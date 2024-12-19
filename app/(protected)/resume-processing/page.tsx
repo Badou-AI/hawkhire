@@ -30,7 +30,7 @@ export default function ResumeProcessingPage() {
   const [uploadProgress, setUploadProgress] = useState<number>(0)
   const [processingStatus, setProcessingStatus] = useState<'idle' | 'uploading' | 'processing' | 'completed' | 'error'>('idle')
   const [stats, setStats] = useState({
-    totalFiles: 1000, // Simulating 1000 CVs
+    totalFiles: 0, // Start with 0 total files
     processed: 0,
     failed: 0,
     supported: 0,
@@ -50,11 +50,12 @@ export default function ResumeProcessingPage() {
     let failedCount = 0
     let supportedCount = 0
     let unsupportedCount = 0
+    const totalFiles = 1000 // Store total files locally
     
     const processInterval = setInterval(() => {
       // Simulate random success/failure for each batch
       const batchSize = Math.floor(Math.random() * 5) + 1 // Process 1-5 files per tick
-      const newProcessed = Math.min(processedCount + batchSize, stats.totalFiles)
+      const newProcessed = Math.min(processedCount + batchSize, totalFiles)
       const newFailed = Math.floor(Math.random() * (batchSize * 0.2)) // 20% chance of failure per batch
       
       processedCount = newProcessed
@@ -63,14 +64,14 @@ export default function ResumeProcessingPage() {
       unsupportedCount = Math.floor(Math.random() * (processedCount * 0.05)) // 5% might be unsupported
 
       setStats({
-        totalFiles: stats.totalFiles,
+        totalFiles, // Use the local constant
         processed: processedCount,
         failed: failedCount,
         supported: supportedCount,
         unsupported: unsupportedCount
       })
 
-      if (processedCount >= stats.totalFiles) {
+      if (processedCount >= totalFiles) {
         clearInterval(processInterval)
         setProcessingStatus('completed')
       }
@@ -86,13 +87,13 @@ export default function ResumeProcessingPage() {
 
     // Start upload simulation
     setProcessingStatus('uploading')
-    setStats(prev => ({
-      ...prev,
+    setStats({
+      totalFiles: 1000, // Set total files when process starts
       processed: 0,
       failed: 0,
       supported: 0,
       unsupported: 0
-    }))
+    })
 
     let progress = 0
     const uploadInterval = setInterval(() => {
@@ -316,6 +317,13 @@ export default function ResumeProcessingPage() {
                 disabled={stats.failed === 0}
               >
                 View Failed Items ({stats.failed})
+              </Button>
+              <Button 
+                className="w-full" 
+                variant="outline" 
+                disabled={stats.unsupported === 0}
+              >
+                View Unsupported Files ({stats.unsupported})
               </Button>
             </CardContent>
           </Card>
