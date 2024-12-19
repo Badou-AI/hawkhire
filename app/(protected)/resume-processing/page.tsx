@@ -31,9 +31,25 @@ const formatTime = (seconds: number): string => {
   if (seconds < 60) {
     return `${seconds.toFixed(1)} seconds`
   }
+  
   const minutes = Math.floor(seconds / 60)
-  const remainingSeconds = seconds % 60
-  return `${minutes} minute${minutes > 1 ? 's' : ''} ${remainingSeconds.toFixed(0)} seconds`
+  const remainingSeconds = Math.floor(seconds % 60)
+  
+  // If minutes is less than 60, show minutes and seconds
+  if (minutes < 60) {
+    return `${minutes} minute${minutes > 1 ? 's' : ''} ${remainingSeconds} second${remainingSeconds !== 1 ? 's' : ''}`
+  }
+  
+  // If hours is less than 24, show hours, minutes and seconds
+  const hours = Math.floor(minutes / 60)
+  const remainingMinutes = minutes % 60
+  
+  if (hours < 24) {
+    return `${hours} hour${hours > 1 ? 's' : ''} ${remainingMinutes} minute${remainingMinutes !== 1 ? 's' : ''}`
+  }
+  
+  // For very long durations, just show hours
+  return `${hours} hour${hours > 1 ? 's' : ''}`
 }
 
 export default function ResumeProcessingPage() {
