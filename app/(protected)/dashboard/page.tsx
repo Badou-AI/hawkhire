@@ -27,7 +27,6 @@ import {
   Cell,
   ResponsiveContainer,
 } from "recharts"
-import { cn } from "@/lib/utils"
 
 const candidateStatus = {
   total: 2651,
@@ -217,8 +216,8 @@ export default function DashboardPage() {
                           </div>
                         </div>
                         <Badge 
-                          variant={application.status === "OFFER" ? "success" : "secondary"}
-                          className="uppercase"
+                          variant="default"
+                          className={`uppercase ${application.status === "OFFER" ? "bg-green-500 hover:bg-green-600" : ""}`}
                         >
                           {application.status}
                         </Badge>

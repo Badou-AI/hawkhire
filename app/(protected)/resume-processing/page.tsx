@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -57,6 +57,7 @@ export default function ResumeProcessingPage() {
   const [selectedJob, setSelectedJob] = useState<string>("")
   const [uploadProgress, setUploadProgress] = useState<number>(0)
   const [processingStatus, setProcessingStatus] = useState<'idle' | 'counting' | 'uploading' | 'processing' | 'completed' | 'error'>('idle')
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [startTime, setStartTime] = useState<number>(0)
   const [processingTime, setProcessingTime] = useState<number>(0)
   const [stats, setStats] = useState({

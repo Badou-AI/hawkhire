@@ -31,6 +31,31 @@ import { MoreVertical, Star } from 'lucide-react'
 import { ApplicantDetails } from "@/components/applicant-details"
 import Link from "next/link";
 
+type Applicant = {
+  name: string;
+  position: string;
+  status: string;
+  email: string;
+  date: string;
+  appliedDate: string;  // Required
+  phone?: string;       // Optional
+  linkedin?: string;    // Optional
+  education?: {
+    degree: string;
+    university: string;
+    graduationDate: string;
+  }[];
+  experience?: {
+    title: string;
+    company: string;
+    duration: string;
+    location: string;
+    description: string[];
+  }[];
+  skills?: string[];
+  rating?: number;
+}
+
 const metrics = [
   {
     title: "Open Positions",
@@ -64,7 +89,7 @@ const metrics = [
   },
 ]
 
-const applicants = [
+const applicants: Applicant[] = [
   {
     name: "Jameson Steuber",
     position: "Full Stack Developer",
@@ -140,6 +165,38 @@ const applicants = [
     status: "New Application",
     email: "b.bradtke@example.com",
     rating: 5,
+    appliedDate: "Aug, 22 2023",
+    phone: "(123) 456-7890",
+    linkedin: "linkedin.com/in/b.bradtke",
+    education: [
+      {
+        degree: "Bachelor of Science in Computer Science",
+        university: "UNIVERSITY OF TECHNOLOGY",
+        graduationDate: "May 2017",
+      }
+    ],
+    experience: [
+      {
+        title: "Software Engineer",
+        company: "TECH INNOVATORS INC",
+        location: "United States",
+        duration: "Jan, 2023 - Present",
+        description: [
+          "Developed React.js components for improved user engagement",
+          "Collaborated on RESTful APIs for seamless data exchange",
+          "Optimized performance through efficient algorithms",
+        ],
+      },
+    ],
+    skills: [
+      "JavaScript",
+      "Python",
+      "HTML5",
+      "CSS3",
+      "React.js",
+      "Node.js",
+      "Express.js",
+    ],
   },
   {
     name: "Jameson Steul",
@@ -148,6 +205,38 @@ const applicants = [
     status: "Interview 1",
     email: "steuber2012@example.com",
     rating: 4,
+    appliedDate: "Aug, 22 2023",
+    phone: "(123) 456-7890",
+    linkedin: "linkedin.com/in/j.steuber",
+    education: [
+      {
+        degree: "Bachelor of Science in Computer Science",
+        university: "UNIVERSITY OF TECHNOLOGY",
+        graduationDate: "May 2017",
+      }
+    ],
+    experience: [
+      {
+        title: "Software Engineer",
+        company: "TECH INNOVATORS INC",
+        location: "United States",
+        duration: "Jan, 2023 - Present",
+        description: [
+          "Developed React.js components for improved user engagement",
+          "Collaborated on RESTful APIs for seamless data exchange",
+          "Optimized performance through efficient algorithms",
+        ],
+      },
+    ],
+    skills: [
+      "JavaScript",
+      "Python",
+      "HTML5",
+      "CSS3",
+      "React.js",
+      "Node.js",
+      "Express.js",
+    ],
   },
   {
     name: "Ellen Howell",
@@ -156,6 +245,29 @@ const applicants = [
     status: "Review",
     email: "ellen4452@example.com",
     rating: 3,
+    appliedDate: "Aug, 22 2023",
+    phone: "(123) 456-7890",
+    linkedin: "linkedin.com/in/b.bradtke",
+    education: [
+      {
+        degree: "Bachelor of Science in Computer Science",
+        university: "UNIVERSITY OF TECHNOLOGY",
+        graduationDate: "May 2017",
+      }
+    ],
+    experience: [
+      {
+        title: "Software Engineer",
+        company: "TECH INNOVATORS INC",
+        location: "United States",
+        duration: "Jan, 2023 - Present",
+        description: [
+          "Developed React.js components for improved user engagement",
+          "Collaborated on RESTful APIs for seamless data exchange",
+          "Optimized performance through efficient algorithms",
+        ],
+      },
+    ],
   },
   {
     name: "Krystina Kautz",
@@ -164,6 +276,38 @@ const applicants = [
     status: "Onboarding",
     email: "krkautz@example.com",
     rating: 5,
+    appliedDate: "Aug, 22 2023",
+    phone: "(123) 456-7890",
+    linkedin: "linkedin.com/in/b.bradtke",
+    education: [
+      {
+        degree: "Bachelor of Science in Computer Science",
+        university: "UNIVERSITY OF TECHNOLOGY",
+        graduationDate: "May 2017",
+      }
+    ],
+    experience: [
+      {
+        title: "Software Engineer",
+        company: "TECH INNOVATORS INC",
+        location: "United States",
+        duration: "Jan, 2023 - Present",
+        description: [
+          "Developed React.js components for improved user engagement",
+          "Collaborated on RESTful APIs for seamless data exchange",
+          "Optimized performance through efficient algorithms",
+        ],
+      },
+    ],
+    skills: [
+      "JavaScript",
+      "Python",
+      "HTML5",
+      "CSS3",
+      "React.js",
+      "Node.js",
+      "Express.js",
+    ],
   },
   {
     name: "Colt Lakin",
@@ -172,6 +316,38 @@ const applicants = [
     status: "Offer Extended",
     email: "coltlakin@example.com",
     rating: 5,
+    appliedDate: "Aug, 22 2023",
+    phone: "(123) 456-7890",
+    linkedin: "linkedin.com/in/b.bradtke",
+    education: [
+      {
+        degree: "Bachelor of Science in Computer Science",
+        university: "UNIVERSITY OF TECHNOLOGY",
+        graduationDate: "May 2017",
+      }
+    ],
+    experience: [
+      {
+        title: "Software Engineer",
+        company: "TECH INNOVATORS INC",
+        location: "United States",
+        duration: "Jan, 2023 - Present",
+        description: [
+          "Developed React.js components for improved user engagement",
+          "Collaborated on RESTful APIs for seamless data exchange",
+          "Optimized performance through efficient algorithms",
+        ],
+      },
+    ],
+    skills: [
+      "JavaScript",
+      "Python",
+      "HTML5",
+      "CSS3",
+      "React.js",
+      "Node.js",
+      "Express.js",
+    ],
   },
 ]
 
@@ -271,18 +447,20 @@ export default function ApplicantsPage() {
                     </TableCell>
                     <TableCell>{applicant.email}</TableCell>
                     <TableCell>
-                      <div className="flex">
-                        {[...Array(5)].map((_, i) => (
-                          <Star
-                            key={i}
-                            className={`h-4 w-4 ${
-                              i < applicant.rating
-                                ? "text-yellow-400 fill-yellow-400"
-                                : "text-gray-200 fill-gray-200"
-                            }`}
-                          />
-                        ))}
-                      </div>
+                      {typeof applicant.rating === 'number' && (
+                        <div className="flex">
+                          {[...Array(5)].map((_, i) => (
+                            <Star
+                              key={i}
+                              className={`h-4 w-4 ${
+                                i < applicant.rating!
+                                  ? "text-yellow-400 fill-yellow-400"
+                                  : "text-gray-200 fill-gray-200"
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell>
                       <DropdownMenu>
