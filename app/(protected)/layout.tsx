@@ -1,7 +1,7 @@
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 
-export default function DashboardLayout({
+export default function ProtectedLayout({
   children,
 }: {
   children: React.ReactNode
@@ -16,6 +16,5 @@ export default function DashboardLayout({
         </main>
       </div>
     </div>
-  )
-}
-
+  );
+} 

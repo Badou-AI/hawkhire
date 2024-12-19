@@ -145,7 +145,7 @@ export default function SignInPage() {
             </div>
 
             <p className="mt-2 text-center text-sm text-gray-600">
-              Don't have an account?{" "}
+              Don&apos;t have an account?{" "}
               <Link href="/sign-up" className="font-medium text-violet-600 hover:text-violet-500">
                 Sign up
               </Link>
@@ -157,13 +157,13 @@ export default function SignInPage() {
         <div className="absolute inset-0 flex flex-col items-center justify-center text-white p-12">
           <Image
             src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Cleverwise-NNqNplHGCNwge6NJihMuobMRSYyxJC.png"
-            alt="Cleverwise"
+            alt="Hawkhire"
             width={150}
             height={40}
             className="mb-8"
           />
           <h2 className="text-4xl font-bold text-center max-w-xl">
-            Streamline your personnel processes for better efficiency and convenience today!
+            Hawkhire streamlines your personnel processes for better efficiency and convenience instantly!
           </h2>
         </div>
       </div>

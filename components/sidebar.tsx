@@ -70,7 +70,7 @@ function SidebarContent({ pathname }: { pathname: string }) {
     <div className="flex h-full flex-col">
       <div className="p-6">
         <Link href="/" className="flex items-center gap-2 font-semibold">
-          <span className="text-2xl font-libre-franklin">Cleverwise</span>
+          <span className="text-2xl font-libre-franklin">Hawkhire</span>
         </Link>
       </div>
       <ScrollArea className="flex-1">

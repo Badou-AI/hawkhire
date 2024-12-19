@@ -27,6 +27,7 @@ import {
   Cell,
   ResponsiveContainer,
 } from "recharts"
+import { cn } from "@/lib/utils"
 
 const candidateStatus = {
   total: 2651,
@@ -319,7 +320,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid gap-6 md:grid-cols-3">
-          <Card className="md:col-span-2">
+          <Card className="md:col-span-2 bg-[#F4F5F7]">
             {/* Recent Vacancies */}
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-lg font-medium">Recent Vacancies</CardTitle>
@@ -327,24 +328,33 @@ export default function DashboardPage() {
                 All Vacancies
               </Button>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
+                <div className="px-4">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-white">
-                    <TableHead>Job Title</TableHead>
-                    <TableHead>Location</TableHead>
-                    <TableHead>Applicants</TableHead>
-                    <TableHead>Applications</TableHead>
-                    <TableHead />
+                  <TableRow className="bg-white hover:bg-white rounded-lg overflow-hidden border-none">
+                    <TableHead className="text-xs text-muted-foreground font-normal first:rounded-l-lg last:rounded-r-lg">Job Title</TableHead>
+                    <TableHead className="text-xs text-muted-foreground font-normal">Location</TableHead>
+                    <TableHead className="text-xs text-muted-foreground font-normal">Applicants</TableHead>
+                    <TableHead className="text-xs text-muted-foreground font-normal">Applications</TableHead>
+                    <TableHead className="text-xs text-muted-foreground font-normal first:rounded-l-lg last:rounded-r-lg" />
                   </TableRow>
                 </TableHeader>
-                <TableBody className="bg-[#F4F5F7]">
+                <TableBody>
                   {recentVacancies.map((vacancy) => (
-                    <TableRow key={vacancy.title}>
-                      <TableCell className="font-medium">{vacancy.title}</TableCell>
+                    <TableRow 
+                      key={vacancy.title}
+                      className="hover:bg-secondary/50"
+                    >
                       <TableCell>
-                        <div className="flex items-center gap-1">
-                          <MapPin className="h-4 w-4 text-muted-foreground" />
+                        <div className="flex items-center gap-2 text-left">
+                          <div className="h-8 w-8 rounded-md bg-primary/40" />
+                          <span className="font-medium">{vacancy.title}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1 text-muted-foreground">
+                          <MapPin className="h-4 w-4" />
                           {vacancy.location}
                         </div>
                       </TableCell>
@@ -391,7 +401,7 @@ export default function DashboardPage() {
                     </TableRow>
                   ))}
                 </TableBody>
-              </Table>
+              </Table></div>
             </CardContent>
           </Card>
 
