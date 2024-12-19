@@ -18,19 +18,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Upload, FileType, AlertCircle, CheckCircle2, XCircle } from 'lucide-react'
+import { Upload, FileType, AlertCircle, CheckCircle2, XCircle, Timer } from 'lucide-react'
 import { cn } from "@/lib/utils"
 
 // Simulated processing speeds (ms)
 const UPLOAD_SPEED = 50 // Time per % of upload
 const PROCESS_SPEED = 20 // Time per CV
+const COUNT_FILES_DURATION = 2000 // Time to count files in ZIP
+const TOTAL_FILES = 1000 // Constant for total files
+
+const formatTime = (seconds: number): string => {
+  if (seconds < 60) {
+    return `${seconds.toFixed(1)} seconds`
+  }
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = seconds % 60
+  return `${minutes} minute${minutes > 1 ? 's' : ''} ${remainingSeconds.toFixed(0)} seconds`
+}
 
 export default function ResumeProcessingPage() {
   const [selectedJob, setSelectedJob] = useState<string>("")
   const [uploadProgress, setUploadProgress] = useState<number>(0)
-  const [processingStatus, setProcessingStatus] = useState<'idle' | 'uploading' | 'processing' | 'completed' | 'error'>('idle')
+  const [processingStatus, setProcessingStatus] = useState<'idle' | 'counting' | 'uploading' | 'processing' | 'completed' | 'error'>('idle')
+  const [startTime, setStartTime] = useState<number>(0)
+  const [processingTime, setProcessingTime] = useState<number>(0)
   const [stats, setStats] = useState({
-    totalFiles: 0, // Start with 0 total files
+    totalFiles: 0,
     processed: 0,
     failed: 0,
     supported: 0,
@@ -50,30 +63,31 @@ export default function ResumeProcessingPage() {
     let failedCount = 0
     let supportedCount = 0
     let unsupportedCount = 0
-    const totalFiles = 1000 // Store total files locally
+    setStartTime(Date.now()) // Start timing
     
     const processInterval = setInterval(() => {
       // Simulate random success/failure for each batch
-      const batchSize = Math.floor(Math.random() * 5) + 1 // Process 1-5 files per tick
-      const newProcessed = Math.min(processedCount + batchSize, totalFiles)
-      const newFailed = Math.floor(Math.random() * (batchSize * 0.2)) // 20% chance of failure per batch
+      const batchSize = Math.floor(Math.random() * 5) + 1
+      const newProcessed = Math.min(processedCount + batchSize, TOTAL_FILES)
+      const newFailed = Math.floor(Math.random() * (batchSize * 0.2))
       
       processedCount = newProcessed
       failedCount += newFailed
       supportedCount = processedCount - failedCount
-      unsupportedCount = Math.floor(Math.random() * (processedCount * 0.05)) // 5% might be unsupported
+      unsupportedCount = Math.floor(Math.random() * (processedCount * 0.05))
 
-      setStats({
-        totalFiles, // Use the local constant
+      setStats(prev => ({
+        ...prev,
         processed: processedCount,
         failed: failedCount,
         supported: supportedCount,
         unsupported: unsupportedCount
-      })
+      }))
 
-      if (processedCount >= totalFiles) {
+      if (processedCount >= TOTAL_FILES) {
         clearInterval(processInterval)
         setProcessingStatus('completed')
+        setProcessingTime((Date.now() - startTime) / 1000)
       }
     }, PROCESS_SPEED)
 
@@ -85,27 +99,37 @@ export default function ResumeProcessingPage() {
     
     if (!selectedJob) return
 
-    // Start upload simulation
-    setProcessingStatus('uploading')
+    // First, simulate counting files in the ZIP
+    setProcessingStatus('counting')
     setStats({
-      totalFiles: 1000, // Set total files when process starts
+      totalFiles: 0,
       processed: 0,
       failed: 0,
       supported: 0,
       unsupported: 0
     })
-
-    let progress = 0
-    const uploadInterval = setInterval(() => {
-      progress += 1
-      setUploadProgress(progress)
+    
+    // Simulate ZIP extraction and file counting
+    setTimeout(() => {
+      setStats(prev => ({
+        ...prev,
+        totalFiles: TOTAL_FILES
+      }))
       
-      if (progress >= 100) {
-        clearInterval(uploadInterval)
-        setProcessingStatus('processing')
-        simulateProcessing()
-      }
-    }, UPLOAD_SPEED)
+      // Then start upload simulation
+      setProcessingStatus('uploading')
+      let progress = 0
+      const uploadInterval = setInterval(() => {
+        progress += 1
+        setUploadProgress(progress)
+        
+        if (progress >= 100) {
+          clearInterval(uploadInterval)
+          setProcessingStatus('processing')
+          simulateProcessing()
+        }
+      }, UPLOAD_SPEED)
+    }, COUNT_FILES_DURATION)
   }
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
@@ -114,6 +138,7 @@ export default function ResumeProcessingPage() {
 
   const getStatusColor = (status: typeof processingStatus) => {
     switch (status) {
+      case 'counting':
       case 'uploading':
       case 'processing':
         return 'text-blue-500'
@@ -128,12 +153,14 @@ export default function ResumeProcessingPage() {
 
   const getStatusMessage = (status: typeof processingStatus) => {
     switch (status) {
+      case 'counting':
+        return 'Counting files in ZIP...'
       case 'uploading':
         return 'Uploading files...'
       case 'processing':
         return `Processing resumes (${stats.processed}/${stats.totalFiles})`
       case 'completed':
-        return 'Processing completed'
+        return `Processing completed in ${formatTime(processingTime)}`
       case 'error':
         return 'Error processing files'
       default:
@@ -256,7 +283,11 @@ export default function ResumeProcessingPage() {
             <CardContent className="space-y-4">
               <div>
                 <div className="text-sm text-muted-foreground mb-1">TOTAL FILES</div>
-                <div className="text-2xl font-bold">{stats.totalFiles}</div>
+                <div className="text-2xl font-bold">
+                  {processingStatus === 'counting' ? (
+                    <span className="text-muted-foreground">Counting...</span>
+                  ) : stats.totalFiles}
+                </div>
               </div>
               
               <div className="grid grid-cols-2 gap-4">
@@ -283,6 +314,13 @@ export default function ResumeProcessingPage() {
                   </div>
                 </div>
               </div>
+
+              {processingStatus === 'completed' && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground pt-2">
+                  <Timer className="h-4 w-4" />
+                  <span>Processed {stats.totalFiles} files in {formatTime(processingTime)}</span>
+                </div>
+              )}
 
               <div className="pt-4 border-t">
                 <div className="grid grid-cols-2 gap-4">
