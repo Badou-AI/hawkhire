@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { cn } from "@/lib/utils"
-import { Calendar, DollarSign, LayoutDashboard, Menu, Users, UserSquare2 } from 'lucide-react'
+import { Calendar, DollarSign, LayoutDashboard, Menu, Users, UserSquare2, FileText } from 'lucide-react'
 import { useState } from "react"
 
 const sidebarItems = [
@@ -24,6 +24,11 @@ const sidebarItems = [
     title: "Applicants",
     icon: UserSquare2,
     href: "/applicants",
+  },
+  {
+    title: "Resume Processing",
+    icon: FileText,
+    href: "/resume-processing",
   },
   {
     title: "Employees",
