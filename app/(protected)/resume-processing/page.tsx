@@ -26,6 +26,7 @@ const UPLOAD_SPEED = 50 // Time per % of upload
 const PROCESS_SPEED = 20 // Time per CV
 const COUNT_FILES_DURATION = 2000 // Time to count files in ZIP
 const TOTAL_FILES = 1000 // Constant for total files
+const SIMULATED_PROCESS_TIME = 28 // Constant processing time in seconds
 
 const formatTime = (seconds: number): string => {
   if (seconds < 60) {
@@ -79,7 +80,13 @@ export default function ResumeProcessingPage() {
     let failedCount = 0
     let supportedCount = 0
     let unsupportedCount = 0
-    setStartTime(Date.now()) // Start timing
+    setStartTime(Date.now())
+    
+    // Simulate random error (10% chance)
+    if (Math.random() < 0.1) {
+      setProcessingStatus('error')
+      return
+    }
     
     const processInterval = setInterval(() => {
       // Simulate random success/failure for each batch
@@ -103,7 +110,7 @@ export default function ResumeProcessingPage() {
       if (processedCount >= TOTAL_FILES) {
         clearInterval(processInterval)
         setProcessingStatus('completed')
-        setProcessingTime((Date.now() - startTime) / 1000)
+        setProcessingTime(SIMULATED_PROCESS_TIME) // Use constant time instead of actual
       }
     }, PROCESS_SPEED)
 
@@ -115,8 +122,9 @@ export default function ResumeProcessingPage() {
     
     if (!selectedJob) return
 
-    // First, simulate counting files in the ZIP
+    // Reset states
     setProcessingStatus('counting')
+    setProcessingTime(0)
     setStats({
       totalFiles: 0,
       processed: 0,
@@ -176,9 +184,9 @@ export default function ResumeProcessingPage() {
       case 'processing':
         return `Processing resumes (${stats.processed}/${stats.totalFiles})`
       case 'completed':
-        return `Processing completed in ${formatTime(processingTime)}`
+        return `Processing completed in ${SIMULATED_PROCESS_TIME} seconds`
       case 'error':
-        return 'Error processing files'
+        return 'Error processing files: Invalid file format detected'
       default:
         return 'Ready to process'
     }
@@ -280,11 +288,13 @@ export default function ResumeProcessingPage() {
                         {getStatusMessage(processingStatus)}
                       </span>
                     </div>
-                    <span className="text-sm text-muted-foreground">
-                      {getProcessingProgress()}%
-                    </span>
+                    {processingStatus !== 'error' && (
+                      <span className="text-sm text-muted-foreground">
+                        {getProcessingProgress()}%
+                      </span>
+                    )}
                   </div>
-                  <Progress value={getProcessingProgress()} />
+                  {processingStatus !== 'error' && <Progress value={getProcessingProgress()} />}
                 </div>
               )}
             </div>
