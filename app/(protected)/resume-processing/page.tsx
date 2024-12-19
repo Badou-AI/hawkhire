@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -21,12 +21,16 @@ import {
 import { Upload, FileType, AlertCircle, CheckCircle2, XCircle } from 'lucide-react'
 import { cn } from "@/lib/utils"
 
+// Simulated processing speeds (ms)
+const UPLOAD_SPEED = 50 // Time per % of upload
+const PROCESS_SPEED = 20 // Time per CV
+
 export default function ResumeProcessingPage() {
   const [selectedJob, setSelectedJob] = useState<string>("")
   const [uploadProgress, setUploadProgress] = useState<number>(0)
   const [processingStatus, setProcessingStatus] = useState<'idle' | 'uploading' | 'processing' | 'completed' | 'error'>('idle')
   const [stats, setStats] = useState({
-    totalFiles: 0,
+    totalFiles: 1000, // Simulating 1000 CVs
     processed: 0,
     failed: 0,
     supported: 0,
@@ -40,41 +44,67 @@ export default function ResumeProcessingPage() {
     { id: "3", title: "Data Analyst" },
   ]
 
+  // Simulate processing of CVs
+  const simulateProcessing = () => {
+    let processedCount = 0
+    let failedCount = 0
+    let supportedCount = 0
+    let unsupportedCount = 0
+    
+    const processInterval = setInterval(() => {
+      // Simulate random success/failure for each batch
+      const batchSize = Math.floor(Math.random() * 5) + 1 // Process 1-5 files per tick
+      const newProcessed = Math.min(processedCount + batchSize, stats.totalFiles)
+      const newFailed = Math.floor(Math.random() * (batchSize * 0.2)) // 20% chance of failure per batch
+      
+      processedCount = newProcessed
+      failedCount += newFailed
+      supportedCount = processedCount - failedCount
+      unsupportedCount = Math.floor(Math.random() * (processedCount * 0.05)) // 5% might be unsupported
+
+      setStats({
+        totalFiles: stats.totalFiles,
+        processed: processedCount,
+        failed: failedCount,
+        supported: supportedCount,
+        unsupported: unsupportedCount
+      })
+
+      if (processedCount >= stats.totalFiles) {
+        clearInterval(processInterval)
+        setProcessingStatus('completed')
+      }
+    }, PROCESS_SPEED)
+
+    return () => clearInterval(processInterval)
+  }
+
   const handleFileUpload = (e: React.DragEvent<HTMLDivElement> | React.ChangeEvent<HTMLInputElement>) => {
     e.preventDefault()
     
-    // Handle both drag and drop and file input
-    const files = 'dataTransfer' in e 
-      ? e.dataTransfer.files 
-      : e.target.files
+    if (!selectedJob) return
 
-    if (!files || !selectedJob) return
-
-    // Simulate file upload and processing
+    // Start upload simulation
     setProcessingStatus('uploading')
-    setStats({
-      totalFiles: files.length,
+    setStats(prev => ({
+      ...prev,
       processed: 0,
       failed: 0,
-      supported: files.length,
+      supported: 0,
       unsupported: 0
-    })
+    }))
 
-    // Simulate progress
     let progress = 0
-    const interval = setInterval(() => {
-      progress += 5
+    const uploadInterval = setInterval(() => {
+      progress += 1
       setUploadProgress(progress)
       
       if (progress >= 100) {
-        clearInterval(interval)
-        setProcessingStatus('completed')
-        setStats(prev => ({
-          ...prev,
-          processed: prev.totalFiles,
-        }))
+        clearInterval(uploadInterval)
+        setProcessingStatus('processing')
+        simulateProcessing()
       }
-    }, 100)
+    }, UPLOAD_SPEED)
   }
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
@@ -100,7 +130,7 @@ export default function ResumeProcessingPage() {
       case 'uploading':
         return 'Uploading files...'
       case 'processing':
-        return 'Processing resumes...'
+        return `Processing resumes (${stats.processed}/${stats.totalFiles})`
       case 'completed':
         return 'Processing completed'
       case 'error':
@@ -108,6 +138,15 @@ export default function ResumeProcessingPage() {
       default:
         return 'Ready to process'
     }
+  }
+
+  // Calculate processing progress percentage
+  const getProcessingProgress = () => {
+    if (processingStatus === 'uploading') return uploadProgress
+    if (processingStatus === 'processing') {
+      return Math.floor((stats.processed / stats.totalFiles) * 100)
+    }
+    return 100
   }
 
   return (
@@ -143,11 +182,15 @@ export default function ResumeProcessingPage() {
                 className={cn(
                   "border-2 border-dashed rounded-lg p-8 text-center space-y-4",
                   "hover:border-primary/50 transition-colors",
-                  "cursor-pointer"
+                  processingStatus === 'idle' ? "cursor-pointer" : "cursor-not-allowed opacity-50"
                 )}
-                onDrop={handleFileUpload}
+                onDrop={processingStatus === 'idle' ? handleFileUpload : undefined}
                 onDragOver={handleDragOver}
-                onClick={() => document.getElementById('file-upload')?.click()}
+                onClick={() => {
+                  if (processingStatus === 'idle') {
+                    document.getElementById('file-upload')?.click()
+                  }
+                }}
               >
                 <div className="flex flex-col items-center gap-2">
                   <Upload className="h-10 w-10 text-muted-foreground" />
@@ -174,6 +217,7 @@ export default function ResumeProcessingPage() {
                   accept=".zip"
                   className="hidden"
                   onChange={handleFileUpload}
+                  disabled={processingStatus !== 'idle'}
                 />
               </div>
 
@@ -193,10 +237,10 @@ export default function ResumeProcessingPage() {
                       </span>
                     </div>
                     <span className="text-sm text-muted-foreground">
-                      {uploadProgress}%
+                      {getProcessingProgress()}%
                     </span>
                   </div>
-                  <Progress value={uploadProgress} />
+                  <Progress value={getProcessingProgress()} />
                 </div>
               )}
             </div>
@@ -219,12 +263,22 @@ export default function ResumeProcessingPage() {
                   <div className="text-sm text-muted-foreground mb-1">PROCESSED</div>
                   <div className="flex items-baseline gap-2">
                     <span className="text-xl font-bold text-green-600">{stats.processed}</span>
+                    {processingStatus === 'processing' && (
+                      <span className="text-xs text-muted-foreground">
+                        {((stats.processed / stats.totalFiles) * 100).toFixed(1)}%
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div>
                   <div className="text-sm text-muted-foreground mb-1">FAILED</div>
                   <div className="flex items-baseline gap-2">
                     <span className="text-xl font-bold text-red-600">{stats.failed}</span>
+                    {stats.failed > 0 && (
+                      <span className="text-xs text-muted-foreground">
+                        {((stats.failed / stats.totalFiles) * 100).toFixed(1)}%
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -249,11 +303,19 @@ export default function ResumeProcessingPage() {
               <CardTitle>Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              <Button className="w-full" variant="outline" disabled={processingStatus !== 'completed'}>
-                View Processed Resumes
+              <Button 
+                className="w-full" 
+                variant="outline" 
+                disabled={processingStatus !== 'completed'}
+              >
+                View Processed Resumes ({stats.supported})
               </Button>
-              <Button className="w-full" variant="outline" disabled={stats.failed === 0}>
-                View Failed Items
+              <Button 
+                className="w-full" 
+                variant="outline" 
+                disabled={stats.failed === 0}
+              >
+                View Failed Items ({stats.failed})
               </Button>
             </CardContent>
           </Card>
