@@ -185,7 +185,7 @@ export default function MatchesPage() {
           <div>
             <h5 className="font-medium text-sm mb-2">Education</h5>
             <div className="space-y-1">
-              <p className="text-sm font-medium">Master's in Computer Science</p>
+              <p className="text-sm font-medium">Master&apos;s in Computer Science</p>
               <p className="text-xs text-muted-foreground">Stanford University, 2020</p>
             </div>
           </div>
