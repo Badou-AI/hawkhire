@@ -21,6 +21,7 @@ import {
 import { Upload, FileType, AlertCircle, CheckCircle2, XCircle, Timer, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
+import Link from "next/link"
 
 // Simulated processing speeds (ms)
 const UPLOAD_SPEED = 50 // Time per % of upload
@@ -55,7 +56,7 @@ const formatTime = (seconds: number): string => {
 }
 
 // Mock jobs data with skill requirements
-const jobs = [
+export const jobs = [
   { 
     id: "1", 
     title: "Full Stack Developer",
@@ -77,7 +78,7 @@ const jobs = [
 ]
 
 // Updated mock candidate matches with skill ratings
-const candidateMatches = [
+export const candidateMatches = [
   {
     name: "Sarah Miller",
     avatar: "/placeholder.svg",
@@ -254,7 +255,7 @@ const candidateMatches = [
 ]
 
 // Add this helper function for skill color
-const getSkillColor = (score: number): string => {
+export const getSkillColor = (score: number): string => {
   if (score >= 90) return "bg-green-500"
   if (score >= 80) return "bg-blue-500"
   if (score >= 70) return "bg-yellow-500"
@@ -533,7 +534,9 @@ export default function ResumeProcessingPage() {
                           <ChevronRight className="h-4 w-4" />
                         </Button>
                       </div>
-                      <Button variant="outline" size="sm">View All</Button>
+                      <Link href="/resume-processing/matches" className="inline-block">
+                        <Button variant="outline" size="sm">View All</Button>
+                      </Link>
                     </div>
                   </div>
                   <div 
