@@ -4,7 +4,27 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
-import { ChevronLeft, Calendar, Clock, Users, Briefcase, Star, CheckCircle2, ChevronRight as ChevronRightIcon } from 'lucide-react'
+import { 
+  ChevronLeft, 
+  Calendar, 
+  Clock, 
+  Users, 
+  Briefcase, 
+  Star, 
+  CheckCircle2, 
+  ChevronRight as ChevronRightIcon,
+  LayoutList,
+  Table as TableIcon,
+  LayoutGrid
+} from 'lucide-react'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { useState } from "react"
@@ -39,6 +59,7 @@ export default function MatchesPage() {
   const currentJob = jobs[0]
   const [isDetailedView, setIsDetailedView] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
+  const [viewMode, setViewMode] = useState<'simple' | 'detailed' | 'table'>('simple')
   
   // Calculate pagination
   const totalPages = Math.ceil(candidateMatches.length / ITEMS_PER_PAGE)
@@ -253,12 +274,35 @@ export default function MatchesPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button 
-              variant="outline" 
-              onClick={() => setIsDetailedView(!isDetailedView)}
-            >
-              {isDetailedView ? 'Simple View' : 'Detailed View'}
-            </Button>
+            <div className="flex items-center gap-1 border rounded-md p-1">
+              <Button 
+                variant={viewMode === 'simple' ? "secondary" : "ghost"}
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setViewMode('simple')}
+                title="Simple List View"
+              >
+                <LayoutList className="h-4 w-4" />
+              </Button>
+              <Button 
+                variant={viewMode === 'detailed' ? "secondary" : "ghost"}
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setViewMode('detailed')}
+                title="Detailed List View"
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+              <Button 
+                variant={viewMode === 'table' ? "secondary" : "ghost"}
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setViewMode('table')}
+                title="Table View"
+              >
+                <TableIcon className="h-4 w-4" />
+              </Button>
+            </div>
             <Button variant="outline">Filter</Button>
             <Button variant="outline">Sort by Match Score</Button>
           </div>
@@ -341,21 +385,98 @@ export default function MatchesPage() {
 
       {/* Scrollable content area */}
       <div className="min-h-0 flex-1 flex flex-col">
-        {/* Candidate cards - scrollable */}
+        {/* Content - scrollable */}
         <div className="flex-1 overflow-y-auto hide-scrollbar">
-          <div className="grid gap-4 pb-6">
-            {currentCandidates.map((candidate) => (
-              <Card key={candidate.name} className="hover:bg-muted/50 transition-colors">
-                <CardContent className="p-6">
-                  {renderCandidateCard(candidate, isDetailedView)}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          {viewMode === 'table' ? (
+            <div className="pb-16">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Candidate</TableHead>
+                    <TableHead>Experience</TableHead>
+                    <TableHead>Key Skills</TableHead>
+                    <TableHead>Match Score</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {currentCandidates.map((candidate) => (
+                    <TableRow key={candidate.name}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-8 w-8">
+                            <AvatarImage src={candidate.avatar} alt={candidate.name} />
+                            <AvatarFallback>{candidate.name.charAt(0)}</AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <div className="font-medium">{candidate.name}</div>
+                            <div className="text-sm text-muted-foreground line-clamp-1">
+                              {candidate.summary}
+                            </div>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>{candidate.experience}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {Object.entries(candidate.skillRatings)
+                            .sort(([, a], [, b]) => b - a)
+                            .slice(0, 3)
+                            .map(([skill, score]) => (
+                              <Badge 
+                                key={skill} 
+                                variant="secondary"
+                                className={cn(
+                                  "text-xs font-normal",
+                                  score >= 90 ? "bg-green-100" : 
+                                  score >= 80 ? "bg-blue-100" : 
+                                  "bg-yellow-100"
+                                )}
+                              >
+                                {skill} ({score}%)
+                              </Badge>
+                            ))}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-semibold text-green-600">
+                            {candidate.matchScore}%
+                          </span>
+                          <div className="h-1.5 w-16 rounded-full bg-secondary">
+                            <div 
+                              className={cn("h-full rounded-full transition-all", getSkillColor(candidate.matchScore))}
+                              style={{ width: `${candidate.matchScore}%` }}
+                            />
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button variant="outline" size="sm">View Profile</Button>
+                          <Button size="sm">Contact</Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <div className="grid gap-4 pb-16">
+              {currentCandidates.map((candidate) => (
+                <Card key={candidate.name} className="hover:bg-muted/50 transition-colors">
+                  <CardContent className="p-6">
+                    {renderCandidateCard(candidate, viewMode === 'detailed')}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Pagination - fixed at bottom */}
-        <div className="shrink-0 border-t py-4">
+        <div className="shrink-0 border-t py-2 -mb-6 bg-background">
           <div className="flex items-center justify-between">
             <div className="text-sm text-muted-foreground">
               Showing <span className="font-medium">{startIndex + 1}</span> to{" "}
