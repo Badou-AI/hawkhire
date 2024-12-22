@@ -513,7 +513,7 @@ export default function ResumeProcessingPage() {
                           onClick={() => {
                             const container = document.getElementById('matches-container')
                             if (container) {
-                              container.scrollLeft -= 320
+                              container.scrollLeft -= container.clientWidth / 3
                             }
                           }}
                         >
@@ -526,7 +526,7 @@ export default function ResumeProcessingPage() {
                           onClick={() => {
                             const container = document.getElementById('matches-container')
                             if (container) {
-                              container.scrollLeft += 320
+                              container.scrollLeft += container.clientWidth / 3
                             }
                           }}
                         >
@@ -540,9 +540,9 @@ export default function ResumeProcessingPage() {
                     id="matches-container"
                     className="overflow-x-auto hide-scrollbar scroll-smooth"
                   >
-                    <div className="flex gap-4 pb-4">
+                    <div className="grid grid-flow-col auto-cols-[calc(33.33%-0.75rem)] gap-3 pb-4">
                       {candidateMatches.map((candidate) => (
-                        <Card key={candidate.name} className="flex-shrink-0 w-[300px]">
+                        <Card key={candidate.name}>
                           <CardContent className="p-4">
                             <div className="space-y-4">
                               {/* Header with avatar and name */}
