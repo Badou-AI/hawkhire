@@ -9,8 +9,8 @@ import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { useState } from "react"
 
-// Import candidate data and helper functions from parent
-import { candidateMatches, getSkillColor, jobs } from "../page"
+// Import candidate data and helper functions from shared data file
+import { candidateMatches, getSkillColor, jobs } from "../data"
 
 // Mock data for job stats
 const jobStats = {
