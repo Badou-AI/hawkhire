@@ -107,6 +107,13 @@ export default function HiringPipeline() {
     });
   };
 
+  const scrollToColumn = (columnId: string) => {
+    const columnElement = document.querySelector(`[data-column-id="${columnId}"]`);
+    if (columnElement) {
+      columnElement.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
+  };
+
   // Calculate stats from actual data
   const calculateStats = () => {
     if (!columns.length) return null;
@@ -210,20 +217,30 @@ export default function HiringPipeline() {
                   {jobDetails.type}
                 </Badge>
               </div>
-              <div className="flex items-center gap-6 text-sm text-muted-foreground mt-2">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
                 <div className="flex items-center gap-2">
                   <Users className="h-4 w-4" />
-                  <span>{jobDetails.totalCandidates} Total Candidates</span>
+                  <span>{jobDetails.stats.totalCandidates}</span>
+                  <span className="text-muted-foreground/60">candidates</span>
                 </div>
-                <span>•</span>
-                <span>{jobDetails.inProgress} In Progress</span>
-                <span>•</span>
-                <span>{jobDetails.hired} Hired</span>
-                <span>•</span>
-                <span>{jobDetails.averageScore}% Average Match</span>
-                <span>•</span>
+                <span className="text-muted-foreground/40 px-2">•</span>
+                <div className="flex items-center gap-2">
+                  <span>{jobDetails.stats.inProgress}</span>
+                  <span className="text-muted-foreground/60">in progress</span>
+                </div>
+                <span className="text-muted-foreground/40 px-2">•</span>
+                <div className="flex items-center gap-2">
+                  <span>{jobDetails.stats.hired}</span>
+                  <span className="text-muted-foreground/60">hired</span>
+                </div>
+                <span className="text-muted-foreground/40 px-2">•</span>
+                <div className="flex items-center gap-2">
+                  <span>{jobDetails.stats.averageScore}%</span>
+                  <span className="text-muted-foreground/60">average match</span>
+                </div>
+                <span className="text-muted-foreground/40 px-2">•</span>
                 <span>{jobDetails.department}</span>
-                <span>•</span>
+                <span className="text-muted-foreground/40 px-2">•</span>
                 <span>{jobDetails.location}</span>
               </div>
             </div>
@@ -264,20 +281,32 @@ export default function HiringPipeline() {
             `}</style>
             {columns.map(column => (
               <div 
-                key={column.id} 
+                key={column.id}
+                data-column-id={column.id}
                 className={cn(
                   "bg-secondary/30 rounded-lg p-4 w-[280px] shrink-0 first:ml-0",
                   (column.id === 'hired' || column.id === 'rejected') && "bg-background border"
                 )}
               >
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className={cn(
-                    "font-semibold text-xs uppercase tracking-wider",
-                    column.id === 'hired' && "text-green-700 dark:text-green-300",
-                    column.id === 'rejected' && "text-red-700 dark:text-red-300"
-                  )}>
-                    {column.title}
-                  </h2>
+                  <div className="flex items-center gap-2">
+                    <div className={cn(
+                      "w-2 h-2 rounded-full shrink-0",
+                      column.id === 'phoneScreen' && "bg-blue-500",
+                      column.id === 'technical' && "bg-purple-500",
+                      column.id === 'cultural' && "bg-orange-500",
+                      column.id === 'offer' && "bg-yellow-500",
+                      column.id === 'hired' && "bg-green-500",
+                      column.id === 'rejected' && "bg-red-500"
+                    )} />
+                    <h2 className={cn(
+                      "font-semibold text-xs uppercase tracking-wider",
+                      column.id === 'hired' && "text-green-700 dark:text-green-300",
+                      column.id === 'rejected' && "text-red-700 dark:text-red-300"
+                    )}>
+                      {column.title}
+                    </h2>
+                  </div>
                   <Badge variant="secondary" className={cn(
                     "text-xs",
                     column.id === 'hired' && "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
@@ -386,12 +415,13 @@ export default function HiringPipeline() {
           <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-20 bg-gradient-to-r from-background to-transparent" />
           <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-background to-transparent" />
 
-          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-2">
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-3 p-1 rounded-full bg-background/80 backdrop-blur-sm shadow-sm">
             {columns.map((column) => (
-              <div
+              <button
                 key={column.id}
+                onClick={() => scrollToColumn(column.id)}
                 className={cn(
-                  "w-1.5 h-1.5 rounded-full transition-colors",
+                  "w-3 h-3 rounded-full transition-all hover:scale-125",
                   column.id === 'phoneScreen' && "bg-blue-500",
                   column.id === 'technical' && "bg-purple-500",
                   column.id === 'cultural' && "bg-orange-500",
