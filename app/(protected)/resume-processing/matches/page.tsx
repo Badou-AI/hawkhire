@@ -69,7 +69,6 @@ const ITEMS_PER_PAGE = 5
 export default function MatchesPage() {
   // For demo, we'll use the first job
   const currentJob = jobs[0]
-  const [isDetailedView, setIsDetailedView] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [viewMode, setViewMode] = useState<'simple' | 'detailed' | 'table'>('simple')
   const [chatOpen, setChatOpen] = useState(false)
