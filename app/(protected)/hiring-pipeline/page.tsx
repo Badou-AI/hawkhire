@@ -26,6 +26,35 @@ interface Column {
   candidates: Candidate[]
 }
 
+interface DragResult {
+  destination?: { droppableId: string; index: number };
+  source: { droppableId: string; index: number };
+  draggableId: string;
+}
+
+interface JobDetails {
+  title: string;
+  department: string;
+  location: string;
+  type: string;
+  stats: {
+    totalCandidates: number;
+    inProgress: number;
+    hired: number;
+    rejected: number;
+    averageScore: number;
+  };
+}
+
+const COLUMN_COLORS = {
+  phoneScreen: 'bg-blue-500',
+  technical: 'bg-purple-500',
+  cultural: 'bg-orange-500',
+  offer: 'bg-yellow-500',
+  hired: 'bg-green-500',
+  rejected: 'bg-red-500'
+} as const;
+
 export default function HiringPipeline() {
   const { getCandidatesByStage, updateCandidateStage } = usePipelineStore()
   const [isLoading, setIsLoading] = useState(true)
@@ -78,23 +107,17 @@ export default function HiringPipeline() {
     setIsLoading(false)
   }, [isHydrated, getCandidatesByStage])
 
-  const onDragEnd = (result: {
-    destination?: { droppableId: string; index: number };
-    source: { droppableId: string; index: number };
-    draggableId: string;
-  }) => {
-    const { destination, draggableId } = result
-    if (!destination) return
+  const onDragEnd = (result: DragResult) => {
+    const { destination, draggableId } = result;
+    if (!destination) return;
     
-    updateCandidateStage(draggableId, destination.droppableId as PipelineStage)
+    updateCandidateStage(draggableId, destination.droppableId as PipelineStage);
     
-    // Update local state to reflect the change
-    const updatedColumns = columns.map(column => ({
+    setColumns(prevColumns => prevColumns.map(column => ({
       ...column,
       candidates: getCandidatesByStage(column.id as PipelineStage)
-    }))
-    setColumns(updatedColumns)
-  }
+    })));
+  };
 
   const scrollTo = (direction: 'left' | 'right') => {
     if (!scrollContainerRef.current) return;
@@ -125,7 +148,7 @@ export default function HiringPipeline() {
     const averageScore = Math.round(
       columns.reduce((sum, col) => 
         sum + col.candidates.reduce((colSum, candidate) => colSum + candidate.score, 0), 0
-      ) / totalCandidates
+      ) / totalCandidates || 0 // Prevent division by zero
     );
 
     return {
@@ -137,8 +160,8 @@ export default function HiringPipeline() {
     };
   };
 
-  // Mock job data - in real app this would come from a job store/API
-  const jobDetails = {
+  // Mock job data with proper typing
+  const jobDetails: JobDetails = {
     title: "Senior Full Stack Developer",
     department: "Engineering",
     location: "San Francisco, CA",
@@ -150,13 +173,13 @@ export default function HiringPipeline() {
       rejected: 0,
       averageScore: 0
     }
-  }
+  };
 
   // Show loading state during hydration or data loading
   if (!isHydrated || isLoading) {
     return (
       <div className="h-full flex flex-col">
-        <div className="shrink-0 space-y-4 mb-6 p-6">
+        <div className="shrink-0 space-y-4 mb-6 p-6 border-b">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Link href="/jobs">
@@ -171,33 +194,49 @@ export default function HiringPipeline() {
                     {jobDetails.type}
                   </Badge>
                 </div>
-                <div className="flex items-center gap-6 text-sm text-muted-foreground mt-2">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
                   <div className="flex items-center gap-2">
                     <Users className="h-4 w-4" />
-                    <span>{jobDetails.totalCandidates} Total Candidates</span>
+                    <span>0</span>
+                    <span className="text-muted-foreground/60">candidates</span>
                   </div>
-                  <span>•</span>
-                  <span>{jobDetails.inProgress} In Progress</span>
-                  <span>•</span>
-                  <span>{jobDetails.hired} Hired</span>
-                  <span>•</span>
-                  <span>{jobDetails.averageScore}% Average Match</span>
-                  <span>•</span>
+                  <span className="text-muted-foreground/40 px-2">•</span>
+                  <div className="flex items-center gap-2">
+                    <span>0</span>
+                    <span className="text-muted-foreground/60">in progress</span>
+                  </div>
+                  <span className="text-muted-foreground/40 px-2">•</span>
+                  <div className="flex items-center gap-2">
+                    <span>0</span>
+                    <span className="text-muted-foreground/60">hired</span>
+                  </div>
+                  <span className="text-muted-foreground/40 px-2">•</span>
+                  <div className="flex items-center gap-2">
+                    <span>0%</span>
+                    <span className="text-muted-foreground/60">average match</span>
+                  </div>
+                  <span className="text-muted-foreground/40 px-2">•</span>
                   <span>{jobDetails.department}</span>
-                  <span>•</span>
+                  <span className="text-muted-foreground/40 px-2">•</span>
                   <span>{jobDetails.location}</span>
                 </div>
               </div>
             </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" className="gap-2">
+                <Users className="h-4 w-4" />
+                View All Candidates
+              </Button>
+            </div>
           </div>
         </div>
-        <div className="grid grid-cols-4 gap-4 p-6">
-          {[...Array(4)].map((_, i) => (
+        <div className="grid grid-cols-6 gap-4 p-6">
+          {[...Array(6)].map((_, i) => (
             <div key={`loading-${i}`} className="bg-secondary/30 rounded-lg p-4 h-[200px] animate-pulse" />
           ))}
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -261,6 +300,7 @@ export default function HiringPipeline() {
             size="icon"
             className="absolute left-2 top-1/2 -translate-y-1/2 z-10 bg-background/80 backdrop-blur-sm shadow-md hidden md:flex"
             onClick={() => scrollTo('left')}
+            aria-label="Scroll left"
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -292,12 +332,7 @@ export default function HiringPipeline() {
                   <div className="flex items-center gap-2">
                     <div className={cn(
                       "w-2 h-2 rounded-full shrink-0",
-                      column.id === 'phoneScreen' && "bg-blue-500",
-                      column.id === 'technical' && "bg-purple-500",
-                      column.id === 'cultural' && "bg-orange-500",
-                      column.id === 'offer' && "bg-yellow-500",
-                      column.id === 'hired' && "bg-green-500",
-                      column.id === 'rejected' && "bg-red-500"
+                      COLUMN_COLORS[column.id]
                     )} />
                     <h2 className={cn(
                       "font-semibold text-xs uppercase tracking-wider",
@@ -408,6 +443,7 @@ export default function HiringPipeline() {
             size="icon"
             className="absolute right-2 top-1/2 -translate-y-1/2 z-10 bg-background/80 backdrop-blur-sm shadow-md hidden md:flex"
             onClick={() => scrollTo('right')}
+            aria-label="Scroll right"
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
@@ -422,14 +458,10 @@ export default function HiringPipeline() {
                 onClick={() => scrollToColumn(column.id)}
                 className={cn(
                   "w-3 h-3 rounded-full transition-all hover:scale-125",
-                  column.id === 'phoneScreen' && "bg-blue-500",
-                  column.id === 'technical' && "bg-purple-500",
-                  column.id === 'cultural' && "bg-orange-500",
-                  column.id === 'offer' && "bg-yellow-500",
-                  column.id === 'hired' && "bg-green-500",
-                  column.id === 'rejected' && "bg-red-500",
+                  COLUMN_COLORS[column.id],
                   "opacity-40 hover:opacity-100"
                 )}
+                aria-label={`Scroll to ${column.title}`}
                 title={column.title}
               />
             ))}
