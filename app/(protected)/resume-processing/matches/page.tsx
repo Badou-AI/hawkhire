@@ -4,6 +4,17 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetFooter,
+  SheetTrigger,
+} from "@/components/ui/sheet"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Input } from "@/components/ui/input"
 import { 
   ChevronLeft, 
   Calendar, 
@@ -15,7 +26,10 @@ import {
   ChevronRight as ChevronRightIcon,
   LayoutList,
   Table as TableIcon,
-  LayoutGrid
+  LayoutGrid,
+  MessagesSquare,
+  Send,
+  Bot
 } from 'lucide-react'
 import {
   Table,
@@ -60,7 +74,9 @@ export default function MatchesPage() {
   const [isDetailedView, setIsDetailedView] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [viewMode, setViewMode] = useState<'simple' | 'detailed' | 'table'>('simple')
-  
+  const [chatOpen, setChatOpen] = useState(false)
+  const [chatInput, setChatInput] = useState("")
+
   // Calculate pagination
   const totalPages = Math.ceil(candidateMatches.length / ITEMS_PER_PAGE)
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
@@ -257,6 +273,14 @@ export default function MatchesPage() {
     )
   }
 
+  const sampleQuestions = [
+    "Show me candidates with React experience above 90%",
+    "Who has the most years of experience?",
+    "Find candidates who know both Python and JavaScript",
+    "Which candidates are available to start within 2 weeks?",
+    "Show remote-only candidates with salary expectations under $130k"
+  ]
+
   return (
     <div className="h-full flex flex-col">
       {/* Header section - fixed */}
@@ -274,6 +298,86 @@ export default function MatchesPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Sheet open={chatOpen} onOpenChange={setChatOpen}>
+              <SheetTrigger asChild>
+                <Button variant="default" className="gap-2 w-full">
+                  <Bot className="h-4 w-4" />
+                  Ask AI Assistant
+                </Button>
+              </SheetTrigger>
+              <SheetContent 
+                className="w-[800px] sm:w-full sm:max-w-full lg:w-[750px]  flex flex-col p-0 max-w-full"
+                side="right"
+              >
+                <SheetHeader className="p-6 border-b">
+                  <SheetTitle className="flex items-center gap-2">
+                    <Bot className="h-5 w-5" />
+                    AI Assistant
+                  </SheetTitle>
+                  <SheetDescription>
+                    Ask questions about the candidates in natural language
+                  </SheetDescription>
+                </SheetHeader>
+                
+                <ScrollArea className="flex-1 p-6">
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Try asking about:</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {sampleQuestions.map((question, index) => (
+                          <Button
+                            key={index}
+                            variant="outline"
+                            size="sm"
+                            className="h-auto py-1.5 px-2.5 text-xs justify-start font-normal whitespace-normal text-left"
+                            onClick={() => setChatInput(question)}
+                          >
+                            {question}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Chat messages will go here */}
+                    <div className="space-y-4 min-h-[300px]">
+                      {/* Example message */}
+                      <div className="flex gap-3">
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback>AI</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 space-y-2">
+                          <p className="text-sm text-muted-foreground">AI Assistant</p>
+                          <div className="bg-muted p-3 rounded-lg text-sm">
+                            Hello! I can help you analyze the candidate data. Try asking me about specific skills, experience levels, or other criteria.
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </ScrollArea>
+
+                <div className="border-t p-4">
+                  <form 
+                    className="flex gap-2" 
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      // Handle chat submission
+                      console.log('Chat input:', chatInput)
+                      setChatInput("")
+                    }}
+                  >
+                    <Input
+                      placeholder="Ask about candidates..."
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                    />
+                    <Button type="submit" size="icon">
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </form>
+                </div>
+              </SheetContent>
+            </Sheet>
             <div className="flex items-center gap-1 border rounded-md p-1">
               <Button 
                 variant={viewMode === 'simple' ? "secondary" : "ghost"}
