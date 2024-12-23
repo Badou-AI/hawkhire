@@ -10,26 +10,24 @@ import {
   SheetHeader,
   SheetTitle,
   SheetDescription,
-  SheetFooter,
   SheetTrigger,
 } from "@/components/ui/sheet"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Input } from "@/components/ui/input"
-import { 
-  ChevronLeft, 
-  Calendar, 
-  Clock, 
-  Users, 
-  Briefcase, 
-  Star, 
-  CheckCircle2, 
+import {
+  ChevronLeft,
+  Calendar,
+  Clock,
+  Users,
+  Briefcase,
+  Star,
+  CheckCircle2,
   ChevronRight as ChevronRightIcon,
   LayoutList,
   Table as TableIcon,
   LayoutGrid,
-  MessagesSquare,
   Send,
-  Bot
+  Bot,
 } from 'lucide-react'
 import {
   Table,
