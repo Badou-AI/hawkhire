@@ -28,6 +28,7 @@ import {
   LayoutGrid,
   Send,
   Bot,
+  Plus,
 } from 'lucide-react'
 import {
   Table,
@@ -40,6 +41,8 @@ import {
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { useState } from "react"
+import { usePipelineStore } from '@/lib/store/pipeline-store'
+import { PipelineStatus } from '@/components/pipeline-status'
 
 // Import candidate data and helper functions from shared data file
 import { candidateMatches, getSkillColor, jobs } from "../data"
@@ -67,6 +70,7 @@ const formatDate = (dateString: string) => {
 const ITEMS_PER_PAGE = 5
 
 export default function MatchesPage() {
+  const { addCandidate, candidates } = usePipelineStore()
   // For demo, we'll use the first job
   const currentJob = jobs[0]
   const [currentPage, setCurrentPage] = useState(1)
@@ -114,77 +118,18 @@ export default function MatchesPage() {
     return pageNumbers
   }
 
-  const renderCandidateCard = (candidate: typeof candidateMatches[0], detailed: boolean) => {
-    if (!detailed) {
-      return (
-        <div className="flex items-start gap-6">
-          {/* Left section: Avatar and basic info */}
-          <div className="flex items-start gap-4 flex-1">
-            <Avatar className="h-12 w-12">
-              <AvatarImage src={candidate.avatar} alt={candidate.name} />
-              <AvatarFallback>{candidate.name.charAt(0)}</AvatarFallback>
-            </Avatar>
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <h4 className="font-semibold">{candidate.name}</h4>
-                <span className="text-sm text-muted-foreground">
-                  {candidate.experience} experience
-                </span>
-              </div>
-              <p className="text-sm text-muted-foreground line-clamp-2">
-                {candidate.summary}
-              </p>
-            </div>
-          </div>
-
-          {/* Center section: Key skills */}
-          <div className="flex-1">
-            <div className="grid grid-cols-2 gap-2">
-              {Object.entries(candidate.skillRatings).slice(0, 4).map(([skill, score]) => (
-                <div key={skill} className="space-y-1">
-                  <div className="flex justify-between text-xs">
-                    <span className="font-medium">{skill}</span>
-                    <span className="text-muted-foreground">{score}%</span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-secondary">
-                    <div 
-                      className={cn("h-full rounded-full transition-all", getSkillColor(score))}
-                      style={{ width: `${score}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Right section: Match score and actions */}
-          <div className="flex flex-col items-end gap-3">
-            <div className="flex items-center gap-3">
-              <span className="text-3xl font-bold text-green-600">
-                {candidate.matchScore}%
-              </span>
-              <Badge variant="outline">Match Score</Badge>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm">View Profile</Button>
-              <Button size="sm">Contact</Button>
-            </div>
-          </div>
-        </div>
-      )
-    }
-
+  const renderCandidateCard = (candidate: typeof candidateMatches[0]) => {
     return (
       <div className="flex items-start gap-6">
         {/* Left section: Avatar and basic info */}
-        <div className="flex items-start gap-4 w-[280px]">
+        <div className="flex items-start gap-4 flex-1">
           <Avatar className="h-12 w-12">
             <AvatarImage src={candidate.avatar} alt={candidate.name} />
             <AvatarFallback>{candidate.name.charAt(0)}</AvatarFallback>
           </Avatar>
-          <div className="space-y-1">
+          <div className="space-y-1 min-w-[200px]">
             <div className="flex items-center gap-2">
-              <h4 className="font-semibold">{candidate.name}</h4>
+              <h4 className="font-medium">{candidate.name}</h4>
               <span className="text-sm text-muted-foreground">
                 {candidate.experience} experience
               </span>
@@ -192,64 +137,45 @@ export default function MatchesPage() {
             <p className="text-sm text-muted-foreground line-clamp-2">
               {candidate.summary}
             </p>
+            {candidates[candidate.id] ? (
+              <PipelineStatus currentStage={candidates[candidate.id].stage} />
+            ) : (
+              <Button
+                onClick={() => addCandidate({
+                  id: candidate.id,
+                  name: candidate.name,
+                  role: candidate.role,
+                  score: candidate.matchScore,
+                  imageUrl: candidate.avatar
+                })}
+                variant="outline"
+                size="sm"
+                className="gap-2 mt-2 h-7 text-xs"
+              >
+                <Plus className="h-3 w-3" />
+                Add to Pipeline
+              </Button>
+            )}
           </div>
         </div>
 
-        {/* Center-left: Key skills */}
-        <div className="w-[200px] space-y-2">
-          <h5 className="font-medium text-sm">Key Skills</h5>
-          {Object.entries(candidate.skillRatings).slice(0, 4).map(([skill, score]) => (
-            <div key={skill} className="space-y-1">
-              <div className="flex justify-between text-xs">
-                <span className="font-medium">{skill}</span>
-                <span className="text-muted-foreground">{score}%</span>
+        {/* Center section: Key skills */}
+        <div className="flex-1">
+          <div className="grid grid-cols-2 gap-2">
+            {Object.entries(candidate.skillRatings).slice(0, 4).map(([skill, score]) => (
+              <div key={skill} className="space-y-1">
+                <div className="flex justify-between text-xs">
+                  <span className="font-medium">{skill}</span>
+                  <span className="text-muted-foreground">{score}%</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-secondary">
+                  <div 
+                    className={cn("h-full rounded-full transition-all", getSkillColor(score))}
+                    style={{ width: `${score}%` }}
+                  />
+                </div>
               </div>
-              <div className="h-1.5 rounded-full bg-secondary">
-                <div 
-                  className={cn("h-full rounded-full transition-all", getSkillColor(score))}
-                  style={{ width: `${score}%` }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Center-right: Additional Info */}
-        <div className="w-[200px] space-y-4">
-          <div>
-            <h5 className="font-medium text-sm mb-2">Education</h5>
-            <div className="space-y-1">
-              <p className="text-sm font-medium">Master&apos;s in Computer Science</p>
-              <p className="text-xs text-muted-foreground">Stanford University, 2020</p>
-            </div>
-          </div>
-          <div>
-            <h5 className="font-medium text-sm mb-2">Languages</h5>
-            <div className="flex flex-wrap gap-1">
-              <Badge variant="secondary">English (Native)</Badge>
-              <Badge variant="secondary">Spanish (B2)</Badge>
-            </div>
-          </div>
-        </div>
-
-        {/* Center-right: Job Preferences */}
-        <div className="w-[200px] space-y-4">
-          <div>
-            <h5 className="font-medium text-sm mb-2">Preferences</h5>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Salary Range</span>
-                <span>$120k - $150k</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Work Type</span>
-                <span>Remote</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Notice Period</span>
-                <span>2 weeks</span>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
 
@@ -295,9 +221,15 @@ export default function MatchesPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Link href="/hiring-pipeline">
+              <Button variant="default" className="gap-2">
+                <Users className="h-4 w-4" />
+                View Pipeline
+              </Button>
+            </Link>
             <Sheet open={chatOpen} onOpenChange={setChatOpen}>
               <SheetTrigger asChild>
-                <Button variant="default" className="gap-2 w-full">
+                <Button variant="default" className="gap-2">
                   <Bot className="h-4 w-4" />
                   Ask AI Assistant
                 </Button>
@@ -504,17 +436,96 @@ export default function MatchesPage() {
                   {currentCandidates.map((candidate) => (
                     <TableRow key={candidate.name}>
                       <TableCell>
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-8 w-8">
-                            <AvatarImage src={candidate.avatar} alt={candidate.name} />
-                            <AvatarFallback>{candidate.name.charAt(0)}</AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <div className="font-medium">{candidate.name}</div>
-                            <div className="text-sm text-muted-foreground line-clamp-1">
-                              {candidate.summary}
+                        <div className="space-y-4">
+                          {/* Main candidate info */}
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-8 w-8">
+                                <AvatarImage src={candidate.avatar} alt={candidate.name} />
+                                <AvatarFallback>{candidate.name.charAt(0)}</AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <div className="font-medium">{candidate.name}</div>
+                                <div className="text-sm text-muted-foreground line-clamp-1">
+                                  {candidate.summary}
+                                </div>
+                              </div>
                             </div>
+                            {candidates[candidate.id] ? (
+                              <PipelineStatus currentStage={candidates[candidate.id].stage} />
+                            ) : (
+                              <Button
+                                onClick={() => addCandidate({
+                                  id: candidate.id,
+                                  name: candidate.name,
+                                  role: candidate.role,
+                                  score: candidate.matchScore,
+                                  imageUrl: candidate.avatar
+                                })}
+                                variant="outline"
+                                size="sm"
+                                className="gap-2 h-7 text-xs"
+                              >
+                                <Plus className="h-3 w-3" />
+                                Add to Pipeline
+                              </Button>
+                            )}
                           </div>
+
+                          {/* Additional details */}
+                          {viewMode === 'detailed' && (
+                            <div className="grid grid-cols-4 gap-6 pt-4 border-t">
+                              {/* Education */}
+                              <div className="space-y-1">
+                                <h5 className="font-medium text-sm">Education</h5>
+                                <p className="text-sm">Master&apos;s in Computer Science</p>
+                                <p className="text-xs text-muted-foreground">Stanford University, 2020</p>
+                              </div>
+                              
+                              {/* Languages */}
+                              <div className="space-y-2">
+                                <h5 className="font-medium text-sm">Languages</h5>
+                                <div className="flex flex-wrap gap-1">
+                                  <Badge variant="secondary">English (Native)</Badge>
+                                  <Badge variant="secondary">Spanish (B2)</Badge>
+                                </div>
+                              </div>
+                              
+                              {/* Additional Skills */}
+                              <div className="space-y-2">
+                                <h5 className="font-medium text-sm">Additional Skills</h5>
+                                <div className="grid gap-1.5">
+                                  {Object.entries(candidate.skillRatings)
+                                    .slice(3, 6)
+                                    .map(([skill, score]) => (
+                                      <div key={skill} className="flex items-center justify-between text-sm">
+                                        <span>{skill}</span>
+                                        <span className="text-muted-foreground">{score}%</span>
+                                      </div>
+                                    ))}
+                                </div>
+                              </div>
+                              
+                              {/* Preferences */}
+                              <div className="space-y-2">
+                                <h5 className="font-medium text-sm">Preferences</h5>
+                                <div className="space-y-1 text-sm">
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Salary</span>
+                                    <span>$120k - $150k</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Work Type</span>
+                                    <span>Remote</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Notice</span>
+                                    <span>2 weeks</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>{candidate.experience}</TableCell>
@@ -553,10 +564,7 @@ export default function MatchesPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="outline" size="sm">View Profile</Button>
-                          <Button size="sm">Contact</Button>
-                        </div>
+                        <Button variant="outline" size="sm">View Profile</Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -567,8 +575,64 @@ export default function MatchesPage() {
             <div className="grid gap-4 pb-16">
               {currentCandidates.map((candidate) => (
                 <Card key={candidate.name} className="hover:bg-muted/50 transition-colors">
-                  <CardContent className="p-6">
-                    {renderCandidateCard(candidate, viewMode === 'detailed')}
+                  <CardContent className="p-6 space-y-6">
+                    {/* Main candidate info */}
+                    {renderCandidateCard(candidate)}
+                    
+                    {/* Additional details */}
+                    {viewMode === 'detailed' && (
+                      <div className="grid grid-cols-4 gap-6 pt-6 border-t">
+                        {/* Education */}
+                        <div className="space-y-1">
+                          <h5 className="font-medium text-sm">Education</h5>
+                          <p className="text-sm">Master&apos;s in Computer Science</p>
+                          <p className="text-xs text-muted-foreground">Stanford University, 2020</p>
+                        </div>
+                        
+                        {/* Languages */}
+                        <div className="space-y-2">
+                          <h5 className="font-medium text-sm">Languages</h5>
+                          <div className="flex flex-wrap gap-1">
+                            <Badge variant="secondary">English (Native)</Badge>
+                            <Badge variant="secondary">Spanish (B2)</Badge>
+                          </div>
+                        </div>
+                        
+                        {/* Additional Skills */}
+                        <div className="space-y-2">
+                          <h5 className="font-medium text-sm">Additional Skills</h5>
+                          <div className="grid gap-1.5">
+                            {Object.entries(candidate.skillRatings)
+                              .slice(3, 6)
+                              .map(([skill, score]) => (
+                                <div key={skill} className="flex items-center justify-between text-sm">
+                                  <span>{skill}</span>
+                                  <span className="text-muted-foreground">{score}%</span>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                        
+                        {/* Preferences */}
+                        <div className="space-y-2">
+                          <h5 className="font-medium text-sm">Preferences</h5>
+                          <div className="space-y-1 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Salary</span>
+                              <span>$120k - $150k</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Work Type</span>
+                              <span>Remote</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Notice</span>
+                              <span>2 weeks</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               ))}
