@@ -69,6 +69,8 @@ const formatDate = (dateString: string) => {
 // Add pagination config
 const ITEMS_PER_PAGE = 5
 
+
+
 export default function MatchesPage() {
   const { addCandidate, candidates } = usePipelineStore()
   // For demo, we'll use the first job
@@ -77,6 +79,7 @@ export default function MatchesPage() {
   const [viewMode, setViewMode] = useState<'simple' | 'detailed' | 'table'>('simple')
   const [chatOpen, setChatOpen] = useState(false)
   const [chatInput, setChatInput] = useState("")
+  const [showDetails, setShowDetails] = useState(false)
 
   // Calculate pagination
   const totalPages = Math.ceil(candidateMatches.length / ITEMS_PER_PAGE)
@@ -312,7 +315,7 @@ export default function MatchesPage() {
                 variant={viewMode === 'simple' ? "secondary" : "ghost"}
                 size="icon"
                 className="h-8 w-8"
-                onClick={() => setViewMode('simple')}
+                onClick={() => {setViewMode('simple'); setShowDetails(false)}}
                 title="Simple List View"
               >
                 <LayoutList className="h-4 w-4" />
@@ -321,7 +324,7 @@ export default function MatchesPage() {
                 variant={viewMode === 'detailed' ? "secondary" : "ghost"}
                 size="icon"
                 className="h-8 w-8"
-                onClick={() => setViewMode('detailed')}
+                onClick={() => {setViewMode('detailed'); setShowDetails(true)}}
                 title="Detailed List View"
               >
                 <LayoutGrid className="h-4 w-4" />
@@ -330,7 +333,7 @@ export default function MatchesPage() {
                 variant={viewMode === 'table' ? "secondary" : "ghost"}
                 size="icon"
                 className="h-8 w-8"
-                onClick={() => setViewMode('table')}
+                onClick={() => {setViewMode('table'); setShowDetails(false)}}
                 title="Table View"
               >
                 <TableIcon className="h-4 w-4" />
@@ -473,7 +476,7 @@ export default function MatchesPage() {
                           </div>
 
                           {/* Additional details */}
-                          {viewMode === 'detailed' && (
+                          {showDetails && (
                             <div className="grid grid-cols-4 gap-6 pt-4 border-t">
                               {/* Education */}
                               <div className="space-y-1">

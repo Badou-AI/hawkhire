@@ -23,9 +23,11 @@ export const jobs = [
 // Updated mock candidate matches with skill ratings
 export const candidateMatches = [
   {
+    id: "1",
     name: "Sarah Miller",
     avatar: "/placeholder.svg",
     matchScore: 95,
+    role: "Full Stack Developer",
     experience: "5 years",
     mainSkillScore: 98,
     skillRatings: {
@@ -43,9 +45,11 @@ export const candidateMatches = [
     summary: "Strong expertise in React with extensive full-stack experience. Demonstrates excellent problem-solving skills and modern development practices."
   },
   {
+    id: "2",
     name: "James Wilson",
     avatar: "/placeholder.svg",
     matchScore: 92,
+    role: "Frontend Developer",
     experience: "4 years",
     mainSkillScore: 90,
     skillRatings: {
@@ -60,9 +64,11 @@ export const candidateMatches = [
     summary: "Versatile developer with strong skills in JavaScript and Python. Proven ability to adapt to new technologies and solve complex problems."
   },
   {
+    id: "3",
     name: "Emily Chen",
     avatar: "/placeholder.svg",
     matchScore: 90,
+    role: "Full Stack Developer",
     experience: "6 years",
     mainSkillScore: 95,
     skillRatings: {
@@ -77,9 +83,11 @@ export const candidateMatches = [
     summary: "Experienced Java developer with a strong focus on Spring and Angular. Demonstrates excellent problem-solving skills and modern development practices."
   },
   {
+    id: "4",
     name: "Michael Brown",
     avatar: "/placeholder.svg",
     matchScore: 88,
+    role: "Full Stack Developer",
     experience: "3 years",
     mainSkillScore: 90,
     skillRatings: {
@@ -94,9 +102,11 @@ export const candidateMatches = [
     summary: "Skilled React Native developer with experience in Firebase and AWS. Proven ability to develop high-quality mobile applications and cloud infrastructure."
   },
   {
+    id: "5",
     name: "Lisa Anderson",
     avatar: "/placeholder.svg",
     matchScore: 87,
+    role: "UI/UX Designer",
     experience: "4 years",
     mainSkillScore: 90,
     skillRatings: {
@@ -111,9 +121,11 @@ export const candidateMatches = [
     summary: "Experienced UI/UX designer with a strong focus on Figma and Adobe XD. Proven ability to create visually appealing and user-friendly designs."
   },
   {
+    id: "6",
     name: "David Kim",
     avatar: "/placeholder.svg",
     matchScore: 85,
+    role: "Full Stack Developer",
     experience: "5 years",
     mainSkillScore: 90,
     skillRatings: {
@@ -128,9 +140,11 @@ export const candidateMatches = [
     summary: "Skilled Python developer with experience in Django and PostgreSQL. Proven ability to develop high-quality backend systems and data analysis."
   },
   {
+    id: "7",
     name: "Anna Martinez",
     avatar: "/placeholder.svg",
     matchScore: 84,
+    role: "Full Stack Developer",
     experience: "4 years",
     mainSkillScore: 90,
     skillRatings: {
@@ -145,9 +159,11 @@ export const candidateMatches = [
     summary: "Experienced JavaScript developer with a strong focus on React and MongoDB. Demonstrates excellent problem-solving skills and modern development practices."
   },
   {
+    id: "8",
     name: "Tom Johnson",
     avatar: "/placeholder.svg",
     matchScore: 82,
+    role: "Full Stack Developer",
     experience: "3 years",
     mainSkillScore: 85,
     skillRatings: {
@@ -162,9 +178,11 @@ export const candidateMatches = [
     summary: "Skilled PHP developer with experience in Laravel and MySQL. Proven ability to develop high-quality backend systems and database administration."
   },
   {
+    id: "9",
     name: "Rachel Lee",
     avatar: "/placeholder.svg",
     matchScore: 81,
+    role: "Full Stack Developer",
     experience: "5 years",
     mainSkillScore: 90,
     skillRatings: {
@@ -179,9 +197,11 @@ export const candidateMatches = [
     summary: "Skilled Ruby developer with experience in Rails and PostgreSQL. Proven ability to develop high-quality backend systems and data analysis."
   },
   {
+    id: "10",
     name: "Chris Taylor",
     avatar: "/placeholder.svg",
     matchScore: 80,
+    role: "Full Stack Developer",
     experience: "4 years",
     mainSkillScore: 85,
     skillRatings: {

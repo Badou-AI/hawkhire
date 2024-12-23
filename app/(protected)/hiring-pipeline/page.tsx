@@ -9,6 +9,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import type { DropResult } from '@hello-pangea/dnd';
 
 interface Candidate {
   id: string
@@ -24,12 +25,6 @@ interface Column {
   id: string
   title: string
   candidates: Candidate[]
-}
-
-interface DragResult {
-  destination?: { droppableId: string; index: number };
-  source: { droppableId: string; index: number };
-  draggableId: string;
 }
 
 interface JobDetails {
@@ -107,11 +102,10 @@ export default function HiringPipeline() {
     setIsLoading(false)
   }, [isHydrated, getCandidatesByStage])
 
-  const onDragEnd = (result: DragResult) => {
-    const { destination, draggableId } = result;
-    if (!destination) return;
+  const onDragEnd = (result: DropResult) => {
+    if (!result.destination) return;
     
-    updateCandidateStage(draggableId, destination.droppableId as PipelineStage);
+    updateCandidateStage(result.draggableId, result.destination.droppableId as PipelineStage);
     
     setColumns(prevColumns => prevColumns.map(column => ({
       ...column,
@@ -332,7 +326,7 @@ export default function HiringPipeline() {
                   <div className="flex items-center gap-2">
                     <div className={cn(
                       "w-2 h-2 rounded-full shrink-0",
-                      COLUMN_COLORS[column.id]
+                      COLUMN_COLORS[column.id as keyof typeof COLUMN_COLORS]
                     )} />
                     <h2 className={cn(
                       "font-semibold text-xs uppercase tracking-wider",
@@ -458,7 +452,7 @@ export default function HiringPipeline() {
                 onClick={() => scrollToColumn(column.id)}
                 className={cn(
                   "w-3 h-3 rounded-full transition-all hover:scale-125",
-                  COLUMN_COLORS[column.id],
+                  COLUMN_COLORS[column.id as keyof typeof COLUMN_COLORS],
                   "opacity-40 hover:opacity-100"
                 )}
                 aria-label={`Scroll to ${column.title}`}
