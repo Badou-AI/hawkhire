@@ -5,8 +5,10 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "pre:build": "npm run lint && npm run type-check",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "type-check": "tsc"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^16.5.0",
