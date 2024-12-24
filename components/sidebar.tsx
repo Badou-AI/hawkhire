@@ -89,7 +89,10 @@ export function Sidebar() {
     >
       <div className="flex h-full flex-col px-3 py-4">
         {/* Logo and Toggle */}
-        <div className="mb-8 flex items-center justify-center">
+        <div className={cn(
+          "mb-8 flex items-center",
+          isCollapsed ? "justify-center" : "justify-between"
+        )}>
           {isCollapsed ? (
             <div className="w-8 h-8 rounded-md bg-primary-foreground/20 flex items-center justify-center text-white">
               H
