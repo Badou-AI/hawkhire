@@ -29,7 +29,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { MoreVertical, Star } from 'lucide-react'
 import { ApplicantDetails } from "@/components/applicant-details"
-import Link from "next/link";
+import Link from "next/link"
 
 type Applicant = {
   name: string;
@@ -358,7 +358,7 @@ export default function ApplicantsPage() {
     <>
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <h1 className="text-4xl font-bold">Applicants</h1>
+          <h1 className="text-2xl font-bold">Applicants</h1>
           <div className="flex flex-wrap items-center gap-4">
             <Button variant="outline" size="sm">Sort by</Button>
             <Button variant="outline" size="sm">Designation</Button>

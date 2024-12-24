@@ -219,7 +219,7 @@ export default function MatchesPage() {
               </Button>
             </Link>
             <div>
-              <h1 className="text-4xl font-bold">{currentJob.title}</h1>
+              <h1 className="text-2xl font-bold">{currentJob.title}</h1>
               <p className="text-muted-foreground mt-1">Review matched candidates based on skills and experience</p>
             </div>
           </div>

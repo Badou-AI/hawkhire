@@ -183,7 +183,7 @@ export default function HiringPipeline() {
               </Link>
               <div>
                 <div className="flex items-center gap-3">
-                  <h1 className="text-4xl font-bold">{jobDetails.title}</h1>
+                  <h1 className="text-2xl font-bold">{jobDetails.title}</h1>
                   <Badge variant="secondary" className="mt-1">
                     {jobDetails.type}
                   </Badge>
@@ -245,7 +245,7 @@ export default function HiringPipeline() {
             </Link>
             <div>
               <div className="flex items-center gap-3">
-                <h1 className="text-4xl font-bold">{jobDetails.title}</h1>
+                <h1 className="text-2xl font-bold">{jobDetails.title}</h1>
                 <Badge variant="secondary" className="mt-1">
                   {jobDetails.type}
                 </Badge>
