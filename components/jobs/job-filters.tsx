@@ -1,10 +1,10 @@
 'use client'
 
 import { Checkbox } from '@/components/ui/checkbox'
-import { useState } from 'react'
+//import { useState } from 'react'
 
 export function JobFilters() {
-  const [jobAlerts, setJobAlerts] = useState(false)
+  //const [jobAlerts, setJobAlerts] = useState(false)
   
   return (
     <div className="space-y-8">

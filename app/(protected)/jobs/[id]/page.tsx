@@ -4,14 +4,18 @@ import { Button } from '@/components/ui/button'
 import Image from 'next/image'
 import { Share2, BookmarkIcon } from 'lucide-react'
 
-interface Props {
-  params: {
-    id: string
-  }
+interface PageProps {
+  params: Promise<{
+    id: string;
+  }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
-export default function JobDetailsPage({ params }: Props) {
-  const job = mockJobs.find(j => j.id === params.id)
+export default async function JobPage({ 
+  params,
+}: PageProps) {
+  const resolvedParams = await params
+  const job = mockJobs.find(j => j.id === resolvedParams.id)
   
   if (!job) {
     notFound()

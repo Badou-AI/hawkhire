@@ -102,7 +102,7 @@ export function getFilteredJobs(filters: {
 
   if (filters.type?.length) {
     filtered = filtered.filter(job =>
-      filters.type.includes(job.type)
+      (filters.type || []).includes(job.type)
     )
   }
 
