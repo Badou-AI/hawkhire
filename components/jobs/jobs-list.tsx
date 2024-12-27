@@ -34,10 +34,10 @@ export function JobsList() {
         </select>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 auto-rows-fr">
         {jobs.map((job) => (
-          <Link href={`/jobs/${job.id}`} key={job.id}>
-            <Card className="flex flex-col overflow-hidden p-6 transition-colors hover:border-primary">
+          <Link href={`/jobs/${job.id}`} key={job.id} className="block h-full">
+            <Card className="flex h-full flex-col p-6 transition-colors hover:border-primary">
               <div className="flex items-start gap-4">
                 <div className="h-12 w-12 flex-shrink-0">
                   <Image
@@ -57,14 +57,14 @@ export function JobsList() {
                 </div>
               </div>
 
-              <div className="mt-4">
+              <div className="mt-4 min-h-[120px]">
                 <h4 className="text-base font-medium leading-snug">{job.title}</h4>
                 <p className="mt-2 line-clamp-3 text-sm text-gray-600">
                   {job.description}
                 </p>
               </div>
 
-              <div className="mt-4">
+              <div className="mt-4 min-h-[32px]">
                 <div className="flex flex-wrap gap-2">
                   {job.skills.slice(0, 3).map((skill) => (
                     <span
@@ -82,7 +82,7 @@ export function JobsList() {
                 <span>{job.type}</span>
               </div>
 
-              <div className="mt-4">
+              <div className="mt-4 mt-auto">
                 <Button variant="link" className="h-auto p-0 text-primary">
                   {job.remote ? 'Remote' : 'On-site'} • {job.salary}
                 </Button>
