@@ -166,3 +166,15 @@ h6 {
   }
 }
 
+.job-card:hover {
+  border-color: theme('colors.primary.DEFAULT');
+}
+
+.rating-star {
+  @apply h-4 w-4 fill-yellow-400 text-yellow-400;
+}
+
+.job-filters-section {
+  @apply space-y-6 p-4;
+}
+
