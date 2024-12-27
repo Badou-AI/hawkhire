@@ -45,7 +45,8 @@ export function JobsList() {
                     alt={`${job.company} logo`}
                     width={48}
                     height={48}
-                    className="rounded-lg"
+                    className="rounded-lg object-contain"
+                    quality={95}
                   />
                 </div>
                 <div>
