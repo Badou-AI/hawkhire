@@ -39,6 +39,14 @@
     --sidebar-collapsed-width: 64px;
     --header-height: 64px;
     --content-padding: 1rem;
+
+    /* Pipeline status colors */
+    --status-screening: 214 84% 52%;    /* Primary blue #1F74EC */
+    --status-interview: 271 81% 56%;    /* Purple #7C3AED */
+    --status-assessment: 31 97% 55%;    /* Orange #F97316 */
+    --status-offer: 142 72% 29%;        /* Green #1E7647 */
+    --status-hired: 161 94% 30%;        /* Teal #097B68 */
+    --status-rejected: 0 84% 60%;       /* Red #EA4335 */
   }
  
   .dark {

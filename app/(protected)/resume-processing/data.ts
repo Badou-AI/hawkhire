@@ -42,7 +42,8 @@ export const candidateMatches = [
       { jobTitle: "Backend Developer", score: 89 },
       { jobTitle: "DevOps Engineer", score: 82 }
     ],
-    summary: "Strong expertise in React with extensive full-stack experience. Demonstrates excellent problem-solving skills and modern development practices."
+    summary: "Strong expertise in React with extensive full-stack experience. Demonstrates excellent problem-solving skills and modern development practices.",
+    stage: 'phoneScreen'
   },
   {
     id: "2",
@@ -61,7 +62,8 @@ export const candidateMatches = [
       { jobTitle: "Frontend Developer", score: 87 },
       { jobTitle: "Data Scientist", score: 80 }
     ],
-    summary: "Versatile developer with strong skills in JavaScript and Python. Proven ability to adapt to new technologies and solve complex problems."
+    summary: "Versatile developer with strong skills in JavaScript and Python. Proven ability to adapt to new technologies and solve complex problems.",
+    stage: 'technical'
   },
   {
     id: "3",
@@ -80,7 +82,8 @@ export const candidateMatches = [
       { jobTitle: "Full Stack Developer", score: 92 },
       { jobTitle: "Backend Developer", score: 88 }
     ],
-    summary: "Experienced Java developer with a strong focus on Spring and Angular. Demonstrates excellent problem-solving skills and modern development practices."
+    summary: "Experienced Java developer with a strong focus on Spring and Angular. Demonstrates excellent problem-solving skills and modern development practices.",
+    stage: 'cultural'
   },
   {
     id: "4",
@@ -99,7 +102,8 @@ export const candidateMatches = [
       { jobTitle: "Mobile Developer", score: 87 },
       { jobTitle: "Cloud Engineer", score: 80 }
     ],
-    summary: "Skilled React Native developer with experience in Firebase and AWS. Proven ability to develop high-quality mobile applications and cloud infrastructure."
+    summary: "Skilled React Native developer with experience in Firebase and AWS. Proven ability to develop high-quality mobile applications and cloud infrastructure.",
+    stage: 'offer'
   },
   {
     id: "5",
@@ -118,7 +122,8 @@ export const candidateMatches = [
       { jobTitle: "UX Designer", score: 85 },
       { jobTitle: "Graphic Designer", score: 80 }
     ],
-    summary: "Experienced UI/UX designer with a strong focus on Figma and Adobe XD. Proven ability to create visually appealing and user-friendly designs."
+    summary: "Experienced UI/UX designer with a strong focus on Figma and Adobe XD. Proven ability to create visually appealing and user-friendly designs.",
+    stage: 'offer'
   },
   {
     id: "6",
@@ -137,7 +142,8 @@ export const candidateMatches = [
       { jobTitle: "Backend Developer", score: 87 },
       { jobTitle: "Data Scientist", score: 80 }
     ],
-    summary: "Skilled Python developer with experience in Django and PostgreSQL. Proven ability to develop high-quality backend systems and data analysis."
+    summary: "Skilled Python developer with experience in Django and PostgreSQL. Proven ability to develop high-quality backend systems and data analysis.",
+    stage: 'offer'
   },
   {
     id: "7",
@@ -156,7 +162,8 @@ export const candidateMatches = [
       { jobTitle: "Full Stack Developer", score: 87 },
       { jobTitle: "Backend Developer", score: 85 }
     ],
-    summary: "Experienced JavaScript developer with a strong focus on React and MongoDB. Demonstrates excellent problem-solving skills and modern development practices."
+    summary: "Experienced JavaScript developer with a strong focus on React and MongoDB. Demonstrates excellent problem-solving skills and modern development practices.",
+    stage: 'offer'
   },
   {
     id: "8",
@@ -175,7 +182,8 @@ export const candidateMatches = [
       { jobTitle: "Backend Developer", score: 80 },
       { jobTitle: "Database Administrator", score: 75 }
     ],
-    summary: "Skilled PHP developer with experience in Laravel and MySQL. Proven ability to develop high-quality backend systems and database administration."
+    summary: "Skilled PHP developer with experience in Laravel and MySQL. Proven ability to develop high-quality backend systems and database administration.",
+    stage: 'rejected'
   },
   {
     id: "9",
@@ -194,7 +202,8 @@ export const candidateMatches = [
       { jobTitle: "Backend Developer", score: 87 },
       { jobTitle: "Data Scientist", score: 80 }
     ],
-    summary: "Skilled Ruby developer with experience in Rails and PostgreSQL. Proven ability to develop high-quality backend systems and data analysis."
+    summary: "Skilled Ruby developer with experience in Rails and PostgreSQL. Proven ability to develop high-quality backend systems and data analysis.",
+    stage: 'cultural'
   },
   {
     id: "10",
@@ -213,7 +222,8 @@ export const candidateMatches = [
       { jobTitle: "Mobile Developer", score: 87 },
       { jobTitle: "Cloud Engineer", score: 80 }
     ],
-    summary: "Skilled Flutter developer with experience in Dart and Firebase. Proven ability to develop high-quality mobile applications and cloud infrastructure."
+    summary: "Skilled Flutter developer with experience in Dart and Firebase. Proven ability to develop high-quality mobile applications and cloud infrastructure.",
+    stage: 'technical'
   }
 ]
 

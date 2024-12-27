@@ -140,9 +140,9 @@ export default function MatchesPage() {
             <p className="text-sm text-muted-foreground line-clamp-2">
               {candidate.summary}
             </p>
-            {candidates[candidate.id] ? (
+            {/* {candidates[candidate.id] ? (
               <PipelineStatus currentStage={candidates[candidate.id].stage} />
-            ) : (
+            ) : ( */}
               <Button
                 onClick={() => addCandidate({
                   id: candidate.id,
@@ -158,7 +158,7 @@ export default function MatchesPage() {
                 <Plus className="h-3 w-3" />
                 Add to Pipeline
               </Button>
-            )}
+            {/* )} */}
           </div>
         </div>
 
@@ -219,7 +219,7 @@ export default function MatchesPage() {
               </Button>
             </Link>
             <div>
-              <h1 className="text-2xl font-bold">{currentJob.title}</h1>
+              <h1 className="text-4xl font-bold">{currentJob.title}</h1>
               <p className="text-muted-foreground mt-1">Review matched candidates based on skills and experience</p>
             </div>
           </div>
@@ -577,7 +577,21 @@ export default function MatchesPage() {
           ) : (
             <div className="grid gap-4 pb-16">
               {currentCandidates.map((candidate) => (
-                <Card key={candidate.name} className="hover:bg-muted/50 transition-colors">
+                <Card 
+                  key={candidate.name} 
+                  data-stage={candidates[candidate.id]?.stage}
+                  className={cn(
+                    "hover:bg-muted/50 transition-colors",
+                    {
+                      'border-l-[4px] border-l-[hsl(var(--status-screening))]': candidates[candidate.id]?.stage === 'phoneScreen',
+                      'border-l-[4px] border-l-[hsl(var(--status-interview))]': candidates[candidate.id]?.stage === 'technical',
+                      'border-l-[4px] border-l-[hsl(var(--status-assessment))]': candidates[candidate.id]?.stage === 'cultural',
+                      'border-l-[4px] border-l-[hsl(var(--status-offer))]': candidates[candidate.id]?.stage === 'offer',
+                      'border-l-[4px] border-l-[hsl(var(--status-hired))]': candidates[candidate.id]?.stage === 'hired',
+                      'border-l-[4px] border-l-[hsl(var(--status-rejected))]': candidates[candidate.id]?.stage === 'rejected',
+                    }
+                  )}
+                >
                   <CardContent className="p-6 space-y-6">
                     {/* Main candidate info */}
                     {renderCandidateCard(candidate)}

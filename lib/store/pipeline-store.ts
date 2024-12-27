@@ -38,7 +38,7 @@ const mockCandidates: Record<string, Candidate> = {
     role: 'Frontend Developer',
     score: 92,
     imageUrl: '/placeholder.svg',
-    stage: 'phoneScreen'
+    stage: 'technical'
   },
   '3': {
     id: '3',
@@ -46,7 +46,7 @@ const mockCandidates: Record<string, Candidate> = {
     role: 'DevOps Engineer',
     score: 88,
     imageUrl: '/placeholder.svg',
-    stage: 'phoneScreen'
+    stage: 'cultural'
   },
   '4': {
     id: '4',
@@ -54,7 +54,7 @@ const mockCandidates: Record<string, Candidate> = {
     role: 'UI/UX Designer',
     score: 91,
     imageUrl: '/placeholder.svg',
-    stage: 'phoneScreen'
+    stage: 'offer'
   },
   '5': {
     id: '5',
@@ -62,7 +62,7 @@ const mockCandidates: Record<string, Candidate> = {
     role: 'Backend Developer',
     score: 87,
     imageUrl: '/placeholder.svg',
-    stage: 'phoneScreen'
+    stage: 'offer'
   },
   '6': {
     id: '6',
@@ -70,7 +70,7 @@ const mockCandidates: Record<string, Candidate> = {
     role: 'Data Engineer',
     score: 89,
     imageUrl: '/placeholder.svg',
-    stage: 'phoneScreen'
+    stage: 'rejected'
   },
   '7': {
     id: '7',
@@ -78,7 +78,7 @@ const mockCandidates: Record<string, Candidate> = {
     role: 'Mobile Developer',
     score: 86,
     imageUrl: '/placeholder.svg',
-    stage: 'phoneScreen'
+    stage: 'cultural'
   },
   '8': {
     id: '8',
@@ -86,7 +86,7 @@ const mockCandidates: Record<string, Candidate> = {
     role: 'Full Stack Developer',
     score: 90,
     imageUrl: '/placeholder.svg',
-    stage: 'phoneScreen'
+    stage: 'technical'
   },
 
   // Technical Interview Stage (7 candidates)
@@ -96,7 +96,7 @@ const mockCandidates: Record<string, Candidate> = {
     role: 'Backend Developer',
     score: 94,
     imageUrl: '/placeholder.svg',
-    stage: 'technical',
+    stage: 'offer',
     scheduledTime: 'Tomorrow at 2:00 PM',
     interviewLink: 'meet.google.com/abc-defg-hij'
   },

@@ -41,15 +41,6 @@ interface JobDetails {
   };
 }
 
-const COLUMN_COLORS = {
-  phoneScreen: 'bg-blue-500',
-  technical: 'bg-purple-500',
-  cultural: 'bg-orange-500',
-  offer: 'bg-yellow-500',
-  hired: 'bg-green-500',
-  rejected: 'bg-red-500'
-} as const;
-
 export default function HiringPipeline() {
   const { getCandidatesByStage, updateCandidateStage } = usePipelineStore()
   const [isLoading, setIsLoading] = useState(true)
@@ -324,10 +315,19 @@ export default function HiringPipeline() {
               >
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
-                    <div className={cn(
-                      "w-2 h-2 rounded-full shrink-0",
-                      COLUMN_COLORS[column.id as keyof typeof COLUMN_COLORS]
-                    )} />
+                    <div 
+                      className={cn(
+                        "w-2 h-2 rounded-full shrink-0",
+                        {
+                          'bg-[hsl(var(--status-screening))]': column.id === 'phoneScreen',
+                          'bg-[hsl(var(--status-interview))]': column.id === 'technical',
+                          'bg-[hsl(var(--status-assessment))]': column.id === 'cultural',
+                          'bg-[hsl(var(--status-offer))]': column.id === 'offer',
+                          'bg-[hsl(var(--status-hired))]': column.id === 'hired',
+                          'bg-[hsl(var(--status-rejected))]': column.id === 'rejected',
+                        }
+                      )} 
+                    />
                     <h2 className={cn(
                       "font-semibold text-xs uppercase tracking-wider",
                       column.id === 'hired' && "text-green-700 dark:text-green-300",
@@ -452,7 +452,14 @@ export default function HiringPipeline() {
                 onClick={() => scrollToColumn(column.id)}
                 className={cn(
                   "w-3 h-3 rounded-full transition-all hover:scale-125",
-                  COLUMN_COLORS[column.id as keyof typeof COLUMN_COLORS],
+                  {
+                    'bg-[hsl(var(--status-screening))]': column.id === 'phoneScreen',
+                    'bg-[hsl(var(--status-interview))]': column.id === 'technical',
+                    'bg-[hsl(var(--status-assessment))]': column.id === 'cultural',
+                    'bg-[hsl(var(--status-offer))]': column.id === 'offer',
+                    'bg-[hsl(var(--status-hired))]': column.id === 'hired',
+                    'bg-[hsl(var(--status-rejected))]': column.id === 'rejected',
+                  },
                   "opacity-40 hover:opacity-100"
                 )}
                 aria-label={`Scroll to ${column.title}`}

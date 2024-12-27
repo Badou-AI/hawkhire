@@ -51,6 +51,18 @@
     --sidebar-border: 220 13% 91%;
  
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    --sidebar-width: 256px;
+    --sidebar-collapsed-width: 64px;
+    --header-height: 64px;
+    --content-padding: 1rem;
+
+    --status-screening: 271 81% 56%;
+    --status-interview: 214 84% 52%;
+    --status-assessment: 31 97% 55%;
+    --status-offer: 142 72% 29%;
+    --status-hired: 161 94% 30%;
+    --status-rejected: 0 84% 60%;
   }
  
   .dark {
