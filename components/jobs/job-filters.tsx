@@ -1,13 +1,34 @@
 'use client'
 
 import { Checkbox } from '@/components/ui/checkbox'
-//import { useState } from 'react'
+import { useState } from 'react'
 
 export function JobFilters() {
-  //const [jobAlerts, setJobAlerts] = useState(false)
+  const [isRemoteOnly, setIsRemoteOnly] = useState(false)
+  const [selectedLocations, setSelectedLocations] = useState<string[]>([])
+
+  // This would typically come from a geolocation service
+  // For now using mock data
+  const nearbyLocations = [
+    { name: 'San Francisco Bay Area', count: 234 },
+    { name: 'South Bay', count: 156 },
+    { name: 'East Bay', count: 98 },
+    { name: 'Peninsula', count: 167 },
+    { name: 'North Bay', count: 45 },
+    { name: 'Sacramento', count: 78 }
+  ]
   
   return (
     <div className="space-y-8">
+      {/* Easy Apply Filter */}
+      <div className="flex items-center gap-2">
+        <Checkbox id="easy-apply" />
+        <label htmlFor="easy-apply" className="text-sm font-medium">
+          Easy Apply Only
+        </label>
+      </div>
+
+      {/* Sectors */}
       <div>
         <h3 className="mb-4 text-lg font-medium">Sectors</h3>
         <div className="space-y-3">
@@ -36,27 +57,109 @@ export function JobFilters() {
         </div>
       </div>
 
+      {/* Employment Type */}
       <div>
-        <h3 className="mb-4 text-lg font-medium">Company size</h3>
+        <h3 className="mb-4 text-lg font-medium">Employment Type</h3>
         <div className="space-y-3">
           {[
-            '1-10',
-            '11-50',
-            '51-200',
-            '201-500',
-            '501-1000',
-            '1001-5000',
-            '5001+'
-          ].map((size) => (
-            <div key={size} className="flex items-center gap-2">
-              <Checkbox id={size} />
-              <label htmlFor={size} className="text-sm text-gray-600">
-                {size} employees
+            'Full-time',
+            'Part-time',
+            'Contract',
+            'Temporary',
+            'Internship',
+            'Freelance'
+          ].map((type) => (
+            <div key={type} className="flex items-center gap-2">
+              <Checkbox id={type} />
+              <label htmlFor={type} className="text-sm text-gray-600">
+                {type}
               </label>
             </div>
           ))}
         </div>
       </div>
+
+      {/* Employer Type */}
+      <div>
+        <h3 className="mb-4 text-lg font-medium">Employer Type</h3>
+        <div className="space-y-3">
+          {[
+            'Direct Hire',
+            'Agency',
+            'Startup',
+            'Enterprise',
+            'Non-profit',
+            'Government'
+          ].map((type) => (
+            <div key={type} className="flex items-center gap-2">
+              <Checkbox id={type} />
+              <label htmlFor={type} className="text-sm text-gray-600">
+                {type}
+              </label>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Work Settings */}
+      <div>
+        <h3 className="mb-4 text-lg font-medium">Work Settings</h3>
+        <div className="space-y-3">
+          {[
+            'Remote',
+            'Hybrid',
+            'On-site',
+            'Flexible Schedule',
+            'Fixed Schedule'
+          ].map((setting) => (
+            <div key={setting} className="flex items-center gap-2">
+              <Checkbox 
+                id={setting} 
+                onCheckedChange={(checked) => {
+                  if (setting === 'Remote') {
+                    setIsRemoteOnly(checked as boolean)
+                  }
+                }}
+              />
+              <label htmlFor={setting} className="text-sm text-gray-600">
+                {setting}
+              </label>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Locations - Only show when Remote is not checked */}
+      {!isRemoteOnly && (
+        <div>
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-lg font-medium">Locations Near You</h3>
+            <span className="text-sm text-gray-500">within 50 miles</span>
+          </div>
+          <div className="space-y-3">
+            {nearbyLocations.map((location) => (
+              <div key={location.name} className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Checkbox 
+                    id={location.name}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setSelectedLocations([...selectedLocations, location.name])
+                      } else {
+                        setSelectedLocations(selectedLocations.filter(loc => loc !== location.name))
+                      }
+                    }}
+                  />
+                  <label htmlFor={location.name} className="text-sm text-gray-600">
+                    {location.name}
+                  </label>
+                </div>
+                <span className="text-sm text-gray-400">{location.count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 } 
