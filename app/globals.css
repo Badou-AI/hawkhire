@@ -113,7 +113,6 @@
   body {
     @apply bg-background text-foreground;
   }
-  
 }
 
 .font-sans {
