@@ -3,32 +3,25 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
-    Card,
-    CardContent,
-    CardHeader,
-    CardTitle,
-    CardDescription,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
 } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select"
 import { Upload, FileType, AlertCircle, CheckCircle2, XCircle, Timer, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import Link from "next/link"
-
-// Simulated processing speeds (ms)
-const UPLOAD_SPEED = 50 // Time per % of upload
-const PROCESS_SPEED = 20 // Time per CV
-const COUNT_FILES_DURATION = 2000 // Time to count files in ZIP
-const TOTAL_FILES = 1000 // Constant for total files
-const SIMULATED_PROCESS_TIME = 28 // Constant processing time in seconds
 
 const formatTime = (seconds: number): string => {
   if (seconds < 60) {
@@ -38,12 +31,10 @@ const formatTime = (seconds: number): string => {
   const minutes = Math.floor(seconds / 60)
   const remainingSeconds = Math.floor(seconds % 60)
   
-  // If minutes is less than 60, show minutes and seconds
   if (minutes < 60) {
     return `${minutes} minute${minutes > 1 ? 's' : ''} ${remainingSeconds} second${remainingSeconds !== 1 ? 's' : ''}`
   }
   
-  // If hours is less than 24, show hours, minutes and seconds
   const hours = Math.floor(minutes / 60)
   const remainingMinutes = minutes % 60
   
@@ -51,7 +42,6 @@ const formatTime = (seconds: number): string => {
     return `${hours} hour${hours > 1 ? 's' : ''} ${remainingMinutes} minute${remainingMinutes !== 1 ? 's' : ''}`
   }
   
-  // For very long durations, just show hours
   return `${hours} hour${hours > 1 ? 's' : ''}`
 }
 
@@ -63,8 +53,6 @@ export default function ResumeProcessingPage() {
   const [selectedJob, setSelectedJob] = useState<string>("")
   const [uploadProgress, setUploadProgress] = useState<number>(0)
   const [processingStatus, setProcessingStatus] = useState<'idle' | 'counting' | 'uploading' | 'processing' | 'completed' | 'error'>('idle')
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [startTime, setStartTime] = useState<number>(0)
   const [processingTime, setProcessingTime] = useState<number>(0)
   const [stats, setStats] = useState({
     totalFiles: 0,
@@ -74,57 +62,31 @@ export default function ResumeProcessingPage() {
     unsupported: 0
   })
 
-  // Simulate processing of CVs
-  const simulateProcessing = () => {
-    let processedCount = 0
-    let failedCount = 0
-    let supportedCount = 0
-    let unsupportedCount = 0
-    setStartTime(Date.now())
-    
-    // Simulate random error (10% chance)
-    if (Math.random() < 0.1) {
-      setProcessingStatus('error')
-      return
-    }
-    
-    const processInterval = setInterval(() => {
-      // Simulate random success/failure for each batch
-      const batchSize = Math.floor(Math.random() * 5) + 1
-      const newProcessed = Math.min(processedCount + batchSize, TOTAL_FILES)
-      const newFailed = Math.floor(Math.random() * (batchSize * 0.2))
-      
-      processedCount = newProcessed
-      failedCount += newFailed
-      supportedCount = processedCount - failedCount
-      unsupportedCount = Math.floor(Math.random() * (processedCount * 0.05))
-
-      setStats(prev => ({
-        ...prev,
-        processed: processedCount,
-        failed: failedCount,
-        supported: supportedCount,
-        unsupported: unsupportedCount
-      }))
-
-      if (processedCount >= TOTAL_FILES) {
-        clearInterval(processInterval)
-        setProcessingStatus('completed')
-        setProcessingTime(SIMULATED_PROCESS_TIME) // Use constant time instead of actual
-      }
-    }, PROCESS_SPEED)
-
-    return () => clearInterval(processInterval)
-  }
-
-  const handleFileUpload = (e: React.DragEvent<HTMLDivElement> | React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.DragEvent<HTMLDivElement> | React.ChangeEvent<HTMLInputElement>) => {
     e.preventDefault()
     
     if (!selectedJob) return
 
+    // Get the file
+    let file: File | null = null
+    if ('dataTransfer' in e && e.dataTransfer?.files?.length > 0) {
+      file = e.dataTransfer.files[0]
+    } else if ('target' in e && e.target instanceof HTMLInputElement && e.target.files) {
+      const fileList = e.target.files
+      if (fileList.length > 0) {
+        file = fileList[0]
+      }
+    }
+
+    if (!file) {
+      setProcessingStatus('error')
+      return
+    }
+
     // Reset states
     setProcessingStatus('counting')
     setProcessingTime(0)
+    setUploadProgress(0)
     setStats({
       totalFiles: 0,
       processed: 0,
@@ -132,28 +94,53 @@ export default function ResumeProcessingPage() {
       supported: 0,
       unsupported: 0
     })
-    
-    // Simulate ZIP extraction and file counting
-    setTimeout(() => {
-      setStats(prev => ({
-        ...prev,
-        totalFiles: TOTAL_FILES
-      }))
-      
-      // Then start upload simulation
+
+    try {
+      // Create form data
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('jobId', selectedJob)
+
+      // Start upload with progress tracking
       setProcessingStatus('uploading')
-      let progress = 0
-      const uploadInterval = setInterval(() => {
-        progress += 1
-        setUploadProgress(progress)
-        
-        if (progress >= 100) {
-          clearInterval(uploadInterval)
-          setProcessingStatus('processing')
-          simulateProcessing()
+      const startTime = Date.now()
+
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', '/api/resumes')
+
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const progress = (event.loaded / event.total) * 100
+          setUploadProgress(Math.round(progress))
         }
-      }, UPLOAD_SPEED)
-    }, COUNT_FILES_DURATION)
+      }
+
+      xhr.onload = async () => {
+        if (xhr.status === 200) {
+          const data = JSON.parse(xhr.responseText)
+          setStats({
+            totalFiles: data.total_files,
+            processed: data.total_files,
+            failed: 0,
+            supported: data.total_files,
+            unsupported: 0
+          })
+          setProcessingStatus('completed')
+          setProcessingTime((Date.now() - startTime) / 1000)
+        } else {
+          throw new Error('Upload failed')
+        }
+      }
+
+      xhr.onerror = () => {
+        throw new Error('Upload failed')
+      }
+
+      xhr.send(formData)
+    } catch (error) {
+      console.error('Error uploading file:', error)
+      setProcessingStatus('error')
+    }
   }
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
@@ -180,11 +167,11 @@ export default function ResumeProcessingPage() {
       case 'counting':
         return 'Counting files in ZIP...'
       case 'uploading':
-        return 'Uploading files...'
+        return `Uploading files... ${uploadProgress}%`
       case 'processing':
         return `Processing resumes (${stats.processed}/${stats.totalFiles})`
       case 'completed':
-        return `Processing completed in ${SIMULATED_PROCESS_TIME} seconds`
+        return `Processing completed in ${formatTime(processingTime)}`
       case 'error':
         return 'Error processing files: Invalid file format detected'
       default:
