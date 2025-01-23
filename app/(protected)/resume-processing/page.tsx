@@ -97,7 +97,6 @@ export default function ResumeProcessingPage() {
   const [uploadProgress, setUploadProgress] = useState(0)
   const [processingStatus, setProcessingStatus] = useState<'idle' | 'uploading' | 'processing' | 'completed' | 'error'>('idle')
   const [processingTime, setProcessingTime] = useState<number>(0)
-  const [startTime, setStartTime] = useState<number>(0)
   const [stats, setStats] = useState<ProcessingStats>({
     totalFiles: 0,
     processedCount: 0,
@@ -117,14 +116,7 @@ export default function ResumeProcessingPage() {
     setError('')
     setProcessingStatus('uploading')
     setUploadProgress(0)
-    setStartTime(Date.now())
-    setStats({
-      totalFiles: 0,
-      processedCount: 0,
-      failedCount: 0,
-      supported: 0,
-      unsupported: 0
-    })
+    setProcessingTime(0)  // Reset processing time
 
     const formData = new FormData()
     formData.append('file', file)
@@ -132,6 +124,7 @@ export default function ResumeProcessingPage() {
     formData.append('jobTitle', selectedJob.title)
 
     try {
+      const startProcessingTime = Date.now()  // Track processing time locally
       const response = await fetch('/api/resumes', {
         method: 'POST',
         body: formData
@@ -192,8 +185,9 @@ export default function ResumeProcessingPage() {
                   break
 
                 case 'completed':
+                  const processingDuration = (Date.now() - startProcessingTime) / 1000  // Calculate duration in seconds
+                  setProcessingTime(processingDuration)
                   setProcessingStatus('completed')
-                  setProcessingTime((Date.now() - startTime) / 1000)
                   setStats(prev => ({
                     ...prev,
                     processedCount: event.processed_count,

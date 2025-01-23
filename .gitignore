@@ -50,3 +50,9 @@ next-env.d.ts
 # local example folder
 /hr-semantic-search
 /hr-semantic-search/*
+/backend/storage
+/backend/storage/*
+/backend/test_data
+/backend/test_data/*
+/backend/test_resumes
+/backend/test_resumes/*
