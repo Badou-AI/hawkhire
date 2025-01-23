@@ -1,0 +1,88 @@
+{
+    "settings": {
+        "number_of_shards": 1,
+        "number_of_replicas": 0,
+        "analysis": {
+            "analyzer": {
+                "resume_analyzer": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": [
+                        "lowercase",
+                        "asciifolding",
+                        "stop",
+                        "snowball"
+                    ]
+                }
+            }
+        }
+    },
+    "mappings": {
+        "properties": {
+            "upload_id": {"type": "keyword"},
+            "job_id": {"type": "keyword"},
+            "timestamp": {"type": "date"},
+            "content": {
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "text",
+                        "analyzer": "resume_analyzer"
+                    },
+                    "profile": {
+                        "type": "object",
+                        "properties": {
+                            "first_name": {
+                                "type": "text",
+                                "analyzer": "resume_analyzer"
+                            },
+                            "last_name": {
+                                "type": "text",
+                                "analyzer": "resume_analyzer"
+                            },
+                            "tel_num": {"type": "keyword"},
+                            "email": {"type": "keyword"}
+                        }
+                    },
+                    "summary": {
+                        "type": "text",
+                        "analyzer": "resume_analyzer"
+                    },
+                    "question_answer": {
+                        "type": "nested",
+                        "properties": {
+                            "question": {
+                                "type": "text",
+                                "analyzer": "resume_analyzer"
+                            },
+                            "answer": {
+                                "type": "text",
+                                "analyzer": "resume_analyzer"
+                            }
+                        }
+                    },
+                    "example_queries": {
+                        "type": "text",
+                        "index": false
+                    },
+                    "topics": {"type": "keyword"}
+                }
+            },
+            "file_info": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "keyword"},
+                    "size": {"type": "long"},
+                    "mime_type": {"type": "keyword"},
+                    "processed_path": {"type": "keyword"}
+                }
+            },
+            "embedding": {
+                "type": "dense_vector",
+                "dims": 1024,
+                "index": true,
+                "similarity": "cosine"
+            }
+        }
+    }
+} 
