@@ -533,7 +533,7 @@ async def process_zip_file(zip_file: UploadFile, job_id: str, job_title: str = "
         })
 
         # Process PDFs in parallel with semaphore for concurrency control
-        semaphore = asyncio.Semaphore(3)  # Limit to 3 concurrent tasks
+        semaphore = asyncio.Semaphore(15)  # Increased from 10 to 20 concurrent tasks
         
         async def process_with_semaphore(file_path, dest_path):
             async with semaphore:
