@@ -56,3 +56,7 @@ next-env.d.ts
 /backend/test_data/*
 /backend/test_resumes
 /backend/test_resumes/*
+
+# all python pycache
+__pycache__
+__pycache__/*
