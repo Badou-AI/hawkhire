@@ -387,16 +387,21 @@ async def process_single_pdf(
     """Process a single PDF file with all necessary steps"""
     try:
         stats = FileStats(file_path)
+        timings = {}
         
         # Convert PDF to text
+        text_start = time.time()
         text_result = await semantic_service.convert_pdf_to_text(dest_path)
         text_content = "\n".join(text_result.get('pages', []))
+        timings['text_extraction'] = time.time() - text_start
         
         # Generate document ID
         doc_id = hashlib.sha256(text_content.encode()).hexdigest()
         
         # Generate embedding
+        embedding_start = time.time()
         embedding = await semantic_service.generate_embedding(text_content)
+        timings['embedding'] = time.time() - embedding_start
         
         # Create structured document
         document = {
@@ -426,7 +431,17 @@ async def process_single_pdf(
         }
         
         # Index the document
+        indexing_start = time.time()
         await semantic_service.index_document(index_name, doc_id, document)
+        timings['indexing'] = time.time() - indexing_start
+        
+        # Calculate total API time
+        total_api_time = sum(timings.values())
+        print(f"API calls timing for {stats.name}:")
+        print(f"  Text Extraction: {timings['text_extraction']:.2f}s")
+        print(f"  Embedding: {timings['embedding']:.2f}s")
+        print(f"  Indexing: {timings['indexing']:.2f}s")
+        print(f"  Total API Time: {total_api_time:.2f}s")
         
         file_info = {
             "name": stats.name,
@@ -437,7 +452,8 @@ async def process_single_pdf(
             "doc_id": doc_id,
             "text_content": text_content[:500] + "...",
             "status": "processed",
-            "indexed": True
+            "indexed": True,
+            "timings": timings
         }
         
         # Call progress callback
