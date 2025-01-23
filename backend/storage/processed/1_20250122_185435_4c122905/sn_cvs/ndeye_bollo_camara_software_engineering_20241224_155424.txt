@@ -1,0 +1,49 @@
+Ndeye Bollo Camara
+
+Email: ndeye.camara@example.com
+Phone: +221 77 123 4567
+
+Résumé Professionnel:
+Ingénieur logiciel senior avec plus de 15 ans d'expérience dans le développement de solutions logicielles robustes et évolutives. Expertise en architecture de systèmes, gestion de projets et leadership technique.
+
+Formation:
+Master in Informatique
+Université Cheikh Anta Diop
+2002 - 2005
+
+Licence in Mathématiques et Informatique
+Université Gaston Berger
+1999 - 2002
+
+Expérience:
+Architecte Logiciel at Tech Innovators SA
+2018-05 - Present
+- Conception et mise en œuvre de l'architecture logicielle de plusieurs applications d'entreprise.
+- Gestion d'une équipe de 10 développeurs pour assurer la livraison dans les délais des projets.
+- Collaboration avec les parties prenantes pour définir les exigences fonctionnelles et techniques.
+
+Développeur Senior at Solutions Digitales
+2010-01 - 2018-04
+- Développement de modules logiciels pour des systèmes de gestion intégrée.
+- Implémentation de tests automatisés pour améliorer la qualité du code.
+- Formation et mentorat de développeurs juniors.
+
+Développeur Logiciel at Informatique et Services
+2005-06 - 2009-12
+- Participation au développement de solutions logicielles pour le secteur public.
+- Assistance dans l'intégration des nouvelles technologies au sein des équipes de développement.
+- Rédaction de la documentation technique et des guides utilisateurs.
+
+Compétences:
+Langages de Programmation:
+- Java, Python, C++, JavaScript
+
+Technologies:
+- Docker, Kubernetes, AWS, Spring Framework
+
+Bases de Données:
+- MySQL, PostgreSQL, MongoDB
+
+Méthodologies:
+- Agile, Scrum, DevOps
+

@@ -1,0 +1,49 @@
+Omar Samb
+
+Email: omar.samb@example.com
+Phone: +221 77 123 4567
+
+Résumé Professionnel:
+Ingénieur logiciel senior avec plus de 15 ans d'expérience dans le développement d'applications complexes et la gestion d'équipes techniques. Spécialisé dans les solutions innovantes et l'optimisation des processus pour améliorer l'efficacité et la qualité des produits.
+
+Formation:
+Master in Informatique
+Université Paris-Saclay
+2004 - 2006
+
+Licence in Informatique
+Université Cheikh Anta Diop
+2000 - 2003
+
+Expérience:
+Chef de projet logiciel at Tech Innovate
+2016-05 - 2023-09
+- Diriger une équipe de 15 ingénieurs pour développer des solutions logicielles sur mesure.
+- Implémenter des méthodologies Agile pour améliorer les cycles de développement et la collaboration.
+- Collaborer avec les parties prenantes pour définir les exigences et atteindre les objectifs du projet.
+
+Développeur logiciel senior at Global Software Solutions
+2011-02 - 2016-04
+- Concevoir et développer des modules logiciels pour des applications bancaires.
+- Optimiser les performances des applications existantes, réduisant le temps de traitement de 30%.
+- Mentorer des développeurs juniors et organiser des sessions de formation technique.
+
+Développeur logiciel at Digital Tech
+2006-07 - 2011-01
+- Participer au développement d'applications web en utilisant Java et Python.
+- Contribuer à la mise en œuvre de la sécurité des applications.
+- Travailler en étroite collaboration avec les équipes de conception pour améliorer l'expérience utilisateur.
+
+Compétences:
+Langages de programmation:
+- Java, Python, JavaScript, C++
+
+Outils et technologies:
+- Docker, Kubernetes, AWS, Jenkins
+
+Méthodologies:
+- Agile, Scrum, DevOps
+
+Compétences interpersonnelles:
+- Gestion d'équipe, Communication, Résolution de problèmes
+

@@ -1,0 +1,49 @@
+Astou Ndao
+
+Email: astou.ndao@example.com
+Phone: +221 77 123 4567
+
+Résumé Professionnel:
+Ingénieure logicielle senior avec plus de 10 ans d'expérience dans le développement de solutions logicielles robustes et évolutives. Spécialisée dans les technologies backend, l'architecture logicielle, et la gestion d'équipes de développement.
+
+Formation:
+Master in Informatique
+Université Cheikh Anta Diop
+2008 - 2010
+
+Licence in Sciences Informatiques
+Université Gaston Berger
+2005 - 2008
+
+Expérience:
+Ingénieure logicielle senior at Tech Innovators
+2018-05 - Present
+- Diriger une équipe de 10 développeurs pour concevoir et développer des applications backend.
+- Mettre en œuvre des solutions d'architecture microservices pour améliorer l'évolutivité des applications.
+- Collaborer avec les équipes produit pour définir les exigences logicielles.
+
+Ingénieure logiciel at Sénégal Software Solutions
+2014-03 - 2018-04
+- Développer des applications web utilisant Java et Spring Framework.
+- Améliorer les performances du système en optimisant le code et les bases de données.
+- Participer à des revues de code et à des sessions de mentorat pour les développeurs juniors.
+
+Développeuse junior at Développement Informatique Pro
+2010-06 - 2014-02
+- Contribuer au développement de fonctionnalités pour des applications mobiles.
+- Assurer la maintenance et la mise à jour des systèmes existants.
+- Collaborer avec des équipes interfonctionnelles pour résoudre des problèmes techniques.
+
+Compétences:
+Langages de programmation:
+- Java, Python, JavaScript, C++
+
+Technologies:
+- Spring, Docker, Kubernetes, AWS
+
+Outils de développement:
+- Git, JIRA, Jenkins, Eclipse
+
+Compétences interpersonnelles:
+- Gestion d'équipe, Communication, Résolution de problèmes
+

@@ -31,7 +31,8 @@ export async function POST(request: NextRequest) {
       method: 'POST',
       body: apiFormData,
       headers: {
-        'Host': '127.0.0.1:8080'
+        'Host': '127.0.0.1:8080',
+        'Accept': 'application/json'
       }
     })
 

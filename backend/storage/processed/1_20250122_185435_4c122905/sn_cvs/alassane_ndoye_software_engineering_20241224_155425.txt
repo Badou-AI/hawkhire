@@ -1,0 +1,46 @@
+Alassane Ndoye
+
+Email: alassane.ndoye@example.com
+Phone: +221 77 123 4567
+
+Résumé Professionnel:
+Ingénieur logiciel senior avec plus de 15 ans d'expérience dans le développement de solutions logicielles robustes et évolutives. Expert en architecture logicielle, conception de systèmes et leadership technique, avec une passion pour l'innovation et l'excellence en ingénierie.
+
+Formation:
+Diplôme d'Ingénieur in Génie Logiciel
+Université Cheikh Anta Diop
+2002 - 2007
+
+Master in Informatique
+Institut National des Sciences Appliquées de Lyon
+2008 - 2010
+
+Expérience:
+Architecte Logiciel Principal at Tech Innovators
+2018-05 - 2023-08
+- Dirigé une équipe de 15 ingénieurs dans la conception et le développement de plateformes logicielles complexes.
+- Conçu des architectures évolutives pour des applications cloud à grande échelle.
+- Collaboré avec les parties prenantes pour définir les exigences et les spécifications techniques.
+
+Développeur Sénior at Solutions Numériques SA
+2013-04 - 2018-04
+- Développé et maintenu des applications web critiques pour l'entreprise.
+- Mis en œuvre des pratiques de développement agile pour améliorer l'efficacité de l'équipe.
+- Participé à la révision du code et à la formation des développeurs juniors.
+
+Ingénieur Logiciel at Informatique et Technologie
+2010-06 - 2013-03
+- Développé des modules logiciels pour des applications de gestion d'entreprise.
+- Assuré la qualité du code à travers des tests unitaires et d'intégration.
+- Collaboré avec les équipes de projet pour respecter les délais et les objectifs.
+
+Compétences:
+Langages de Programmation:
+- Java, Python, C++, JavaScript
+
+Technologies:
+- AWS, Docker, Kubernetes, RESTful APIs
+
+Méthodologies:
+- Agile, Scrum, DevOps
+

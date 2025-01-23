@@ -1,0 +1,49 @@
+Tidiane Barry
+
+Email: tidiane.barry@example.com
+Phone: +221 77 123 4567
+
+Résumé Professionnel:
+Ingénieur logiciel senior avec plus de 15 ans d'expérience dans le développement de solutions logicielles robustes et efficaces. Spécialisé dans la conception et l'optimisation d'applications pour améliorer les performances et l'expérience utilisateur. Passionné par l'innovation technologique et le leadership d'équipes dynamiques.
+
+Formation:
+Master in Informatique
+Université de Paris
+2002 - 2005
+
+Licence in Sciences Informatiques
+Université Cheikh Anta Diop
+1999 - 2002
+
+Expérience:
+Architecte logiciel principal at Tech Innovators
+2015-03 - 2023-10
+- Dirigé une équipe de 10 ingénieurs pour développer une plateforme SaaS utilisée par plus de 50 000 utilisateurs.
+- Optimisé les performances de l'application, réduisant le temps de réponse de 30%.
+- Collaboré avec les équipes de produit pour définir la feuille de route technique.
+
+Ingénieur logiciel senior at Solutions Numériques
+2010-08 - 2015-02
+- Conçu et implémenté des fonctionnalités clés pour une application de gestion de projet.
+- Supervisé l'intégration de nouvelles technologies pour améliorer l'efficacité et la sécurité du produit.
+- Formé et encadré de nouveaux développeurs dans l'équipe.
+
+Développeur logiciel at DevWorks
+2005-06 - 2010-07
+- Développé et maintenu des modules logiciels pour des clients internationaux.
+- Participé à la migration d'une application monolithique vers une architecture microservices.
+- Assuré la qualité des livrables grâce à des tests unitaires et d'intégration.
+
+Compétences:
+Langues de programmation:
+- Java, Python, C++, JavaScript
+
+Technologies:
+- Docker, Kubernetes, AWS, Azure
+
+Méthodologies:
+- Agile, Scrum, DevOps
+
+Langues:
+- Français, Anglais
+

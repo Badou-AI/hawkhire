@@ -128,11 +128,13 @@ export default function ResumeProcessingPage() {
           setProcessingStatus('completed')
           setProcessingTime((Date.now() - startTime) / 1000)
         } else {
-          throw new Error('Upload failed')
+          console.error('Upload failed:', xhr.responseText)
+          throw new Error('Upload failed: ' + xhr.responseText)
         }
       }
 
-      xhr.onerror = () => {
+      xhr.onerror = (error) => {
+        console.error('XHR error:', error)
         throw new Error('Upload failed')
       }
 
