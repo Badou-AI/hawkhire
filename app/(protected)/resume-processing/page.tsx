@@ -49,21 +49,38 @@ interface Job {
 
 // Add back the formatTime function
 const formatTime = (seconds: number): string => {
+  // Handle invalid or zero time
+  if (!seconds || seconds < 0) {
+    return '0 seconds'
+  }
+
+  // Round to 1 decimal place for seconds
+  seconds = Math.round(seconds * 10) / 10
+
+  // Less than a minute: show seconds
   if (seconds < 60) {
-    return `${seconds.toFixed(1)} seconds`
+    return `${seconds.toFixed(1)} second${seconds === 1 ? '' : 's'}`
   }
   
+  // Less than an hour: show minutes and seconds
   const minutes = Math.floor(seconds / 60)
-  const remainingSeconds = Math.floor(seconds % 60)
+  const remainingSeconds = Math.round(seconds % 60)
   
   if (minutes < 60) {
-    return `${minutes} minute${minutes > 1 ? 's' : ''} ${remainingSeconds} second${remainingSeconds !== 1 ? 's' : ''}`
+    if (remainingSeconds === 0) {
+      return `${minutes} minute${minutes === 1 ? '' : 's'}`
+    }
+    return `${minutes} minute${minutes === 1 ? '' : 's'} ${remainingSeconds} second${remainingSeconds === 1 ? '' : 's'}`
   }
   
+  // More than an hour: show hours and minutes
   const hours = Math.floor(minutes / 60)
   const remainingMinutes = minutes % 60
   
-  return `${hours} hour${hours > 1 ? 's' : ''} ${remainingMinutes} minute${remainingMinutes !== 1 ? 's' : ''}`
+  if (remainingMinutes === 0) {
+    return `${hours} hour${hours === 1 ? '' : 's'}`
+  }
+  return `${hours} hour${hours === 1 ? '' : 's'} ${remainingMinutes} minute${remainingMinutes === 1 ? '' : 's'}`
 }
 
 // Add a utility function to generate consistent index names
@@ -80,6 +97,7 @@ export default function ResumeProcessingPage() {
   const [uploadProgress, setUploadProgress] = useState(0)
   const [processingStatus, setProcessingStatus] = useState<'idle' | 'uploading' | 'processing' | 'completed' | 'error'>('idle')
   const [processingTime, setProcessingTime] = useState<number>(0)
+  const [startTime, setStartTime] = useState<number>(0)
   const [stats, setStats] = useState<ProcessingStats>({
     totalFiles: 0,
     processedCount: 0,
@@ -99,6 +117,7 @@ export default function ResumeProcessingPage() {
     setError('')
     setProcessingStatus('uploading')
     setUploadProgress(0)
+    setStartTime(Date.now())
     setStats({
       totalFiles: 0,
       processedCount: 0,
@@ -174,6 +193,7 @@ export default function ResumeProcessingPage() {
 
                 case 'completed':
                   setProcessingStatus('completed')
+                  setProcessingTime((Date.now() - startTime) / 1000)
                   setStats(prev => ({
                     ...prev,
                     processedCount: event.processed_count,
@@ -181,13 +201,22 @@ export default function ResumeProcessingPage() {
                     supported: event.processed_count,
                     unsupported: event.total_files - event.processed_count - event.failed_count
                   }))
+                  
                   // Fetch updated index status
-                  const indexName = `job-${selectedJob.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${selectedJob.id}`
-                  await fetchIndexStatus(indexName)
+                  const indexName = generateIndexName(selectedJob.id, selectedJob.title)
+                  try {
+                    const response = await fetch(`/api/indices/${indexName}/verify`)
+                    if (response.ok) {
+                      const data = await response.json()
+                      setIndexStatus(data)
+                    }
+                  } catch (error) {
+                    console.error('Error fetching index status:', error)
+                  }
                   break
               }
             } catch (e) {
-              console.error('Error parsing event:', line, e)
+              console.error('Error parsing event:', line.slice(6), e)
             }
           }
         }
@@ -308,6 +337,13 @@ export default function ResumeProcessingPage() {
                   ))}
                 </SelectContent>
               </Select>
+
+              {error && (
+                <div className="flex items-center gap-2 p-4 text-sm text-red-600 bg-red-50 rounded-lg">
+                  <AlertCircle className="h-4 w-4" />
+                  <span>{error}</span>
+                </div>
+              )}
 
               <div
                 className={cn(
