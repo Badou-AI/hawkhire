@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -18,11 +18,36 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Upload, FileType, AlertCircle, CheckCircle2, XCircle, Timer, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Upload, FileType, AlertCircle, CheckCircle2, XCircle, Timer, ChevronLeft, ChevronRight, Database, Settings2 } from 'lucide-react'
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import Link from "next/link"
 
+// Import data from shared data file
+import { jobs, candidateMatches, getSkillColor } from "./data"
+
+// Add new types
+interface IndexStatus {
+  name: string;
+  document_count: number;
+  created_at: string;
+  status: "active" | "empty";
+}
+
+interface ProcessingStats {
+  totalFiles: number
+  processedCount: number
+  failedCount: number
+  supported: number
+  unsupported: number
+}
+
+interface Job {
+  id: string
+  title: string
+}
+
+// Add back the formatTime function
 const formatTime = (seconds: number): string => {
   if (seconds < 60) {
     return `${seconds.toFixed(1)} seconds`
@@ -38,109 +63,140 @@ const formatTime = (seconds: number): string => {
   const hours = Math.floor(minutes / 60)
   const remainingMinutes = minutes % 60
   
-  if (hours < 24) {
-    return `${hours} hour${hours > 1 ? 's' : ''} ${remainingMinutes} minute${remainingMinutes !== 1 ? 's' : ''}`
-  }
-  
-  return `${hours} hour${hours > 1 ? 's' : ''}`
+  return `${hours} hour${hours > 1 ? 's' : ''} ${remainingMinutes} minute${remainingMinutes !== 1 ? 's' : ''}`
 }
 
-// Import data from shared data file
-import { jobs, candidateMatches, getSkillColor } from "./data"
+// Add a utility function to generate consistent index names
+const generateIndexName = (jobId: string, jobTitle: string): string => {
+  const slug = jobTitle.toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-') // Replace non-alphanumeric chars with hyphens
+    .replace(/^-+|-+$/g, ''); // Remove leading/trailing hyphens
+  return `job-${slug}-${jobId}`;
+}
 
 // Remove the exported data and keep only the component logic
 export default function ResumeProcessingPage() {
-  const [selectedJob, setSelectedJob] = useState<string>("")
-  const [uploadProgress, setUploadProgress] = useState<number>(0)
-  const [processingStatus, setProcessingStatus] = useState<'idle' | 'counting' | 'uploading' | 'processing' | 'completed' | 'error'>('idle')
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [processingStatus, setProcessingStatus] = useState<'idle' | 'uploading' | 'processing' | 'completed' | 'error'>('idle')
   const [processingTime, setProcessingTime] = useState<number>(0)
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<ProcessingStats>({
     totalFiles: 0,
-    processed: 0,
-    failed: 0,
+    processedCount: 0,
+    failedCount: 0,
     supported: 0,
     unsupported: 0
   })
+  const [indexStatus, setIndexStatus] = useState<IndexStatus | null>(null)
+  const [error, setError] = useState<string>("")
 
-  const handleFileUpload = async (e: React.DragEvent<HTMLDivElement> | React.ChangeEvent<HTMLInputElement>) => {
-    e.preventDefault()
-    
-    if (!selectedJob) return
-
-    // Get the file
-    let file: File | null = null
-    if ('dataTransfer' in e && e.dataTransfer?.files?.length > 0) {
-      file = e.dataTransfer.files[0]
-    } else if ('target' in e && e.target instanceof HTMLInputElement && e.target.files) {
-      const fileList = e.target.files
-      if (fileList.length > 0) {
-        file = fileList[0]
-      }
-    }
-
-    if (!file) {
-      setProcessingStatus('error')
+  const handleFileUpload = async (file: File) => {
+    if (!selectedJob) {
+      setError('Please select a job position')
       return
     }
 
-    // Reset states
-    setProcessingStatus('counting')
-    setProcessingTime(0)
+    setError('')
+    setProcessingStatus('uploading')
     setUploadProgress(0)
     setStats({
       totalFiles: 0,
-      processed: 0,
-      failed: 0,
+      processedCount: 0,
+      failedCount: 0,
       supported: 0,
       unsupported: 0
     })
 
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('jobId', selectedJob.id.toString())
+    formData.append('jobTitle', selectedJob.title)
+
     try {
-      // Create form data
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('jobId', selectedJob)
+      const response = await fetch('/api/resumes', {
+        method: 'POST',
+        body: formData
+      })
 
-      // Start upload with progress tracking
-      setProcessingStatus('uploading')
-      const startTime = Date.now()
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
 
-      const xhr = new XMLHttpRequest()
-      xhr.open('POST', '/api/resumes')
+      // Handle streaming response
+      const reader = response.body?.getReader()
+      if (!reader) {
+        throw new Error('No reader available')
+      }
 
-      xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable) {
-          const progress = (event.loaded / event.total) * 100
-          setUploadProgress(Math.round(progress))
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        // Append new chunk to buffer and split by double newlines (SSE format)
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n\n')
+        
+        // Process all complete events
+        for (let i = 0; i < lines.length - 1; i++) {
+          const line = lines[i].trim()
+          if (line.startsWith('data: ')) {
+            try {
+              const event = JSON.parse(line.slice(6))
+              console.log('Received event:', event)  // Debug log
+
+              switch (event.event) {
+                case 'processing_started':
+                  setProcessingStatus('processing')
+                  setStats(prev => ({
+                    ...prev,
+                    totalFiles: event.total_files
+                  }))
+                  break
+
+                case 'file_processed':
+                  setStats(prev => ({
+                    ...prev,
+                    processedCount: event.processed_count,
+                    failedCount: event.failed_count,
+                    supported: prev.supported + 1
+                  }))
+                  break
+
+                case 'file_failed':
+                  setStats(prev => ({
+                    ...prev,
+                    failedCount: event.failed_count
+                  }))
+                  break
+
+                case 'completed':
+                  setProcessingStatus('completed')
+                  setStats(prev => ({
+                    ...prev,
+                    processedCount: event.processed_count,
+                    failedCount: event.failed_count,
+                    supported: event.processed_count,
+                    unsupported: event.total_files - event.processed_count - event.failed_count
+                  }))
+                  // Fetch updated index status
+                  const indexName = `job-${selectedJob.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${selectedJob.id}`
+                  await fetchIndexStatus(indexName)
+                  break
+              }
+            } catch (e) {
+              console.error('Error parsing event:', line, e)
+            }
+          }
         }
+        // Keep the last incomplete chunk
+        buffer = lines[lines.length - 1]
       }
-
-      xhr.onload = async () => {
-        if (xhr.status === 200) {
-          const data = JSON.parse(xhr.responseText)
-          setStats({
-            totalFiles: data.total_files,
-            processed: data.total_files,
-            failed: 0,
-            supported: data.total_files,
-            unsupported: 0
-          })
-          setProcessingStatus('completed')
-          setProcessingTime((Date.now() - startTime) / 1000)
-        } else {
-          console.error('Upload failed:', xhr.responseText)
-          throw new Error('Upload failed: ' + xhr.responseText)
-        }
-      }
-
-      xhr.onerror = (error) => {
-        console.error('XHR error:', error)
-        throw new Error('Upload failed')
-      }
-
-      xhr.send(formData)
     } catch (error) {
-      console.error('Error uploading file:', error)
+      console.error('Error:', error)
+      setError(error instanceof Error ? error.message : 'Failed to process file')
       setProcessingStatus('error')
     }
   }
@@ -151,8 +207,8 @@ export default function ResumeProcessingPage() {
 
   const getStatusColor = (status: typeof processingStatus) => {
     switch (status) {
-      case 'counting':
       case 'uploading':
+        return 'text-blue-500'
       case 'processing':
         return 'text-blue-500'
       case 'completed':
@@ -166,12 +222,10 @@ export default function ResumeProcessingPage() {
 
   const getStatusMessage = (status: typeof processingStatus) => {
     switch (status) {
-      case 'counting':
-        return 'Counting files in ZIP...'
       case 'uploading':
         return `Uploading files... ${uploadProgress}%`
       case 'processing':
-        return `Processing resumes (${stats.processed}/${stats.totalFiles})`
+        return `Processing resumes (${stats.processedCount}/${stats.totalFiles})`
       case 'completed':
         return `Processing completed in ${formatTime(processingTime)}`
       case 'error':
@@ -185,9 +239,45 @@ export default function ResumeProcessingPage() {
   const getProcessingProgress = () => {
     if (processingStatus === 'uploading') return uploadProgress
     if (processingStatus === 'processing') {
-      return Math.floor((stats.processed / stats.totalFiles) * 100)
+      return Math.floor((stats.processedCount / stats.totalFiles) * 100)
     }
     return 100
+  }
+
+  // Update the useEffect for index status
+  useEffect(() => {
+    const fetchIndexStatus = async (indexName: string) => {
+      console.log('Fetching status for index:', indexName);
+      
+      try {
+        const response = await fetch(`/api/indices/${indexName}/verify`);
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Index status:', data);
+          setIndexStatus(data);
+        } else {
+          console.warn(`Failed to fetch index status: ${response.status}`);
+          setIndexStatus(null);
+        }
+      } catch (error) {
+        console.error('Error fetching index status:', error);
+        setIndexStatus(null);
+      }
+    };
+
+    if (selectedJob) {
+      fetchIndexStatus(generateIndexName(selectedJob.id, selectedJob.title));
+    }
+  }, [selectedJob]);
+
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    const file = e.dataTransfer.files[0]
+    if (file && file.name.endsWith('.zip')) {
+      await handleFileUpload(file)
+    } else {
+      setError('Please upload a ZIP file')
+    }
   }
 
   return (
@@ -206,13 +296,13 @@ export default function ResumeProcessingPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <Select value={selectedJob} onValueChange={setSelectedJob}>
+              <Select value={selectedJob?.title} onValueChange={(value) => setSelectedJob(jobs.find(job => job.title === value) || null)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select job position" />
                 </SelectTrigger>
                 <SelectContent>
                   {jobs.map(job => (
-                    <SelectItem key={job.id} value={job.id}>
+                    <SelectItem key={job.id} value={job.title}>
                       {job.title}
                     </SelectItem>
                   ))}
@@ -225,7 +315,7 @@ export default function ResumeProcessingPage() {
                   "hover:border-primary/50 transition-colors",
                   processingStatus === 'idle' ? "cursor-pointer" : "cursor-not-allowed opacity-50"
                 )}
-                onDrop={processingStatus === 'idle' ? handleFileUpload : undefined}
+                onDrop={processingStatus === 'idle' ? handleDrop : undefined}
                 onDragOver={handleDragOver}
                 onClick={() => {
                   if (processingStatus === 'idle') {
@@ -257,7 +347,11 @@ export default function ResumeProcessingPage() {
                   type="file"
                   accept=".zip"
                   className="hidden"
-                  onChange={handleFileUpload}
+                  onChange={(e) => {
+                    if (e.target.files) {
+                      handleFileUpload(e.target.files[0])
+                    }
+                  }}
                   disabled={processingStatus !== 'idle'}
                 />
               </div>
@@ -420,8 +514,8 @@ export default function ResumeProcessingPage() {
               <div>
                 <div className="text-sm text-muted-foreground mb-1">TOTAL FILES</div>
                 <div className="text-2xl font-bold">
-                  {processingStatus === 'counting' ? (
-                    <span className="text-muted-foreground">Counting...</span>
+                  {processingStatus === 'idle' ? (
+                    <span className="text-muted-foreground">Ready to process</span>
                   ) : stats.totalFiles}
                 </div>
               </div>
@@ -430,10 +524,10 @@ export default function ResumeProcessingPage() {
                 <div>
                   <div className="text-sm text-muted-foreground mb-1">PROCESSED</div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-xl font-bold text-green-600">{stats.processed}</span>
+                    <span className="text-xl font-bold text-green-600">{stats.processedCount}</span>
                     {processingStatus === 'processing' && (
                       <span className="text-xs text-muted-foreground">
-                        {((stats.processed / stats.totalFiles) * 100).toFixed(1)}%
+                        {((stats.processedCount / stats.totalFiles) * 100).toFixed(1)}%
                       </span>
                     )}
                   </div>
@@ -441,10 +535,10 @@ export default function ResumeProcessingPage() {
                 <div>
                   <div className="text-sm text-muted-foreground mb-1">FAILED</div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-xl font-bold text-red-600">{stats.failed}</span>
-                    {stats.failed > 0 && (
+                    <span className="text-xl font-bold text-red-600">{stats.failedCount}</span>
+                    {stats.failedCount > 0 && (
                       <span className="text-xs text-muted-foreground">
-                        {((stats.failed / stats.totalFiles) * 100).toFixed(1)}%
+                        {((stats.failedCount / stats.totalFiles) * 100).toFixed(1)}%
                       </span>
                     )}
                   </div>
@@ -488,9 +582,9 @@ export default function ResumeProcessingPage() {
               <Button 
                 className="w-full" 
                 variant="outline" 
-                disabled={stats.failed === 0}
+                disabled={stats.failedCount === 0}
               >
-                View Failed Items ({stats.failed})
+                View Failed Items ({stats.failedCount})
               </Button>
               <Button 
                 className="w-full" 
@@ -501,6 +595,51 @@ export default function ResumeProcessingPage() {
               </Button>
             </CardContent>
           </Card>
+
+          {selectedJob && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Database className="h-4 w-4" />
+                  Index Status
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {indexStatus ? (
+                  <>
+                    <div>
+                      <div className="text-sm text-muted-foreground mb-1">INDEX NAME</div>
+                      <div className="text-sm font-medium truncate">{indexStatus.name}</div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <div className="text-sm text-muted-foreground mb-1">DOCUMENTS</div>
+                        <div className="text-xl font-bold">{indexStatus.document_count}</div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-muted-foreground mb-1">STATUS</div>
+                        <Badge variant={indexStatus.status === 'active' ? 'default' : 'secondary'}>
+                          {indexStatus.status}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {indexStatus.created_at && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground pt-2">
+                        <Settings2 className="h-4 w-4" />
+                        <span>Created {new Date(indexStatus.created_at).toLocaleDateString()}</span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="text-sm text-muted-foreground">
+                    No index information available
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>

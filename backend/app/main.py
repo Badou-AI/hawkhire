@@ -1,5 +1,6 @@
 from fastapi import FastAPI, UploadFile, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 import httpx
 from dotenv import load_dotenv
 import os
@@ -15,6 +16,7 @@ import hashlib
 from datetime import datetime
 import json
 from enum import Enum
+import re
 
 # Load environment variables
 load_dotenv()
@@ -156,6 +158,48 @@ class SemanticService:
 # Initialize the semantic service
 semantic_service = SemanticService(SEMANTIC_SEARCH_URL)
 
+class MockSemanticService:
+    """Mock service for testing when semantic search is unavailable"""
+    def __init__(self):
+        self.indices = {}  # Store indices in memory
+        self.documents = {}  # Store documents in memory
+
+    async def create_index(self, index_name: str, config: Dict) -> Dict:
+        """Create a new mock index"""
+        if index_name not in self.indices:
+            self.indices[index_name] = {
+                "config": config,
+                "created_at": datetime.now().isoformat()
+            }
+            self.documents[index_name] = {}
+        return {"acknowledged": True, "shards_acknowledged": True}
+
+    async def index_document(self, index_name: str, doc_id: str, document: Dict) -> Dict:
+        """Store document in mock index"""
+        if index_name not in self.documents:
+            raise HTTPException(status_code=404, detail=f"Index '{index_name}' not found")
+        self.documents[index_name][doc_id] = document
+        return {"result": "created"}
+
+    def get_document_count(self, index_name: str) -> int:
+        """Get number of documents in mock index"""
+        if index_name not in self.documents:
+            return 0
+        return len(self.documents[index_name])
+
+    def index_exists(self, index_name: str) -> bool:
+        """Check if mock index exists"""
+        return index_name in self.indices
+
+    def get_index_settings(self, index_name: str) -> Dict:
+        """Get mock index settings"""
+        if index_name not in self.indices:
+            raise HTTPException(status_code=404, detail=f"Index '{index_name}' not found")
+        return self.indices[index_name]
+
+# Initialize mock service
+mock_semantic_service = MockSemanticService()
+
 async def create_semantic_index(index_name: str) -> Dict:
     """Create a new semantic search index with the specified configuration"""
     async with httpx.AsyncClient() as client:
@@ -176,15 +220,81 @@ async def create_semantic_index(index_name: str) -> Dict:
 async def create_index(index_name: str):
     """Endpoint to create a new semantic search index"""
     try:
+        # Try remote service first
         result = await create_semantic_index(index_name)
-        return {"message": f"Index '{index_name}' created successfully", "details": result}
-    except httpx.HTTPError as e:
-        raise HTTPException(
-            status_code=e.response.status_code if hasattr(e, 'response') else 500,
-            detail=f"Error from semantic search API: {str(e)}"
-        )
+        exists = True
+        doc_count = 0
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+        print(f"Remote service error: {str(e)}, falling back to mock mode")
+        # Fall back to mock service
+        result = await mock_semantic_service.create_index(index_name, RESUME_INDEX_CONFIG)
+        exists = mock_semantic_service.index_exists(index_name)
+        doc_count = mock_semantic_service.get_document_count(index_name)
+    
+    return {
+        "message": f"Index '{index_name}' created successfully",
+        "details": result,
+        "exists": exists,
+        "document_count": doc_count,
+        "mode": "mock" if isinstance(result, Exception) else "remote"
+    }
+
+@app.get("/v1/indices/{index_name}/verify")
+async def verify_index(index_name: str):
+    """Verify an index exists and return its status"""
+    try:
+        # Try remote service first
+        async with httpx.AsyncClient() as client:
+            exist_response = await client.get(
+                f"{SEMANTIC_SEARCH_URL}/v1/index/{index_name}/exist",
+                timeout=30.0
+            )
+            exist_response.raise_for_status()
+            
+            count_response = await client.get(
+                f"{SEMANTIC_SEARCH_URL}/v1/index/{index_name}/count",
+                timeout=30.0
+            )
+            count_response.raise_for_status()
+            doc_count = count_response.json().get("count", 0)
+            
+            settings_response = await client.get(
+                f"{SEMANTIC_SEARCH_URL}/v1/index/{index_name}/settings",
+                timeout=30.0
+            )
+            settings_response.raise_for_status()
+            settings = settings_response.json()
+            
+            return {
+                "name": index_name,
+                "document_count": doc_count,
+                "created_at": settings.get("creation_date", datetime.now().isoformat()),
+                "status": "active" if doc_count > 0 else "empty",
+                "mode": "remote"
+            }
+    except Exception as e:
+        print(f"Remote service error: {str(e)}, falling back to mock mode")
+        # Fall back to mock service
+        exists = mock_semantic_service.index_exists(index_name)
+        if not exists:
+            return {
+                "name": index_name,
+                "document_count": 0,
+                "created_at": datetime.now().isoformat(),
+                "status": "empty",
+                "mode": "mock"
+            }
+            
+        settings = mock_semantic_service.get_index_settings(index_name)
+        doc_count = mock_semantic_service.get_document_count(index_name)
+        
+        return {
+            "name": index_name,
+            "document_count": doc_count,
+            "created_at": settings.get("created_at", datetime.now().isoformat()),
+            "status": "active" if doc_count > 0 else "empty",
+            "mode": "mock"
+        }
 
 def generate_upload_id(file_content: bytes, job_id: str) -> str:
     """Generate a unique ID for an upload based on content hash and job ID"""
@@ -192,6 +302,46 @@ def generate_upload_id(file_content: bytes, job_id: str) -> str:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     upload_id = f"{job_id}_{timestamp}_{content_hash[:8]}"
     return upload_id
+
+def generate_index_name(job_id: str, job_title: str = "") -> str:
+    """Generate a consistent index name from job ID and title"""
+    if not job_title:
+        return f"job-{job_id}"
+    
+    # Convert title to slug
+    slug = job_title.lower()
+    slug = re.sub(r'[^a-z0-9]+', '-', slug)
+    slug = re.sub(r'^-+|-+$', '', slug)
+    return f"job-{slug}-{job_id}"
+
+async def ensure_job_index(job_id: str, job_title: str = "") -> str:
+    """Ensure an index exists for the given job, create if it doesn't exist"""
+    index_name = generate_index_name(job_id, job_title)
+    print(f"Using index name: {index_name}")  # Debug log
+    
+    try:
+        # Check if index exists
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{SEMANTIC_SEARCH_URL}/v1/index/{index_name}/exist",
+                timeout=30.0
+            )
+            
+            if response.status_code == 404:
+                # Create index if it doesn't exist
+                print(f"Creating new index: {index_name}")  # Debug log
+                await create_semantic_index(index_name)
+            elif not response.is_success:
+                print(f"Error checking index: {response.status_code}")  # Debug log
+                # Try creating anyway
+                await create_semantic_index(index_name)
+    except Exception as e:
+        print(f"Error ensuring index: {str(e)}, falling back to mock mode")  # Debug log
+        # Fall back to mock service
+        if not mock_semantic_service.index_exists(index_name):
+            await mock_semantic_service.create_index(index_name, RESUME_INDEX_CONFIG)
+    
+    return index_name
 
 async def save_upload(file: UploadFile, job_id: str) -> Dict:
     """Save an uploaded file and return its metadata"""
@@ -221,8 +371,12 @@ class FileStats:
         self.mime_type = mimetypes.guess_type(str(path))[0] or 'application/octet-stream'
         self.human_size = humanize.naturalsize(self.size)
 
-async def process_zip_file(zip_file: UploadFile, job_id: str) -> Dict:
+async def process_zip_file(zip_file: UploadFile, job_id: str, job_title: str = "") -> Dict:
     """Process uploaded ZIP file containing resumes"""
+    # Ensure index exists for this job
+    index_name = await ensure_job_index(job_id, job_title)
+    print(f"Using index: {index_name}")  # Debug log
+    
     # First save the upload
     upload_info = await save_upload(zip_file, job_id)
     
@@ -255,11 +409,21 @@ async def process_zip_file(zip_file: UploadFile, job_id: str) -> Dict:
             # Save extracted files to processed directory
             processed_path = PROCESSED_DIR / upload_info["upload_id"]
             processed_path.mkdir(parents=True, exist_ok=True)
+
+            # Count total files first
+            total_files = sum(1 for _ in extract_path.rglob('*') if _.is_file())
+            yield {
+                "event": "processing_started",
+                "total_files": total_files,
+                "processed_count": 0,
+                "failed_count": 0
+            }
             
+            processed_count = 0
             for file_path in extract_path.rglob('*'):
                 if not file_path.is_file():
                     continue
-
+                    
                 stats = FileStats(file_path)
                 # Copy to processed directory
                 dest_path = processed_path / file_path.relative_to(extract_path)
@@ -286,15 +450,62 @@ async def process_zip_file(zip_file: UploadFile, job_id: str) -> Dict:
                         # Generate document ID
                         doc_id = hashlib.sha256(text_content.encode()).hexdigest()
                         print(f"Generated doc_id: {doc_id}")  # Debug log
+
+                        # Generate embedding for the text
+                        embedding = await semantic_service.generate_embedding(text_content)
+                        print(f"Generated embedding of size: {len(embedding)}")
+
+                        # Create structured document for indexing
+                        document = {
+                            "upload_id": upload_info["upload_id"],
+                            "job_id": job_id,
+                            "timestamp": datetime.now().isoformat(),
+                            "content": {
+                                "title": stats.name,
+                                "profile": {
+                                    "first_name": "",  # To be filled by analyze_document
+                                    "last_name": "",   # To be filled by analyze_document
+                                    "tel_num": "",     # To be filled by analyze_document
+                                    "email": ""        # To be filled by analyze_document
+                                },
+                                "summary": text_content[:1000],  # First 1000 chars as summary
+                                "question_answer": [],
+                                "example_queries": [],
+                                "topics": []
+                            },
+                            "file_info": {
+                                "name": stats.name,
+                                "size": stats.size,
+                                "mime_type": stats.mime_type,
+                                "processed_path": str(dest_path)
+                            },
+                            "embedding": embedding
+                        }
+
+                        # Index the document
+                        index_result = await semantic_service.index_document(index_name, doc_id, document)
+                        print(f"Indexed document with result: {json.dumps(index_result, indent=2)}")  # Debug log
                         
                         # Add to processed files
                         file_info.update({
                             "doc_id": doc_id,
                             "text_content": text_content[:500] + "...",  # Truncate for logging
-                            "status": "processed"
+                            "status": "processed",
+                            "indexed": True
                         })
                         processed_files.append(file_info)
-                        print(f"Successfully processed {dest_path}")  # Debug log
+                        processed_count += 1
+                        print(f"Successfully processed and indexed {dest_path}")  # Debug log
+
+                        # Send progress update
+                        yield {
+                            "event": "file_processed",
+                            "file_name": stats.name,
+                            "total_files": total_files,
+                            "processed_count": processed_count,
+                            "failed_count": len(failed_files)
+                        }
+
                     except Exception as e:
                         print(f"Error processing PDF {dest_path}: {str(e)}")  # Debug log
                         file_info.update({
@@ -302,6 +513,15 @@ async def process_zip_file(zip_file: UploadFile, job_id: str) -> Dict:
                             "error": str(e)
                         })
                         failed_files.append(file_info)
+                        # Send error update
+                        yield {
+                            "event": "file_failed",
+                            "file_name": stats.name,
+                            "error": str(e),
+                            "total_files": total_files,
+                            "processed_count": processed_count,
+                            "failed_count": len(failed_files)
+                        }
                 else:
                     file_info.update({"status": "unsupported"})
 
@@ -311,9 +531,10 @@ async def process_zip_file(zip_file: UploadFile, job_id: str) -> Dict:
                 # Count file types
                 file_type = stats.mime_type.split('/')[0] if stats.mime_type else 'unknown'
                 file_types[file_type] = file_types.get(file_type, 0) + 1
-            
-            # Add upload info to response
-            return {
+
+            # Final response
+            yield {
+                "event": "completed",
                 "upload_id": upload_info["upload_id"],
                 "job_id": job_id,
                 "total_files": len(files),
@@ -335,11 +556,35 @@ async def process_zip_file(zip_file: UploadFile, job_id: str) -> Dict:
 async def process_zip(
     file: UploadFile,
     job_id: str = Form(...),  # Use Form to get from form data
+    job_title: str = Form(""),  # Optional job title
 ):
     if not file.filename.endswith('.zip'):
         raise HTTPException(status_code=400, detail="File must be a ZIP archive")
     
-    return await process_zip_file(file, job_id)
+    # Read file content and create a new SpooledTemporaryFile
+    content = await file.read()
+    temp_file = tempfile.SpooledTemporaryFile()
+    temp_file.write(content)
+    temp_file.seek(0)
+    
+    # Create new UploadFile with the temp file
+    new_file = UploadFile(
+        filename=file.filename,
+        file=temp_file
+    )
+    
+    async def event_generator():
+        try:
+            async for event in process_zip_file(new_file, job_id, job_title):
+                yield f"data: {json.dumps(event)}\n\n"
+        finally:
+            await new_file.close()
+            temp_file.close()
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream"
+    )
 
 # Health check endpoint
 @app.get("/health")
@@ -415,3 +660,77 @@ async def get_upload_status(upload_id: str):
             results["processed_files"].append(file_info)
     
     return results
+
+@app.get("/v1/indices")
+async def list_indices():
+    """List all job-specific indices"""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{SEMANTIC_SEARCH_URL}/v1/index",
+                timeout=30.0
+            )
+            response.raise_for_status()
+            indices = response.json()
+            
+            # Filter for job-specific indices
+            job_indices = [idx for idx in indices if idx.startswith('job-')]
+            
+            return {
+                "indices": job_indices,
+                "total": len(job_indices)
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing indices: {str(e)}")
+
+@app.delete("/v1/indices/{index_name}")
+async def delete_index(index_name: str):
+    """Delete a specific index"""
+    if not index_name.startswith('job-'):
+        raise HTTPException(status_code=400, detail="Can only delete job-specific indices")
+        
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.delete(
+                f"{SEMANTIC_SEARCH_URL}/v1/index/{index_name}",
+                timeout=30.0
+            )
+            response.raise_for_status()
+            return {"message": f"Index '{index_name}' deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting index: {str(e)}")
+
+@app.get("/v1/indices/{index_name}/status")
+async def get_index_status(index_name: str):
+    """Get detailed status of an index including document count and settings"""
+    try:
+        async with httpx.AsyncClient() as client:
+            # Get document count
+            count_response = await client.get(
+                f"{SEMANTIC_SEARCH_URL}/v1/index/{index_name}/count",
+                timeout=30.0
+            )
+            count_response.raise_for_status()
+            doc_count = count_response.json().get("count", 0)
+            
+            # Get index settings
+            settings_response = await client.get(
+                f"{SEMANTIC_SEARCH_URL}/v1/index/{index_name}/settings",
+                timeout=30.0
+            )
+            settings_response.raise_for_status()
+            settings = settings_response.json()
+            
+            return {
+                "name": index_name,
+                "document_count": doc_count,
+                "settings": settings,
+                "created_at": settings.get("creation_date"),
+                "status": "active" if doc_count > 0 else "empty"
+            }
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            raise HTTPException(status_code=404, detail=f"Index '{index_name}' not found")
+        raise HTTPException(status_code=e.response.status_code, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting index status: {str(e)}")

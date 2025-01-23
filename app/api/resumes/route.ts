@@ -1,53 +1,65 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const FASTAPI_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8080'
-
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData()
     const file = formData.get('file') as File
     const jobId = formData.get('jobId') as string
+    const jobTitle = formData.get('jobTitle') as string
 
-    if (!file) {
+    if (!file || !jobId) {
       return NextResponse.json(
-        { error: 'No file provided' },
+        { error: 'File and jobId are required' },
         { status: 400 }
       )
     }
 
-    if (!jobId) {
-      return NextResponse.json(
-        { error: 'No job ID provided' },
-        { status: 400 }
-      )
-    }
-
-    // Forward the file to FastAPI
+    // Forward to FastAPI backend
     const apiFormData = new FormData()
     apiFormData.append('file', file)
     apiFormData.append('job_id', jobId)
+    if (jobTitle) {
+      apiFormData.append('job_title', jobTitle)
+    }
 
-    const response = await fetch(`${FASTAPI_URL}/process-zip`, {
+    const response = await fetch('http://127.0.0.1:8080/process-zip', {
       method: 'POST',
-      body: apiFormData,
-      headers: {
-        'Host': '127.0.0.1:8080',
-        'Accept': 'application/json'
-      }
+      body: apiFormData
     })
 
     if (!response.ok) {
-      const error = await response.json()
+      let errorMessage = 'Failed to process file'
+      try {
+        const error = await response.json()
+        errorMessage = error.detail || errorMessage
+      } catch {
+        // If response is not JSON, try to get text
+        try {
+          errorMessage = await response.text()
+        } catch {
+          // If we can't get text, use status text
+          errorMessage = response.statusText
+        }
+      }
+      
       return NextResponse.json(
-        { error: error.detail || 'Failed to process file' },
+        { error: errorMessage },
         { status: response.status }
       )
     }
 
-    const data = await response.json()
-    return NextResponse.json(data)
+    // Return the streaming response
+    const headers = new Headers(response.headers)
+    headers.set('Content-Type', 'text/event-stream')
+    headers.set('Cache-Control', 'no-cache')
+    headers.set('Connection', 'keep-alive')
+
+    return new NextResponse(response.body, {
+      status: 200,
+      headers
+    })
   } catch (error) {
-    console.error('Error processing file:', error)
+    console.error('Error processing request:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
