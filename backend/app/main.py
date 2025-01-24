@@ -43,7 +43,7 @@ app.add_middleware(
 
 # Remote API URLs
 REMOTE_API_URL = "http://147.79.115.55:8000"
-SEMANTIC_SEARCH_URL = os.getenv("SEMANTIC_SEARCH_URL", REMOTE_API_URL)  # Default to REMOTE_API_URL if not set
+SEMANTIC_SEARCH_URL = REMOTE_API_URL
 
 # Storage configuration
 UPLOAD_DIR = Path("storage/uploads")
@@ -160,56 +160,14 @@ class SemanticService:
         await self.client.aclose()
 
 # Initialize the semantic service
-semantic_service = SemanticService(SEMANTIC_SEARCH_URL)
-
-class MockSemanticService:
-    """Mock service for testing when semantic search is unavailable"""
-    def __init__(self):
-        self.indices = {}  # Store indices in memory
-        self.documents = {}  # Store documents in memory
-
-    async def create_index(self, index_name: str, config: Dict) -> Dict:
-        """Create a new mock index"""
-        if index_name not in self.indices:
-            self.indices[index_name] = {
-                "config": config,
-                "created_at": datetime.now().isoformat()
-            }
-            self.documents[index_name] = {}
-        return {"acknowledged": True, "shards_acknowledged": True}
-
-    async def index_document(self, index_name: str, doc_id: str, document: Dict) -> Dict:
-        """Store document in mock index"""
-        if index_name not in self.documents:
-            raise HTTPException(status_code=404, detail=f"Index '{index_name}' not found")
-        self.documents[index_name][doc_id] = document
-        return {"result": "created"}
-
-    def get_document_count(self, index_name: str) -> int:
-        """Get number of documents in mock index"""
-        if index_name not in self.documents:
-            return 0
-        return len(self.documents[index_name])
-
-    def index_exists(self, index_name: str) -> bool:
-        """Check if mock index exists"""
-        return index_name in self.indices
-
-    def get_index_settings(self, index_name: str) -> Dict:
-        """Get mock index settings"""
-        if index_name not in self.indices:
-            raise HTTPException(status_code=404, detail=f"Index '{index_name}' not found")
-        return self.indices[index_name]
-
-# Initialize mock service
-mock_semantic_service = MockSemanticService()
+semantic_service = SemanticService(REMOTE_API_URL)
 
 async def create_semantic_index(index_name: str) -> Dict:
     """Create a new semantic search index with the specified configuration"""
     async with httpx.AsyncClient() as client:
         try:
             response = await client.post(
-                f"{SEMANTIC_SEARCH_URL}/v1/index/{index_name}",
+                f"{REMOTE_API_URL}/v1/index/{index_name}",
                 json=RESUME_INDEX_CONFIG,
                 timeout=30.0
             )
@@ -224,46 +182,36 @@ async def create_semantic_index(index_name: str) -> Dict:
 async def create_index(index_name: str):
     """Endpoint to create a new semantic search index"""
     try:
-        # Try remote service first
         result = await create_semantic_index(index_name)
-        exists = True
-        doc_count = 0
+        return {
+            "message": f"Index '{index_name}' created successfully",
+            "details": result,
+            "mode": "remote"
+        }
     except Exception as e:
-        print(f"Remote service error: {str(e)}, falling back to mock mode")
-        # Fall back to mock service
-        result = await mock_semantic_service.create_index(index_name, RESUME_INDEX_CONFIG)
-        exists = mock_semantic_service.index_exists(index_name)
-        doc_count = mock_semantic_service.get_document_count(index_name)
-    
-    return {
-        "message": f"Index '{index_name}' created successfully",
-        "details": result,
-        "exists": exists,
-        "document_count": doc_count,
-        "mode": "mock" if isinstance(result, Exception) else "remote"
-    }
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/v1/indices/{index_name}/verify")
 async def verify_index(index_name: str):
     """Verify an index exists and return its status"""
     try:
-        # Try remote service first
         async with httpx.AsyncClient() as client:
+            # Keep only the remote service checks
             exist_response = await client.get(
-                f"{SEMANTIC_SEARCH_URL}/v1/index/{index_name}/exist",
+                f"{REMOTE_API_URL}/v1/index/{index_name}/exist",
                 timeout=30.0
             )
             exist_response.raise_for_status()
             
             count_response = await client.get(
-                f"{SEMANTIC_SEARCH_URL}/v1/index/{index_name}/count",
+                f"{REMOTE_API_URL}/v1/index/{index_name}/count",
                 timeout=30.0
             )
             count_response.raise_for_status()
             doc_count = count_response.json().get("count", 0)
             
             settings_response = await client.get(
-                f"{SEMANTIC_SEARCH_URL}/v1/index/{index_name}/settings",
+                f"{REMOTE_API_URL}/v1/index/{index_name}/settings",
                 timeout=30.0
             )
             settings_response.raise_for_status()
@@ -276,29 +224,15 @@ async def verify_index(index_name: str):
                 "status": "active" if doc_count > 0 else "empty",
                 "mode": "remote"
             }
-    except Exception as e:
-        print(f"Remote service error: {str(e)}, falling back to mock mode")
-        # Fall back to mock service
-        exists = mock_semantic_service.index_exists(index_name)
-        if not exists:
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
             return {
                 "name": index_name,
                 "document_count": 0,
-                "created_at": datetime.now().isoformat(),
-                "status": "empty",
-                "mode": "mock"
+                "status": "does_not_exist",
+                "mode": "remote"
             }
-            
-        settings = mock_semantic_service.get_index_settings(index_name)
-        doc_count = mock_semantic_service.get_document_count(index_name)
-        
-        return {
-            "name": index_name,
-            "document_count": doc_count,
-            "created_at": settings.get("created_at", datetime.now().isoformat()),
-            "status": "active" if doc_count > 0 else "empty",
-            "mode": "mock"
-        }
+        raise HTTPException(status_code=e.response.status_code, detail=str(e))
 
 def generate_upload_id(file_content: bytes, job_id: str) -> str:
     """Generate a unique ID for an upload based on content hash and job ID"""
@@ -327,7 +261,7 @@ async def ensure_job_index(job_id: str, job_title: str = "") -> str:
         # Check if index exists
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{SEMANTIC_SEARCH_URL}/v1/index/{index_name}/exist",
+                f"{REMOTE_API_URL}/v1/index/{index_name}/exist",
                 timeout=30.0
             )
             
@@ -766,7 +700,7 @@ async def list_indices():
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{SEMANTIC_SEARCH_URL}/v1/index",
+                f"{REMOTE_API_URL}/v1/index",
                 timeout=30.0
             )
             response.raise_for_status()
@@ -791,7 +725,7 @@ async def delete_index(index_name: str):
     try:
         async with httpx.AsyncClient() as client:
             response = await client.delete(
-                f"{SEMANTIC_SEARCH_URL}/v1/index/{index_name}",
+                f"{REMOTE_API_URL}/v1/index/{index_name}",
                 timeout=30.0
             )
             response.raise_for_status()
@@ -806,7 +740,7 @@ async def get_index_status(index_name: str):
         async with httpx.AsyncClient() as client:
             # Get document count
             count_response = await client.get(
-                f"{SEMANTIC_SEARCH_URL}/v1/index/{index_name}/count",
+                f"{REMOTE_API_URL}/v1/index/{index_name}/count",
                 timeout=30.0
             )
             count_response.raise_for_status()
@@ -814,7 +748,7 @@ async def get_index_status(index_name: str):
             
             # Get index settings
             settings_response = await client.get(
-                f"{SEMANTIC_SEARCH_URL}/v1/index/{index_name}/settings",
+                f"{REMOTE_API_URL}/v1/index/{index_name}/settings",
                 timeout=30.0
             )
             settings_response.raise_for_status()
