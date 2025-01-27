@@ -5,47 +5,48 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-  SheetTrigger,
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetDescription,
+    SheetTrigger,
 } from "@/components/ui/sheet"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Input } from "@/components/ui/input"
 import {
-  ChevronLeft,
-  Calendar,
-  Clock,
-  Users,
-  Briefcase,
-  Star,
-  CheckCircle2,
-  ChevronRight as ChevronRightIcon,
-  LayoutList,
-  Table as TableIcon,
-  LayoutGrid,
-  Send,
-  Bot,
-  Plus,
+    ChevronLeft,
+    Calendar,
+    Clock,
+    Users,
+    Briefcase,
+    Star,
+    CheckCircle2,
+    ChevronRight as ChevronRightIcon,
+    LayoutList,
+    Table as TableIcon,
+    LayoutGrid,
+    Send,
+    Bot,
+    Plus,
 } from 'lucide-react'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { usePipelineStore } from '@/lib/store/pipeline-store'
 import { PipelineStatus } from '@/components/pipeline-status'
+import { useSearchParams } from "next/navigation"
 
-// Import candidate data and helper functions from shared data file
-import { candidateMatches, getSkillColor, jobs } from "../data"
+// Import data from shared data file
+import { jobs, transformApiResponseToUiFormat, getSkillColor } from "../data"
 
 // Mock data for job stats
 const jobStats = {
@@ -69,23 +70,64 @@ const formatDate = (dateString: string) => {
 // Add pagination config
 const ITEMS_PER_PAGE = 5
 
-
+// Define the candidate type to fix type errors
+interface Candidate {
+  id: string;
+  name: string;
+  avatar: string;
+  matchScore: number;
+  role: string;
+  experience: string;
+  mainSkillScore: number;
+  skillRatings: { [key: string]: number };
+  summary: string;
+  stage: string;
+  otherMatches: Array<{ jobTitle: string; score: number }>;
+}
 
 export default function MatchesPage() {
+  const searchParams = useSearchParams()
   const { addCandidate, candidates } = usePipelineStore()
-  // For demo, we'll use the first job
-  const currentJob = jobs[0]
+  const currentJob = jobs.find(job => job.id === searchParams.get('jobId')) || jobs[0]
   const [currentPage, setCurrentPage] = useState(1)
   const [viewMode, setViewMode] = useState<'simple' | 'detailed' | 'table'>('simple')
   const [chatOpen, setChatOpen] = useState(false)
   const [chatInput, setChatInput] = useState("")
   const [showDetails, setShowDetails] = useState(false)
+  const [candidateMatches, setCandidateMatches] = useState<Candidate[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
-  // Calculate pagination
-  const totalPages = Math.ceil(candidateMatches.length / ITEMS_PER_PAGE)
+  useEffect(() => {
+    const fetchCandidates = async () => {
+      try {
+        setIsLoading(true)
+        const indexName = `job-${currentJob.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${currentJob.id}`
+        const response = await fetch(`/api/indices/${indexName}/matches?offset=0&size=5000&exclude_fields=embedding`)
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch candidates')
+        }
+
+        const data = await response.json()
+        const transformedData = transformApiResponseToUiFormat(data)
+        setCandidateMatches(transformedData)
+      } catch (error) {
+        console.error('Error fetching candidates:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    if (currentJob) {
+      fetchCandidates()
+    }
+  }, [currentJob])
+
+  // Calculate pagination with empty state handling
+  const totalPages = Math.max(1, Math.ceil((candidateMatches?.length || 0) / ITEMS_PER_PAGE))
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
   const endIndex = startIndex + ITEMS_PER_PAGE
-  const currentCandidates = candidateMatches.slice(startIndex, endIndex)
+  const currentCandidates = candidateMatches?.slice(startIndex, endIndex) || []
 
   // Generate page numbers to display
   const getPageNumbers = () => {
@@ -423,7 +465,11 @@ export default function MatchesPage() {
       <div className="min-h-0 flex-1 flex flex-col">
         {/* Content - scrollable */}
         <div className="flex-1 overflow-y-auto hide-scrollbar">
-          {viewMode === 'table' ? (
+          {isLoading ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent" />
+            </div>
+          ) : viewMode === 'table' ? (
             <div className="pb-16">
               <Table>
                 <TableHeader>

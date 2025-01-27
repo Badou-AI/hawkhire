@@ -22,6 +22,7 @@ import { Upload, FileType, AlertCircle, CheckCircle2, XCircle, Timer, ChevronLef
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 
 // Import data from shared data file
 import { jobs, mockResumeResponse, transformApiResponseToUiFormat, getSkillColor } from "./data"
@@ -93,6 +94,7 @@ const generateIndexName = (jobId: string, jobTitle: string): string => {
 
 // Remove the exported data and keep only the component logic
 export default function ResumeProcessingPage() {
+  const router = useRouter()
   const [selectedJob, setSelectedJob] = useState<Job | null>(null)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [processingStatus, setProcessingStatus] = useState<'idle' | 'uploading' | 'processing' | 'completed' | 'error'>('idle')
@@ -124,7 +126,7 @@ export default function ResumeProcessingPage() {
     formData.append('jobTitle', selectedJob.title)
 
     try {
-      const startProcessingTime = Date.now()  // Track processing time locally
+      const startProcessingTime = Date.now()
       const response = await fetch('/api/resumes', {
         method: 'POST',
         body: formData
@@ -147,17 +149,15 @@ export default function ResumeProcessingPage() {
         const { done, value } = await reader.read()
         if (done) break
 
-        // Append new chunk to buffer and split by double newlines (SSE format)
         buffer += decoder.decode(value, { stream: true })
         const lines = buffer.split('\n\n')
         
-        // Process all complete events
         for (let i = 0; i < lines.length - 1; i++) {
           const line = lines[i].trim()
           if (line.startsWith('data: ')) {
             try {
               const event = JSON.parse(line.slice(6))
-              console.log('Received event:', event)  // Debug log
+              console.log('Received event:', event)
 
               switch (event.event) {
                 case 'processing_started':
@@ -185,7 +185,7 @@ export default function ResumeProcessingPage() {
                   break
 
                 case 'completed':
-                  const processingDuration = (Date.now() - startProcessingTime) / 1000  // Calculate duration in seconds
+                  const processingDuration = (Date.now() - startProcessingTime) / 1000
                   setProcessingTime(processingDuration)
                   setProcessingStatus('completed')
                   setStats(prev => ({
@@ -196,16 +196,9 @@ export default function ResumeProcessingPage() {
                     unsupported: event.total_files - event.processed_count - event.failed_count
                   }))
                   
-                  // Fetch updated index status
-                  const indexName = generateIndexName(selectedJob.id, selectedJob.title)
-                  try {
-                    const response = await fetch(`/api/indices/${indexName}/verify`)
-                    if (response.ok) {
-                      const data = await response.json()
-                      setIndexStatus(data)
-                    }
-                  } catch (error) {
-                    console.error('Error fetching index status:', error)
+                  // After successful processing, redirect to matches page
+                  if (selectedJob) {
+                    router.push(`/resume-processing/matches?jobId=${selectedJob.id}`)
                   }
                   break
               }
@@ -214,7 +207,6 @@ export default function ResumeProcessingPage() {
             }
           }
         }
-        // Keep the last incomplete chunk
         buffer = lines[lines.length - 1]
       }
     } catch (error) {
