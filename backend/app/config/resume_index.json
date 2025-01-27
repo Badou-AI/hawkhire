@@ -44,26 +44,32 @@
                             "email": {"type": "keyword"}
                         }
                     },
+                    "years_of_experience": {
+                        "type": "integer", 
+                        "analyzer": "resume_analyzer"
+                    },
                     "summary": {
                         "type": "text",
                         "analyzer": "resume_analyzer"
                     },
-                    "question_answer": {
+                    "skills": {
                         "type": "nested",
                         "properties": {
-                            "question": {
-                                "type": "text",
-                                "analyzer": "resume_analyzer"
-                            },
-                            "answer": {
-                                "type": "text",
-                                "analyzer": "resume_analyzer"
+                        "skill": {
+                            "type": "text",
+                            "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
                             }
+                            }
+                        },
+                        "score": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 1
                         }
-                    },
-                    "example_queries": {
-                        "type": "text",
-                        "index": false
+                        }
                     },
                     "topics": {"type": "keyword"}
                 }
@@ -75,6 +81,25 @@
                     "size": {"type": "long"},
                     "mime_type": {"type": "keyword"},
                     "processed_path": {"type": "keyword"}
+                }
+            },
+            "matching_score": {
+                "type": "object",
+                "properties": {
+                    "justification": {
+                        "type": "text",
+                        "meta": {
+                            "description": "justification of the matching score in the language of the document e.g. 'the candidate is a good match for the job because...' or 'the candidate is not a good match for the job because...' and if the resume is in French, the justification should be in French"
+                        }
+                    },
+                    "score": {
+                        "type": "float",
+                        "minimum": 0,
+                        "maximum": 1,
+                        "meta": {
+                            "description": "score de matching entre 0 et 1"
+                        }
+                    }
                 }
             },
             "embedding": {

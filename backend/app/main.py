@@ -99,24 +99,65 @@ class SemanticService:
             )
             response.raise_for_status()
             return response.json()
+        
+    async def extract_knowledge(self, text: str, schema: Dict) -> Dict:
+        """Analyze document content and compare with job description"""
+        response = await self.client.post(
+            f"{self.base_url}/v1/tools/convert_doc2json",
+            json={
+                'text': f"cv: {text}",
+                'target_json_schema': {
+                    "title": {
+                        "type": "text",
+                        "description": "Resume title or headline"
+                    },
+                    "profile": {
+                        "type": "object with keys",
+                        "description": "Personal contact information",
+                        "properties": {
+                            "first_name": {"type": "text", "description": "First name"},
+                            "last_name": {"type": "text", "description": "Last name"},
+                            "tel_num": {"type": "keyword", "description": "Phone number"},
+                            "email": {"type": "keyword", "description": "Email address"}
+                        }
+                    },
+                    "years_of_experience": {
+                        "type": "integer", 
+                        "description": "Years of experience"
+                    },
+                    "summary": {
+                        "type": "text", 
+                        "description": "Professional summary"
+                    },
+                "skills": {
+                    "type": "array of object where each object is {'skill': 'text', 'score': 'integer'}",
+                    "description": "Liste des compétences professionnelles du candidat",
+                    "properties": {
+                        "skill": {"type": "text", "description": "Nom de la compétence"},
+                        "score": {"type": "integer", "description": "Niveau de la compétence (0-1)"}
+                    }
+                },
+                "topics": {
+                    "type": "keyword", 
+                    "description": "Mots clés professionnels du candidat"
+                }
+            },
+                'extraction_steps': 'tout les champs sont requis. le document est un cv',
+                'model': 'gpt-4'
+            }
+        )
+        response.raise_for_status()
+        return response.json()
 
-    async def analyze_document(self, text: str, job_description: str) -> Dict:
+
+    async def analyze_document(self, text: str, job_description: str, schema: Dict) -> Dict:
         """Analyze document content and compare with job description"""
         response = await self.client.post(
             f"{self.base_url}/v1/tools/convert_doc2json",
             json={
                 'text': f"cv: {text}\n### job: {job_description}",
-                'target_json_schema': {
-                    "score": {
-                        "type": "array of object where each object is {'domain': 'string', 'value': 'float'}",
-                        "description": "semantic score matching job/candidate entre 0 et 1"
-                    },
-                    "justification": {
-                        "type": "string",
-                        "description": "justification du score de matching"
-                    }
-                },
-                'extraction_steps': 'analyze the input text, fill all fields',
+                'target_json_schema': schema,
+                'extraction_steps': 'anlysze the matching of the cv with the job description and provide a score and justification',
                 'model': 'gpt-4'
             }
         )
@@ -337,30 +378,76 @@ async def process_single_pdf(
         embedding = await semantic_service.generate_embedding(text_content)
         timings['embedding'] = time.time() - embedding_start
         
+        job_description = """
+            # Ingénieur Deep Learning & Image Processing
+
+## À propos du poste
+Nous recherchons un(e) ingénieur(e) talentueux(se) spécialisé(e) en deep learning et traitement d'images pour rejoindre notre équipe R&D. Le candidat idéal associera une expertise technique pointue en deep learning à une solide expérience en optimisation GPU et conteneurisation.
+
+## Responsabilités principales
+- Concevoir et développer des solutions innovantes de traitement d'images basées sur le deep learning
+- Optimiser les performances des modèles sur GPU en utilisant CUDA
+- Implémenter des pipelines de traitement distribué avec ZeroMQ
+- Conteneuriser les applications avec Docker pour faciliter le déploiement
+- Collaborer avec les équipes produit pour l'intégration des solutions
+- Assurer une veille technologique active dans le domaine
+
+## Compétences techniques requises
+### Deep Learning & Computer Vision
+- Maîtrise des frameworks de deep learning (PyTorch, TensorFlow)
+- Expertise en traitement d'images et computer vision
+- Expérience pratique avec les architectures CNN, transformers et detection/segmentation
+- Connaissance approfondie des techniques d'optimisation de modèles
+
+### Développement & Optimisation
+- Expertise en programmation CUDA pour l'accélération GPU
+- Maîtrise de Python et C++
+- Expérience avec ZeroMQ pour la communication distribuée
+- Pratique de Docker et des outils de conteneurisation
+- Bonnes pratiques de versioning (Git) et CI/CD
+
+### Compétences additionnelles appréciées
+- Expérience avec Kubernetes
+- Connaissance des plateformes cloud (AWS, GCP, Azure)
+- Contributions à des projets open source
+- Publications scientifiques dans le domaine
+
+## Formation & Expérience
+- Master ou Doctorat en Computer Science, Machine Learning ou domaine connexe
+- Minimum 5 ans d'expérience professionnelle en deep learning
+- Portfolio de projets démontrant une expertise en traitement d'images
+
+## Qualités personnelles
+- Forte capacité d'analyse et de résolution de problèmes
+- Excellentes aptitudes en communication technique
+- Autonomie et prise d'initiative
+- Esprit d'équipe et collaboration
+- Passion pour l'innovation technologique
+
+## Environnement de travail
+- Équipe internationale et dynamique
+- Projets innovants à fort impact
+- Infrastructure de calcul GPU dernière génération
+- Possibilité de télétravail partiel
+- Formation continue et participation à des conférences
+        """
+        # text to json 
+
         # Create structured document
+        extracted_knowledge = await semantic_service.extract_knowledge(text_content, RESUME_INDEX_CONFIG['mappings']['properties']['content']['properties'])
+        extracted_matching_score = await semantic_service.analyze_document(text_content, job_description, RESUME_INDEX_CONFIG['mappings']['properties']['matching_score']['properties'])
         document = {
             "upload_id": upload_id,
             "job_id": job_id,
             "timestamp": datetime.now().isoformat(),
-            "content": {
-                "title": stats.name,
-                "profile": {
-                    "first_name": "",
-                    "last_name": "",
-                    "tel_num": "",
-                    "email": ""
-                },
-                "summary": text_content[:1000],
-                "question_answer": [],
-                "example_queries": [],
-                "topics": []
-            },
+            "content": extracted_knowledge,
             "file_info": {
                 "name": stats.name,
                 "size": stats.size,
                 "mime_type": stats.mime_type,
                 "processed_path": str(dest_path)
             },
+            "matching_score": extracted_matching_score,
             "embedding": embedding
         }
         

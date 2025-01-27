@@ -3,20 +3,20 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+    CardDescription,
 } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from "@/components/ui/select"
 import { Upload, FileType, AlertCircle, CheckCircle2, XCircle, Timer, ChevronLeft, ChevronRight, Database, Settings2 } from 'lucide-react'
 import { cn } from "@/lib/utils"
@@ -24,7 +24,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import Link from "next/link"
 
 // Import data from shared data file
-import { jobs, candidateMatches, getSkillColor } from "./data"
+import { jobs, mockResumeResponse, transformApiResponseToUiFormat, getSkillColor } from "./data"
 
 // Add new types
 interface IndexStatus {
@@ -302,6 +302,9 @@ export default function ResumeProcessingPage() {
       setError('Please upload a ZIP file')
     }
   }
+
+  // Inside the ResumeProcessingPage component, replace candidateMatches with:
+  const candidateMatches = transformApiResponseToUiFormat(mockResumeResponse);
 
   return (
     <div className="space-y-6">

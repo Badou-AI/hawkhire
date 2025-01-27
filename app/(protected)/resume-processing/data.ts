@@ -1,3 +1,75 @@
+// Types to match API response
+interface ResumeProfile {
+  first_name: string;
+  last_name: string;
+  tel_num: string;
+  email: string;
+}
+
+interface ResumeSkill {
+  skill: string;
+  score: number;
+}
+
+interface OtherMatch {
+  jobTitle: string;
+  score: number;
+}
+
+interface ResumeContent {
+  data: {
+    title: string;
+    profile: ResumeProfile;
+    years_of_experience: number;
+    summary: string;
+    skills: ResumeSkill[];
+    topics: string;
+  }
+}
+
+interface ResumeFileInfo {
+  name: string;
+  size: number;
+  mime_type: string;
+  processed_path: string;
+}
+
+interface ResumeMatchingScore {
+  data: {
+    justification: {
+      type: string;
+      meta: {
+        description: string;
+      }
+    };
+    score: {
+      type: string;
+      minimum: number;
+      maximum: number;
+      meta: {
+        description: string;
+      };
+      value: number;
+    }
+  }
+}
+
+interface ResumeDocument {
+  id: string;
+  item_data: {
+    upload_id: string;
+    job_id: string;
+    timestamp: string;
+    content: ResumeContent;
+    file_info: ResumeFileInfo;
+    matching_score: ResumeMatchingScore;
+  }
+}
+
+interface ResumeResponse {
+  documents: ResumeDocument[];
+}
+
 // Mock jobs data with skill requirements
 export const jobs = [
   { 
@@ -20,217 +92,147 @@ export const jobs = [
   },
 ]
 
-// Updated mock candidate matches with skill ratings
-export const candidateMatches = [
-  {
-    id: "1",
-    name: "Sarah Miller",
-    avatar: "/placeholder.svg",
-    matchScore: 95,
-    role: "Full Stack Developer",
-    experience: "5 years",
-    mainSkillScore: 98,
-    skillRatings: {
-      "React": 98,
-      "TypeScript": 95,
-      "Node.js": 92,
-      "PostgreSQL": 88,
-      "Python": 75,
-      "AWS": 85
+// Mock API response data
+export const mockResumeResponse: ResumeResponse = {
+  documents: [
+    {
+      id: "b935f825aecab2591b4d00018500215743c8ff680588ee9dc617e093194fe1a3",
+      item_data: {
+        upload_id: "1_20250127_170510_bdddc0a8",
+        job_id: "1",
+        timestamp: "2025-01-27T17:05:20.560295",
+        content: {
+          data: {
+            title: "Senior Software Engineer",
+            profile: {
+              first_name: "Sarah",
+              last_name: "Miller",
+              tel_num: "+1 555-0123",
+              email: "sarah.miller@example.com"
+            },
+            years_of_experience: 5,
+            summary: "Strong expertise in React with extensive full-stack experience. Demonstrates excellent problem-solving skills and modern development practices.",
+            skills: [
+              { skill: "React", score: 0.98 },
+              { skill: "TypeScript", score: 0.95 },
+              { skill: "Node.js", score: 0.92 },
+              { skill: "PostgreSQL", score: 0.88 },
+              { skill: "Python", score: 0.75 },
+              { skill: "AWS", score: 0.85 }
+            ],
+            topics: "Full Stack Development, Web Development, Cloud Architecture"
+          }
+        },
+        file_info: {
+          name: "sarah_miller_resume.pdf",
+          size: 245760,
+          mime_type: "application/pdf",
+          processed_path: "storage/processed/1_20250127_170510_bdddc0a8/sarah_miller_resume.pdf"
+        },
+        matching_score: {
+          data: {
+            justification: {
+              type: "text",
+              meta: {
+                description: "Excellent match with strong expertise in required technologies and proven full-stack experience."
+              }
+            },
+            score: {
+              type: "float",
+              minimum: 0,
+              maximum: 1,
+              meta: {
+                description: "score de matching entre 0 et 1"
+              },
+              value: 0.95
+            }
+          }
+        }
+      }
     },
-    otherMatches: [
-      { jobTitle: "Backend Developer", score: 89 },
-      { jobTitle: "DevOps Engineer", score: 82 }
-    ],
-    summary: "Strong expertise in React with extensive full-stack experience. Demonstrates excellent problem-solving skills and modern development practices.",
-    stage: 'phoneScreen'
-  },
-  {
-    id: "2",
-    name: "James Wilson",
-    avatar: "/placeholder.svg",
-    matchScore: 92,
-    role: "Frontend Developer",
-    experience: "4 years",
-    mainSkillScore: 90,
-    skillRatings: {
-      "Vue.js": 90,
-      "JavaScript": 88,
-      "Python": 85
-    },
-    otherMatches: [
-      { jobTitle: "Frontend Developer", score: 87 },
-      { jobTitle: "Data Scientist", score: 80 }
-    ],
-    summary: "Versatile developer with strong skills in JavaScript and Python. Proven ability to adapt to new technologies and solve complex problems.",
-    stage: 'technical'
-  },
-  {
-    id: "3",
-    name: "Emily Chen",
-    avatar: "/placeholder.svg",
-    matchScore: 90,
-    role: "Full Stack Developer",
-    experience: "6 years",
-    mainSkillScore: 95,
-    skillRatings: {
-      "Angular": 95,
-      "Java": 92,
-      "Spring": 90
-    },
-    otherMatches: [
-      { jobTitle: "Full Stack Developer", score: 92 },
-      { jobTitle: "Backend Developer", score: 88 }
-    ],
-    summary: "Experienced Java developer with a strong focus on Spring and Angular. Demonstrates excellent problem-solving skills and modern development practices.",
-    stage: 'cultural'
-  },
-  {
-    id: "4",
-    name: "Michael Brown",
-    avatar: "/placeholder.svg",
-    matchScore: 88,
-    role: "Full Stack Developer",
-    experience: "3 years",
-    mainSkillScore: 90,
-    skillRatings: {
-      "React Native": 90,
-      "Firebase": 88,
-      "AWS": 85
-    },
-    otherMatches: [
-      { jobTitle: "Mobile Developer", score: 87 },
-      { jobTitle: "Cloud Engineer", score: 80 }
-    ],
-    summary: "Skilled React Native developer with experience in Firebase and AWS. Proven ability to develop high-quality mobile applications and cloud infrastructure.",
-    stage: 'offer'
-  },
-  {
-    id: "5",
-    name: "Lisa Anderson",
-    avatar: "/placeholder.svg",
-    matchScore: 87,
-    role: "UI/UX Designer",
-    experience: "4 years",
-    mainSkillScore: 90,
-    skillRatings: {
-      "UI/UX": 90,
-      "Figma": 95,
-      "Adobe XD": 92
-    },
-    otherMatches: [
-      { jobTitle: "UX Designer", score: 85 },
-      { jobTitle: "Graphic Designer", score: 80 }
-    ],
-    summary: "Experienced UI/UX designer with a strong focus on Figma and Adobe XD. Proven ability to create visually appealing and user-friendly designs.",
-    stage: 'offer'
-  },
-  {
-    id: "6",
-    name: "David Kim",
-    avatar: "/placeholder.svg",
-    matchScore: 85,
-    role: "Full Stack Developer",
-    experience: "5 years",
-    mainSkillScore: 90,
-    skillRatings: {
-      "Python": 90,
-      "Django": 88,
-      "PostgreSQL": 85
-    },
-    otherMatches: [
-      { jobTitle: "Backend Developer", score: 87 },
-      { jobTitle: "Data Scientist", score: 80 }
-    ],
-    summary: "Skilled Python developer with experience in Django and PostgreSQL. Proven ability to develop high-quality backend systems and data analysis.",
-    stage: 'offer'
-  },
-  {
-    id: "7",
-    name: "Anna Martinez",
-    avatar: "/placeholder.svg",
-    matchScore: 84,
-    role: "Full Stack Developer",
-    experience: "4 years",
-    mainSkillScore: 90,
-    skillRatings: {
-      "JavaScript": 90,
-      "React": 95,
-      "MongoDB": 88
-    },
-    otherMatches: [
-      { jobTitle: "Full Stack Developer", score: 87 },
-      { jobTitle: "Backend Developer", score: 85 }
-    ],
-    summary: "Experienced JavaScript developer with a strong focus on React and MongoDB. Demonstrates excellent problem-solving skills and modern development practices.",
-    stage: 'offer'
-  },
-  {
-    id: "8",
-    name: "Tom Johnson",
-    avatar: "/placeholder.svg",
-    matchScore: 82,
-    role: "Full Stack Developer",
-    experience: "3 years",
-    mainSkillScore: 85,
-    skillRatings: {
-      "PHP": 85,
-      "Laravel": 88,
-      "MySQL": 80
-    },
-    otherMatches: [
-      { jobTitle: "Backend Developer", score: 80 },
-      { jobTitle: "Database Administrator", score: 75 }
-    ],
-    summary: "Skilled PHP developer with experience in Laravel and MySQL. Proven ability to develop high-quality backend systems and database administration.",
-    stage: 'rejected'
-  },
-  {
-    id: "9",
-    name: "Rachel Lee",
-    avatar: "/placeholder.svg",
-    matchScore: 81,
-    role: "Full Stack Developer",
-    experience: "5 years",
-    mainSkillScore: 90,
-    skillRatings: {
-      "Ruby": 90,
-      "Rails": 88,
-      "PostgreSQL": 85
-    },
-    otherMatches: [
-      { jobTitle: "Backend Developer", score: 87 },
-      { jobTitle: "Data Scientist", score: 80 }
-    ],
-    summary: "Skilled Ruby developer with experience in Rails and PostgreSQL. Proven ability to develop high-quality backend systems and data analysis.",
-    stage: 'cultural'
-  },
-  {
-    id: "10",
-    name: "Chris Taylor",
-    avatar: "/placeholder.svg",
-    matchScore: 80,
-    role: "Full Stack Developer",
-    experience: "4 years",
-    mainSkillScore: 85,
-    skillRatings: {
-      "Flutter": 85,
-      "Dart": 88,
-      "Firebase": 80
-    },
-    otherMatches: [
-      { jobTitle: "Mobile Developer", score: 87 },
-      { jobTitle: "Cloud Engineer", score: 80 }
-    ],
-    summary: "Skilled Flutter developer with experience in Dart and Firebase. Proven ability to develop high-quality mobile applications and cloud infrastructure.",
-    stage: 'technical'
-  }
-]
+    {
+      id: "ffc580b4618e90fac6cde4b6d45a9c1f8cf8f35d684595ca5e9781599fc493cc",
+      item_data: {
+        upload_id: "1_20250127_170510_bdddc0a8",
+        job_id: "1",
+        timestamp: "2025-01-27T17:05:20.556235",
+        content: {
+          data: {
+            title: "Full Stack Developer",
+            profile: {
+              first_name: "James",
+              last_name: "Wilson",
+              tel_num: "+1 555-0124",
+              email: "james.wilson@example.com"
+            },
+            years_of_experience: 4,
+            summary: "Versatile developer with strong skills in JavaScript and Python. Proven ability to adapt to new technologies and solve complex problems.",
+            skills: [
+              { skill: "Vue.js", score: 0.90 },
+              { skill: "JavaScript", score: 0.88 },
+              { skill: "Python", score: 0.85 }
+            ],
+            topics: "Frontend Development, JavaScript Frameworks, Backend Development"
+          }
+        },
+        file_info: {
+          name: "james_wilson_resume.pdf",
+          size: 198450,
+          mime_type: "application/pdf",
+          processed_path: "storage/processed/1_20250127_170510_bdddc0a8/james_wilson_resume.pdf"
+        },
+        matching_score: {
+          data: {
+            justification: {
+              type: "text",
+              meta: {
+                description: "Good match with strong JavaScript skills and adaptability, though lacking some specific required technologies."
+              }
+            },
+            score: {
+              type: "float",
+              minimum: 0,
+              maximum: 1,
+              meta: {
+                description: "score de matching entre 0 et 1"
+              },
+              value: 0.92
+            }
+          }
+        }
+      }
+    }
+  ]
+};
 
 // Helper function for skill color
 export const getSkillColor = (score: number): string => {
-  if (score >= 90) return "bg-green-500"
-  if (score >= 80) return "bg-blue-500"
-  if (score >= 70) return "bg-yellow-500"
+  if (score >= 0.9) return "bg-green-500"
+  if (score >= 0.8) return "bg-blue-500"
+  if (score >= 0.7) return "bg-yellow-500"
   return "bg-red-500"
-} 
+}
+
+// Helper function to transform API response to UI format
+export const transformApiResponseToUiFormat = (response: ResumeResponse) => {
+  return response.documents.map(doc => ({
+    id: doc.id,
+    name: `${doc.item_data.content.data.profile.first_name} ${doc.item_data.content.data.profile.last_name}`,
+    avatar: "/placeholder.svg",
+    matchScore: Math.round(doc.item_data.matching_score.data.score.value * 100),
+    role: doc.item_data.content.data.title,
+    experience: `${doc.item_data.content.data.years_of_experience} years`,
+    mainSkillScore: Math.round(doc.item_data.content.data.skills[0]?.score * 100) || 0,
+    skillRatings: Object.fromEntries(
+      doc.item_data.content.data.skills.map(skill => [
+        skill.skill,
+        Math.round(skill.score * 100)
+      ])
+    ),
+    summary: doc.item_data.content.data.summary,
+    stage: 'new', // Default stage for new matches
+    otherMatches: [
+      { jobTitle: "Similar Role", score: Math.round(doc.item_data.matching_score.data.score.value * 85) }
+    ] as OtherMatch[] // Generate a sample match based on the main score
+  }));
+}; 
