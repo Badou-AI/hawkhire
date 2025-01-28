@@ -5,38 +5,38 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import {
-    Sheet,
-    SheetContent,
-    SheetHeader,
-    SheetTitle,
-    SheetDescription,
-    SheetTrigger,
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetTrigger,
 } from "@/components/ui/sheet"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Input } from "@/components/ui/input"
 import {
-    ChevronLeft,
-    Calendar,
-    Clock,
-    Users,
-    Briefcase,
-    Star,
-    CheckCircle2,
-    ChevronRight as ChevronRightIcon,
-    LayoutList,
-    Table as TableIcon,
-    LayoutGrid,
-    Send,
-    Bot,
-    Plus,
+  ChevronLeft,
+  Calendar,
+  Clock,
+  Users,
+  Briefcase,
+  Star,
+  CheckCircle2,
+  ChevronRight as ChevronRightIcon,
+  LayoutList,
+  Table as TableIcon,
+  LayoutGrid,
+  Send,
+  Bot,
+  Plus,
 } from 'lucide-react'
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
@@ -184,7 +184,7 @@ export default function MatchesPage() {
     return (
       <div className="flex items-start gap-6">
         {/* Left section: Avatar and basic info */}
-        <div className="flex items-start gap-4 flex-1">
+        <div className="flex items-start gap-4 flex-[2]">
           <Avatar className="h-12 w-12">
             <AvatarImage src={candidate.avatar} alt={candidate.name} />
             <AvatarFallback>{candidate.name.charAt(0)}</AvatarFallback>
@@ -196,39 +196,38 @@ export default function MatchesPage() {
                 {candidate.experience} experience
               </span>
             </div>
-            <p className="text-sm text-muted-foreground line-clamp-2">
+            <p className="text-sm text-muted-foreground col-span-2">
               {candidate.summary}
             </p>
-            {/* {candidates[candidate.id] ? (
-              <PipelineStatus currentStage={candidates[candidate.id].stage} />
-            ) : ( */}
-              <Button
-                onClick={() => addCandidate({
-                  id: candidate.id,
-                  name: candidate.name,
-                  role: candidate.role,
-                  score: candidate.matchScore,
-                  imageUrl: candidate.avatar
-                })}
-                variant="outline"
-                size="sm"
-                className="gap-2 mt-2 h-7 text-xs"
-              >
-                <Plus className="h-3 w-3" />
-                Add to Pipeline
-              </Button>
-            {/* )} */}
+            <Button
+              onClick={() => addCandidate({
+                id: candidate.id,
+                name: candidate.name,
+                role: candidate.role,
+                score: candidate.matchScore,
+                imageUrl: candidate.avatar
+              })}
+              variant="outline"
+              size="sm"
+              className="gap-2 mt-2 h-7 text-xs"
+            >
+              <Plus className="h-3 w-3" />
+              Add to Pipeline
+            </Button>
           </div>
         </div>
 
         {/* Center section: Key skills */}
         <div className="flex-1">
-          <div className="grid grid-cols-2 gap-2">
-            {Object.entries(candidate.skillRatings).slice(0, 4).map(([skill, score]) => (
+          <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+            {Object.entries(candidate.skillRatings)
+              .sort(([, a], [, b]) => b - a)
+              .slice(0, 6)
+              .map(([skill, score]) => (
               <div key={skill} className="space-y-1">
                 <div className="flex justify-between text-xs">
-                  <span className="font-medium">{skill}</span>
-                  <span className="text-muted-foreground">{score}%</span>
+                  <span className="font-medium truncate mr-2">{skill}</span>
+                  <span className="text-muted-foreground shrink-0">{score}%</span>
                 </div>
                 <div className="h-1.5 rounded-full bg-secondary">
                   <div 
