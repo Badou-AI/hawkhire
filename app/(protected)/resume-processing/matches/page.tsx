@@ -110,7 +110,9 @@ export default function MatchesPage() {
 
         const data = await response.json()
         const transformedData = transformApiResponseToUiFormat(data)
-        setCandidateMatches(transformedData)
+        // Sort candidates by match score in descending order
+        const sortedData = transformedData.sort((a, b) => b.matchScore - a.matchScore)
+        setCandidateMatches(sortedData)
       } catch (error) {
         console.error('Error fetching candidates:', error)
       } finally {
@@ -122,6 +124,21 @@ export default function MatchesPage() {
       fetchCandidates()
     }
   }, [currentJob])
+
+  // Helper function for match score color
+  const getMatchScoreColor = (score: number) => {
+    if (score >= 80) return "text-green-600"
+    if (score >= 70) return "text-blue-600"
+    if (score >= 60) return "text-yellow-600"
+    return "text-red-600"
+  }
+
+  // Helper function for match score variant
+  const getMatchScoreVariant = (score: number): "default" | "outline" | "secondary" => {
+    if (score >= 80) return "default"
+    if (score >= 70) return "secondary"
+    return "outline"
+  }
 
   // Calculate pagination with empty state handling
   const totalPages = Math.max(1, Math.ceil((candidateMatches?.length || 0) / ITEMS_PER_PAGE))
@@ -227,10 +244,10 @@ export default function MatchesPage() {
         {/* Right section: Match score and actions */}
         <div className="flex flex-col items-end gap-3">
           <div className="flex items-center gap-3">
-            <span className="text-3xl font-bold text-green-600">
+            <span className={cn("text-3xl font-bold", getMatchScoreColor(candidate.matchScore))}>
               {candidate.matchScore}%
             </span>
-            <Badge variant="outline">Match Score</Badge>
+            <Badge variant={getMatchScoreVariant(candidate.matchScore)}>Match Score</Badge>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm">View Profile</Button>
@@ -248,6 +265,19 @@ export default function MatchesPage() {
     "Which candidates are available to start within 2 weeks?",
     "Show remote-only candidates with salary expectations under $130k"
   ]
+
+  // Function to handle page changes
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+    // Find the scrollable content area that contains the candidate data
+    const scrollableContent = document.querySelector('.min-h-0.flex-1.flex.flex-col > .flex-1.overflow-y-auto')
+    if (scrollableContent) {
+      scrollableContent.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      })
+    }
+  }
 
   return (
     <div className="h-full flex flex-col">
@@ -464,7 +494,7 @@ export default function MatchesPage() {
       {/* Scrollable content area */}
       <div className="min-h-0 flex-1 flex flex-col">
         {/* Content - scrollable */}
-        <div className="flex-1 overflow-y-auto hide-scrollbar">
+        <div className="flex-1 overflow-y-auto hide-scrollbar scroll-smooth">
           {isLoading ? (
             <div className="flex items-center justify-center h-full">
               <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent" />
@@ -601,7 +631,7 @@ export default function MatchesPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <span className="text-lg font-semibold text-green-600">
+                          <span className={cn("text-lg font-semibold", getMatchScoreColor(candidate.matchScore))}>
                             {candidate.matchScore}%
                           </span>
                           <div className="h-1.5 w-16 rounded-full bg-secondary">
@@ -716,7 +746,7 @@ export default function MatchesPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
                 disabled={currentPage === 1}
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -733,7 +763,7 @@ export default function MatchesPage() {
                       variant={currentPage === pageNum ? "default" : "outline"}
                       size="sm"
                       className="w-9"
-                      onClick={() => setCurrentPage(pageNum as number)}
+                      onClick={() => handlePageChange(pageNum as number)}
                     >
                       {pageNum}
                     </Button>
@@ -744,7 +774,7 @@ export default function MatchesPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
                 disabled={currentPage === totalPages}
               >
                 <ChevronRightIcon className="h-4 w-4" />

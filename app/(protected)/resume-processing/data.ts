@@ -229,7 +229,7 @@ export const transformApiResponseToUiFormat = (response: ResumeResponse) => {
         Math.round(skill.score * 100)
       ])
     ),
-    summary: doc.item_data.content.data.summary,
+    summary: doc.item_data.matching_score.data.justification.meta.description,
     stage: 'new', // Default stage for new matches
     otherMatches: [
       { jobTitle: "Similar Role", score: Math.round(doc.item_data.matching_score.data.score.value * 85) }
