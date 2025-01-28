@@ -1,25 +1,62 @@
-import { mockJobs } from '@/lib/data/mock-jobs'
 import { notFound } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import Image from 'next/image'
 import { Share2, BookmarkIcon } from 'lucide-react'
+import { createClient } from '@/lib/supabase/server'
+import { OrganizationAvatar } from '@/components/ui/organization-avatar'
 
 interface PageProps {
-  params: Promise<{
+  params: {
     id: string;
-  }>;
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+  };
+}
+
+interface JobWithOrganization {
+  id: string
+  title: string
+  description: string
+  requirements: string[]
+  skills: string[]
+  status: string
+  created_at: string
+  location: string | null
+  job_type: string | null
+  salary_min: number | null
+  salary_max: number | null
+  remote: boolean
+  rating: number | null
+  organization: {
+    id: string
+    name: string
+    logo_url: string | null
+  }
 }
 
 export default async function JobPage({ 
   params,
 }: PageProps) {
-  const resolvedParams = await params
-  const job = mockJobs.find(j => j.id === resolvedParams.id)
+  const supabase = createClient()
   
-  if (!job) {
+  const { data: job, error } = await supabase
+    .from('jobs')
+    .select(`
+      *,
+      organization:organizations (
+        name,
+        id,
+        logo_url
+      )
+    `)
+    .eq('id', params.id)
+    .single()
+
+  if (error || !job) {
     notFound()
   }
+
+  const typedJob = job as JobWithOrganization
+  const salary = typedJob.salary_min && typedJob.salary_max 
+    ? `$${typedJob.salary_min/1000}k - $${typedJob.salary_max/1000}k`
+    : 'Competitive'
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -30,20 +67,16 @@ export default async function JobPage({
             <div className="flex items-start justify-between">
               <div className="flex gap-4">
                 <div className="h-16 w-16 flex-shrink-0">
-                  <Image
-                    src={job.logo}
-                    alt={`${job.company} logo`}
-                    width={64}
-                    height={64}
-                    className="rounded-lg object-contain"
-                    quality={95}
-                    priority
+                  <OrganizationAvatar
+                    name={typedJob.organization.name}
+                    logoUrl={typedJob.organization.logo_url}
+                    size={64}
                   />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-semibold">{job.title}</h1>
+                  <h1 className="text-2xl font-semibold">{typedJob.title}</h1>
                   <div className="mt-1">
-                    <h2 className="text-base font-medium">{job.company}</h2>
+                    <h2 className="text-base font-medium">{typedJob.organization.name}</h2>
                     <p className="text-sm text-gray-600">IT & Software, Service</p>
                   </div>
                 </div>
@@ -60,50 +93,48 @@ export default async function JobPage({
 
             <div className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-4">
               <div>
-                <h3 className="text-sm font-medium text-gray-500">Experience</h3>
-                <p className="mt-1">Minimum 1 Year</p>
-              </div>
-              <div>
-                <h3 className="text-sm font-medium text-gray-500">Work Level</h3>
-                <p className="mt-1">Senior Level</p>
-              </div>
-              <div>
                 <h3 className="text-sm font-medium text-gray-500">Job Type</h3>
-                <p className="mt-1">{job.type}</p>
+                <p className="mt-1">{typedJob.job_type || 'Full-time'}</p>
               </div>
               <div>
-                <h3 className="text-sm font-medium text-gray-500">Offer Salary</h3>
-                <p className="mt-1">{job.salary}</p>
+                <h3 className="text-sm font-medium text-gray-500">Location</h3>
+                <p className="mt-1">{typedJob.location || 'Remote'}</p>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-gray-500">Work Type</h3>
+                <p className="mt-1">{typedJob.remote ? 'Remote' : 'On-site'}</p>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-gray-500">Salary Range</h3>
+                <p className="mt-1">{salary}</p>
               </div>
             </div>
 
             <div className="mt-8">
               <h3 className="text-lg font-medium">Overview</h3>
-              <p className="mt-2 text-gray-600">{job.description}</p>
+              <p className="mt-2 text-gray-600">{typedJob.description}</p>
             </div>
 
             <div className="mt-8">
-              <h3 className="text-lg font-medium">Job Description</h3>
-              <ul className="mt-4 list-inside list-disc space-y-2 text-gray-600">
-                <li>Provide clear user flow and wireframe</li>
-                <li>Build prototype and do usability testing to solve user problems</li>
-                <li>Follow design system guidelines</li>
-                <li>Explore best practice approach to execute comprehensive documentation</li>
-                <li>Mentor and coach junior team member to ensure the best design implementation</li>
-                <li>Being a consultant for other UX Designers in at least 3 tribes</li>
-              </ul>
+              <h3 className="text-lg font-medium">Required Skills</h3>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {typedJob.skills.map((skill) => (
+                  <span
+                    key={skill}
+                    className="rounded-full bg-primary/10 px-3 py-1 text-sm text-primary"
+                  >
+                    {skill}
+                  </span>
+                ))}
+              </div>
             </div>
 
             <div className="mt-8">
-              <h3 className="text-lg font-medium">What we offer</h3>
+              <h3 className="text-lg font-medium">Requirements</h3>
               <ul className="mt-4 list-inside list-disc space-y-2 text-gray-600">
-                <li>Competitive salary</li>
-                <li>Office in {job.location}</li>
-                <li>A lot of responsibility and freedom</li>
-                <li>Be part of a funded startup and an exciting international growth journey</li>
-                <li>Opportunity to work closely with and learn from an experienced team</li>
-                <li>A small dedicated team with a fun, personal, and friendly culture</li>
-                <li>Opportunity to grow your responsibility as the company grows</li>
+                {typedJob.requirements.map((req) => (
+                  <li key={req}>{req}</li>
+                ))}
               </ul>
             </div>
           </div>
@@ -114,25 +145,7 @@ export default async function JobPage({
           <div className="rounded-lg bg-white p-6 shadow-sm">
             <h3 className="text-lg font-medium">Similar jobs</h3>
             <div className="mt-4 space-y-4">
-              {mockJobs.slice(0, 4).map((similarJob) => (
-                <div key={similarJob.id} className="flex gap-4">
-                  <div className="h-12 w-12 flex-shrink-0">
-                    <Image
-                      src={similarJob.logo}
-                      alt={`${similarJob.company} logo`}
-                      width={48}
-                      height={48}
-                      className="rounded-lg object-contain"
-                      quality={95}
-                    />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-medium">{similarJob.title}</h4>
-                    <p className="text-sm text-gray-600">{similarJob.company}</p>
-                    <p className="text-sm text-gray-600">{similarJob.location}</p>
-                  </div>
-                </div>
-              ))}
+              {/* TODO: Add similar jobs based on skills */}
             </div>
           </div>
         </div>
