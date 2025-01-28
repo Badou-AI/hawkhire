@@ -9,9 +9,24 @@ organizations
 jobs
 resumes
 processing_logs
-Would you like me to:
-1. Verify the existing Supabase project configuration
-2. Set up the authentication providers (if not already done)
-3. Configure the storage buckets for resume files
-Which of these would you like to tackle first?
-Let me know which aspect you'd like to tackle next.
+
+Next steps to implement:
+
+1. Job Details Page Enhancements:
+   - Implement similar jobs feature using skills matching
+   - Add apply functionality with resume upload integration
+   - Move safety tips preferences to user profile/session storage
+   - Add job bookmarking functionality
+   - Implement share job feature
+
+2. Authentication & Storage:
+   - Set up authentication providers
+   - Configure storage buckets for resume files
+   - Implement secure file upload/download
+
+3. User Profile & Preferences:
+   - Create user preferences table
+   - Add user settings management
+   - Integrate with existing features (safety tips, bookmarks)
+
+Would you like to tackle the similar jobs feature first, or would you prefer to set up the authentication and storage for the apply functionality?
