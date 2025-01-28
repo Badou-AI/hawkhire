@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 
+const serviceUrl = process.env.RESUME_PROCESSING_URL || 'http://147.79.115.55:8000'
+
 export async function GET(
   request: Request,
   { params }: { params: { indexName: string } }
@@ -10,9 +12,14 @@ export async function GET(
     const size = searchParams.get('size') || '5000'
     const excludeFields = searchParams.get('exclude_fields')
 
-    // Get the resume processing service URL from environment variable
-    const serviceUrl = process.env.RESUME_PROCESSING_URL || 'http://147.79.115.55:8000'
-    
+    // Ensure we have the indexName before proceeding
+    if (!params?.indexName) {
+      return NextResponse.json(
+        { error: 'Index name is required' },
+        { status: 400 }
+      )
+    }
+
     const response = await fetch(
       `${serviceUrl}/v1/index/${params.indexName}/document?offset=${offset}&size=${size}${excludeFields ? `&exclude_fields=${excludeFields}` : ''}`,
       {
