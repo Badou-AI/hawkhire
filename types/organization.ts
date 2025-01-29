@@ -3,6 +3,36 @@ export type VerificationStatus = 'pending' | 'verified' | 'rejected'
 export type MemberRole = 'owner' | 'admin' | 'member'
 export type MemberStatus = 'pending' | 'active' | 'inactive'
 
+export interface Testimonial {
+  id: string
+  organization_id: string
+  content: string
+  author_name: string
+  author_title: string
+  author_image?: string
+  created_at: string
+}
+
+export interface OrganizationNews {
+  id: string
+  organization_id: string
+  title: string
+  summary: string
+  content: string
+  image_url?: string
+  published_at: string
+  created_at: string
+}
+
+export interface SocialLinks {
+  linkedin?: string
+  twitter?: string
+  facebook?: string
+  instagram?: string
+  github?: string
+  website?: string
+}
+
 export interface Organization {
   id: string
   name: string
@@ -22,6 +52,11 @@ export interface Organization {
   verified_at?: string
   tier: OrganizationTier
   members: string[]
+  benefits?: string[]
+  culture_values?: string[]
+  social_links?: SocialLinks
+  testimonials?: Testimonial[]
+  news?: OrganizationNews[]
   storage_used?: number
   storage_limit?: number
   created_at: string

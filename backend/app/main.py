@@ -130,11 +130,12 @@ class SemanticService:
                         "description": "Professional summary"
                     },
                 "skills": {
-                    "type": "array of object where each object is {'skill': 'text', 'score': 'integer'}",
+                    "type": "array of object where each object is {'skill': 'text', 'score': 'float'}",
                     "description": "Liste des compétences professionnelles du candidat",
                     "properties": {
                         "skill": {"type": "text", "description": "Nom de la compétence"},
-                        "score": {"type": "integer", "description": "Niveau de la compétence (0-1)"}
+                        "score": {"type": "float", "description": "Niveau de maîtrise de la compétence entre 0 et 1"},
+                        "justification": {"type": "text", "description": "justification of the skill score in the language of the document in a max of 2 sentences"}
                     }
                 },
                 "topics": {

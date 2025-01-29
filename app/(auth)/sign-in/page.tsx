@@ -8,18 +8,42 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
 export default function SignInPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirectTo = searchParams.get('redirectTo') || '/'
+  
+  const supabase = createClient()
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // For now, just redirect to the dashboard without authentication
-    router.push('/dashboard')
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      if (error) throw error
+
+      router.push(redirectTo)
+      router.refresh()
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Failed to sign in')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -33,6 +57,12 @@ export default function SignInPage() {
                 Welcome back! Please enter your details
               </p>
             </div>
+
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
 
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
@@ -49,6 +79,7 @@ export default function SignInPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="example@email.com"
+                  disabled={isLoading}
                 />
               </div>
 
@@ -56,31 +87,30 @@ export default function SignInPage() {
                 <Label htmlFor="password" className="block text-sm font-medium text-gray-700">
                   PASSWORD
                 </Label>
-                <div className="mt-1 relative">
+                <div className="relative mt-1">
                   <Input
                     id="password"
                     name="password"
-                    type={showPassword ? "text" : "password"}
+                    type={showPassword ? 'text' : 'password'}
                     autoComplete="current-password"
                     required
                     className="pr-10"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter Your Password"
+                    placeholder="••••••••"
+                    disabled={isLoading}
                   />
-                  <Button
+                  <button
                     type="button"
-                    variant="ghost"
-                    size="sm"
                     className="absolute inset-y-0 right-0 flex items-center pr-3"
                     onClick={() => setShowPassword(!showPassword)}
                   >
                     {showPassword ? (
-                      <EyeOff className="h-5 w-5 text-gray-400" />
+                      <EyeOff className="h-4 w-4 text-gray-400" />
                     ) : (
-                      <Eye className="h-5 w-5 text-gray-400" />
+                      <Eye className="h-4 w-4 text-gray-400" />
                     )}
-                  </Button>
+                  </button>
                 </div>
               </div>
 
@@ -102,11 +132,9 @@ export default function SignInPage() {
                 </div>
               </div>
 
-              <div>
-                <Button type="submit" className="w-full bg-violet-600 hover:bg-violet-700">
-                  Sign in
-                </Button>
-              </div>
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? 'Signing in...' : 'Sign in'}
+              </Button>
             </form>
 
             <div className="mt-6">

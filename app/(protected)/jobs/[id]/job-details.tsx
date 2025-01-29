@@ -6,6 +6,7 @@ import { OrganizationAvatar } from '@/components/ui/organization-avatar'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 
 interface JobWithOrganization {
   id: string
@@ -25,6 +26,7 @@ interface JobWithOrganization {
     id: string
     name: string
     logo_url: string | null
+    slug: string
   }
 }
 
@@ -224,9 +226,11 @@ export default function JobDetails({ job }: JobDetailsProps) {
                       <p className="text-sm text-gray-600">Member since {new Date(job.created_at).getFullYear()}</p>
                     </div>
                   </div>
-                  <Button className="w-full" variant="outline">
-                    View Company Profile
-                  </Button>
+                  <Link href={`/organization/${job.organization.slug}`} className="block">
+                    <Button className="w-full" variant="outline">
+                      View Company Profile
+                    </Button>
+                  </Link>
                 </div>
               </div>
 

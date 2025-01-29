@@ -17,3 +17,13 @@ export const getStatusColor = (status: string) => {
   
   return statusColors[status as keyof typeof statusColors] || statusColors.screening;
 };
+
+export function formatSalaryRange(min: number, max: number): string {
+  const formatter = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0
+  })
+  
+  return `${formatter.format(min)} - ${formatter.format(max)}`
+}

@@ -12,6 +12,7 @@ export default async function JobPage({
   params,
 }: PageProps) {
   const supabase = createClient()
+  const id = await Promise.resolve(params.id)
   
   const { data: job, error } = await supabase
     .from('jobs')
@@ -20,10 +21,11 @@ export default async function JobPage({
       organization:organizations (
         name,
         id,
-        logo_url
+        logo_url,
+        slug
       )
     `)
-    .eq('id', params.id)
+    .eq('id', id)
     .single()
 
   if (error || !job) {

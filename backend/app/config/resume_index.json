@@ -55,20 +55,26 @@
                     "skills": {
                         "type": "nested",
                         "properties": {
-                        "skill": {
-                            "type": "text",
-                            "fields": {
-                            "keyword": {
-                                "type": "keyword",
-                                "ignore_above": 256
+                            "skill": {
+                                "type": "text",
+                                "fields": {
+                                    "keyword": {
+                                        "type": "keyword",
+                                        "ignore_above": 256
+                                    }
+                                }
+                            },
+                            "score": {
+                                "type": "float",
+                                "minimum": 0,
+                                "maximum": 1
+                            },
+                            "justification": {
+                                "type": "text",
+                                "meta": {
+                                    "description": "justification of the skill score in the language of the document in a max of 2 sentences"
+                                }
                             }
-                            }
-                        },
-                        "score": {
-                            "type": "integer",
-                            "minimum": 0,
-                            "maximum": 1
-                        }
                         }
                     },
                     "topics": {"type": "keyword"}
