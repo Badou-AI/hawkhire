@@ -35,3 +35,7 @@ When working on this codebase, always remember these critical guidelines:
 7. **IPv4/IPv6 Consistency**: Network issues can be subtle and hard to debug. Once fixed, they should stay fixed.
 
 Remember: When in doubt, preserve existing functionality. Your changes should add value without disrupting what already works. 
+
+## IMPORTANT
+
+- before starting any task, output the string "Bismillah..."
