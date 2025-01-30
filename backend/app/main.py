@@ -1017,6 +1017,27 @@ Score Justification: {matching_score.get('data', {}).get('justification', {}).ge
     
     return markdown
 
+async def store_feedback(upload_id: str, job_title: str, feedback_content: str) -> dict:
+    """Store feedback content in a file and return access info"""
+    # Create feedback directory if it doesn't exist
+    feedback_dir = os.path.join("data", "feedback")
+    os.makedirs(feedback_dir, exist_ok=True)
+    
+    # Generate slug from upload_id and job title
+    job_slug = slugify(job_title) if job_title else "direct-analysis"
+    feedback_slug = f"{upload_id}-{job_slug}"
+    
+    # Save feedback to file
+    feedback_path = os.path.join(feedback_dir, f"{feedback_slug}.md")
+    with open(feedback_path, "w", encoding="utf-8") as f:
+        f.write(feedback_content)
+    
+    return {
+        "content": feedback_content,
+        "slug": feedback_slug,
+        "url": f"/v1/feedback/{feedback_slug}"
+    }
+
 @app.post("/v1/analyze-resume", tags=["Resume Analysis"])
 async def analyze_resume(
     resume: UploadFile,
@@ -1077,7 +1098,14 @@ async def analyze_resume(
     )
 
     # Generate comprehensive feedback
-    feedback = await generate_feedback(knowledge, matching, job_description, doc_language)
+    feedback_content = await generate_feedback(knowledge, matching, job_description, doc_language)
+
+    # Store feedback and get access info
+    feedback = await store_feedback(
+        upload_id=hashlib.sha256(content).hexdigest()[:8],
+        job_title=knowledge.get('data', {}).get('title', ''),
+        feedback_content=feedback_content
+    )
 
     # Generate embedding for the resume only if not excluded
     embedding = None
@@ -1098,7 +1126,7 @@ async def analyze_resume(
             "language": doc_language
         },
         "matching_score": matching,
-        "feedback": feedback
+        "feedback": feedback  # Now includes content, slug, and url
     }
     
     # Add embedding only if not excluded
