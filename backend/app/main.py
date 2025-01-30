@@ -878,11 +878,8 @@ async def generate_feedback(
 ) -> str:
     """Generate comprehensive markdown feedback based on resume analysis"""
     
-    # Use semantic service to generate detailed feedback
-    response = await semantic_service.client.post(
-        f"{semantic_service.base_url}/v1/tools/convert_doc2json",
-        json={
-            'text': f"""
+    # Prepare the input text
+    input_text = f"""
 Resume Analysis Task:
 Compare the following resume against the job requirements and provide detailed feedback.
 
@@ -894,7 +891,15 @@ Job Description:
 
 Matching Score: {matching_score.get('data', {}).get('score', {}).get('value', 0)}
 Score Justification: {matching_score.get('data', {}).get('justification', {}).get('meta', {}).get('description', '')}
-            """,
+    """
+    
+    print(f"Debug - Input Text:\n{input_text}")  # Debug log
+    
+    # Use semantic service to generate detailed feedback
+    response = await semantic_service.client.post(
+        f"{semantic_service.base_url}/v1/tools/convert_doc2json",
+        json={
+            'text': input_text,
             'target_json_schema': {
                 "feedback": {
                     "type": "object",
@@ -971,13 +976,21 @@ Score Justification: {matching_score.get('data', {}).get('justification', {}).ge
         }
     )
     response.raise_for_status()
-    feedback_data = response.json().get('feedback', {})
+    
+    # Debug log the raw response
+    print(f"Debug - Raw Response:\n{json.dumps(response.json(), indent=2)}")
+    
+    # Fix: Get feedback data from nested structure
+    feedback_data = response.json().get('data', {}).get('feedback', {})
+    
+    # Debug log the parsed feedback data
+    print(f"Debug - Feedback Data:\n{json.dumps(feedback_data, indent=2)}")
     
     # Convert the feedback data into markdown format
-    markdown = f"""# Resume Analysis Feedback
+    markdown = f"""# Resume feedback for {knowledge.get('data', {}).get('profile', {}).get('first_name', '')} {knowledge.get('data', {}).get('profile', {}).get('last_name', '')}
 
 ## Overview
-{feedback_data.get('overview', '')}
+You are a {feedback_data.get('overview', '').lower()}
 
 ## Key Strengths
 """
@@ -1000,7 +1013,7 @@ Score Justification: {matching_score.get('data', {}).get('justification', {}).ge
 """
 
     improvement_plan = feedback_data.get('improvement_plan', {})
-    markdown += "\n## Improvement Plan\n"
+    markdown += "\n## Your Improvement Plan\n"
 
     markdown += "\n### Short-term Actions (1-3 months)\n"
     for action in improvement_plan.get('short_term', []):
@@ -1014,6 +1027,9 @@ Score Justification: {matching_score.get('data', {}).get('justification', {}).ge
         markdown += "\n### Resume Improvement Suggestions\n"
         for suggestion in improvement_plan.get('rewrite_suggestions', []):
             markdown += f"- {suggestion}\n"
+    
+    # Debug log the final markdown
+    print(f"Debug - Final Markdown:\n{markdown}")
     
     return markdown
 
@@ -1056,6 +1072,8 @@ async def analyze_resume(
     - **existing_job_id**: Optional ID of an existing job posting
     - **exclude_fields**: Optional comma-separated list of fields to exclude from response
     """
+    print(f"Debug - Job Description:\n{job_description}")  # Debug log
+    
     # Read the file content
     content = await resume.read()
     
