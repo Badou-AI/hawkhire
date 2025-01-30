@@ -6,6 +6,7 @@ import { JobDescriptionInput } from '@/components/resume-evaluator/JobDescriptio
 import { MatchScore } from '@/components/resume-evaluator/AnalysisResults/MatchScore'
 import { SkillsBreakdown } from '@/components/resume-evaluator/AnalysisResults/SkillsBreakdown'
 import { FeedbackView } from '@/components/resume-evaluator/AnalysisResults/FeedbackView'
+import { mockResponse } from './mock-response'
 
 export default function ResumeEvaluatorPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -35,21 +36,15 @@ export default function ResumeEvaluatorPage() {
 
     setIsLoading(true)
     try {
-      const formData = new FormData()
-      formData.append('resume', selectedFile)
-      formData.append('jobDescription', jobDescription)
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 2000))
 
-      const response = await fetch('/api/analyze-resume', {
-        method: 'POST',
-        body: formData
+      // Use mock data instead of API call
+      setAnalysisResults({
+        matchScore: mockResponse.matching_score.data.score.meta.value,
+        skills: mockResponse.content.data.skills,
+        feedback: mockResponse.feedback.content
       })
-
-      if (!response.ok) {
-        throw new Error('Failed to analyze resume')
-      }
-
-      const results = await response.json()
-      setAnalysisResults(results)
     } catch (error) {
       console.error('Error analyzing resume:', error)
       // Handle error appropriately

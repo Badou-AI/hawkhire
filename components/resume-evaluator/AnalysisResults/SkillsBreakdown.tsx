@@ -1,8 +1,8 @@
 'use client'
 
 import { Card } from '@/components/ui/card'
-import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
 
 interface Skill {
   skill: string
@@ -19,10 +19,10 @@ export function SkillsBreakdown({ skills, isLoading = false }: SkillsBreakdownPr
   // Sort skills by score in descending order
   const sortedSkills = [...skills].sort((a, b) => b.score - a.score)
 
-  const getScoreColor = (score: number) => {
-    if (score >= 0.8) return 'bg-green-600'
-    if (score >= 0.6) return 'bg-yellow-600'
-    return 'bg-red-600'
+  const getSkillLevel = (score: number) => {
+    if (score >= 0.8) return { level: 'Expert', color: 'bg-green-600' }
+    if (score >= 0.6) return { level: 'Proficient', color: 'bg-yellow-600' }
+    return { level: 'Basic', color: 'bg-red-600' }
   }
 
   if (isLoading) {
@@ -77,24 +77,32 @@ export function SkillsBreakdown({ skills, isLoading = false }: SkillsBreakdownPr
         </div>
 
         <div className="space-y-4">
-          {sortedSkills.map((skill, index) => (
-            <div key={index} className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="font-medium">{skill.skill}</span>
-                <span className="text-sm text-gray-500">
-                  {Math.round(skill.score * 100)}%
-                </span>
+          {sortedSkills.map((skill, index) => {
+            const { level, color } = getSkillLevel(skill.score)
+            return (
+              <div key={index} className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{skill.skill}</span>
+                    <Badge variant="secondary" className="text-xs">
+                      {level}
+                    </Badge>
+                  </div>
+                  <span className="text-sm text-gray-500">
+                    {Math.round(skill.score * 100)}%
+                  </span>
+                </div>
+                <div className="relative h-2">
+                  <div className={cn("absolute inset-0 rounded-full opacity-20", color)} />
+                  <div 
+                    className={cn("absolute h-full rounded-full transition-all", color)}
+                    style={{ width: `${skill.score * 100}%` }}
+                  />
+                </div>
+                <p className="text-sm text-gray-600">{skill.justification}</p>
               </div>
-              <Progress 
-                value={skill.score * 100} 
-                className="h-2"
-                style={{
-                  ['--progress-background' as string]: getScoreColor(skill.score)
-                }}
-              />
-              <p className="text-sm text-gray-600">{skill.justification}</p>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
     </Card>
