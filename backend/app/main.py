@@ -885,6 +885,16 @@ async def generate_feedback(
 ) -> str:
     """Generate comprehensive markdown feedback based on resume analysis"""
     
+    # Extract and validate the score
+    score = matching_score.get('data', {}).get('score', {}).get('value')
+    if score is None:
+        # Fallback to average of skill scores if matching score is not available
+        skills = knowledge.get('data', {}).get('skills', [])
+        if skills:
+            score = sum(skill.get('score', 0) for skill in skills) / len(skills)
+        else:
+            raise ValueError("No valid score found in matching_score or skills")
+    
     # Prepare the input text
     input_text = f"""
 Resume Analysis Task:
@@ -896,7 +906,7 @@ Resume Skills and Experience:
 Job Description:
 {job_description}
 
-Matching Score: {matching_score.get('data', {}).get('score', {}).get('value', 0)}
+Matching Score: {score}
 Score Justification: {matching_score.get('data', {}).get('justification', {}).get('meta', {}).get('description', '')}
     """
     
@@ -996,7 +1006,11 @@ Score Justification: {matching_score.get('data', {}).get('justification', {}).ge
     # Convert the feedback data into markdown format
     first_name = knowledge.get('data', {}).get('profile', {}).get('first_name', '')
     last_name = knowledge.get('data', {}).get('profile', {}).get('last_name', '')
-    score = matching_score.get('data', {}).get('score', {}).get('value', 0)
+    
+    # Format the score percentage
+    score_percentage = int(float(score) * 100)
+    score_text = f"with a matching score of {score_percentage}%"
+    
     years_exp = knowledge.get('data', {}).get('years_of_experience', 0)
     
     markdown = f"""# Resume Feedback
@@ -1004,7 +1018,7 @@ Score Justification: {matching_score.get('data', {}).get('justification', {}).ge
 Hello {first_name},
 
 ## Overview
-You are a strong candidate for the Full Stack Developer role, with a matching score of {int(score * 100)}%. You possess {years_exp} years of experience in React.js and Next.js, demonstrating expertise in building scalable web applications. Your proficiency in JavaScript and TypeScript aligns with the job's essential skills.
+You are a strong candidate for the Full Stack Developer role {score_text}. You possess {years_exp} years of experience in React.js and Next.js, demonstrating expertise in building scalable web applications. Your proficiency in JavaScript and TypeScript aligns with the job's essential skills.
 
 ## Your Key Strengths
 """
