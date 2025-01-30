@@ -18,7 +18,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-import { Upload, FileType, AlertCircle, CheckCircle2, XCircle, Timer, ChevronLeft, ChevronRight, Database, Settings2 } from 'lucide-react'
+import { AlertCircle, CheckCircle2, XCircle, Timer, ChevronLeft, ChevronRight, Database, Settings2 } from 'lucide-react'
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import Link from "next/link"
@@ -91,6 +91,9 @@ const generateIndexName = (jobId: string, jobTitle: string): string => {
     .replace(/^-+|-+$/g, ''); // Remove leading/trailing hyphens
   return `job-${slug}-${jobId}`;
 }
+
+// Add import for FileDropzone
+import { FileDropzone } from '@/components/resume-evaluator/FileDropzone'
 
 // Remove the exported data and keep only the component logic
 export default function ResumeProcessingPage() {
@@ -216,10 +219,6 @@ export default function ResumeProcessingPage() {
     }
   }
 
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault()
-  }
-
   const getStatusColor = (status: typeof processingStatus) => {
     switch (status) {
       case 'uploading':
@@ -285,16 +284,6 @@ export default function ResumeProcessingPage() {
     }
   }, [selectedJob]);
 
-  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    const file = e.dataTransfer.files[0]
-    if (file && file.name.endsWith('.zip')) {
-      await handleFileUpload(file)
-    } else {
-      setError('Please upload a ZIP file')
-    }
-  }
-
   // Inside the ResumeProcessingPage component, replace candidateMatches with:
   const candidateMatches = transformApiResponseToUiFormat(mockResumeResponse);
 
@@ -334,52 +323,14 @@ export default function ResumeProcessingPage() {
                 </div>
               )}
 
-              <div
-                className={cn(
-                  "border-2 border-dashed rounded-lg p-8 text-center space-y-4",
-                  "hover:border-primary/50 transition-colors",
-                  processingStatus === 'idle' ? "cursor-pointer" : "cursor-not-allowed opacity-50"
-                )}
-                onDrop={processingStatus === 'idle' ? handleDrop : undefined}
-                onDragOver={handleDragOver}
-                onClick={() => {
-                  if (processingStatus === 'idle') {
-                    document.getElementById('file-upload')?.click()
-                  }
-                }}
-              >
-                <div className="flex flex-col items-center gap-2">
-                  <Upload className="h-10 w-10 text-muted-foreground" />
-                  <div className="space-y-1">
-                    <p className="text-lg font-medium">Drag and drop your ZIP file here</p>
-                    <p className="text-sm text-muted-foreground">or click to browse</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground">
-                  <div className="flex items-center gap-1">
-                    <FileType className="h-4 w-4" />
-                    <span>ZIP files only</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <AlertCircle className="h-4 w-4" />
-                    <span>Max size: 500MB</span>
-                  </div>
-                </div>
-
-                <input
-                  id="file-upload"
-                  type="file"
-                  accept=".zip"
-                  className="hidden"
-                  onChange={(e) => {
-                    if (e.target.files) {
-                      handleFileUpload(e.target.files[0])
-                    }
-                  }}
-                  disabled={processingStatus !== 'idle'}
-                />
-              </div>
+              <FileDropzone
+                onFileSelect={handleFileUpload}
+                disabled={processingStatus !== 'idle'}
+                acceptedTypes={['.zip']}
+                description="Drag and drop your ZIP file here"
+                fileTypeDescription="ZIP files only"
+                maxSize={500}
+              />
 
               {processingStatus !== 'idle' && (
                 <div className="space-y-4">
