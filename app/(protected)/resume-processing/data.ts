@@ -2,8 +2,8 @@
 interface ResumeProfile {
   first_name: string;
   last_name: string;
-  tel_num: string;
-  email: string;
+  tel_num?: string;
+  email?: string;
 }
 
 interface ResumeSkill {
@@ -11,20 +11,41 @@ interface ResumeSkill {
   score: number;
 }
 
-interface OtherMatch {
+export interface Job {
+  id: string;
+  title: string;
+}
+
+export interface OtherMatch {
   jobTitle: string;
   score: number;
 }
 
+export interface CandidateMatch {
+  id: string;
+  name: string;
+  avatar: string;
+  matchScore: number;
+  role: string;
+  experience: string;
+  mainSkillScore: number;
+  skillRatings: Record<string, number>;
+  summary: string;
+  stage: string;
+  otherMatches: OtherMatch[];
+}
+
+interface ResumeContentData {
+  title: string;
+  profile: ResumeProfile;
+  years_of_experience: number;
+  summary?: string;
+  skills: ResumeSkill[];
+  topics: string;
+}
+
 interface ResumeContent {
-  data: {
-    title: string;
-    profile: ResumeProfile;
-    years_of_experience: number;
-    summary: string;
-    skills: ResumeSkill[];
-    topics: string;
-  }
+  data: ResumeContentData;
 }
 
 interface ResumeFileInfo {
@@ -34,63 +55,65 @@ interface ResumeFileInfo {
   processed_path: string;
 }
 
+interface ScoreMetadata {
+  description: string;
+  type?: string;
+  minimum?: number;
+  maximum?: number;
+}
+
+interface ScoreData {
+  value: number;
+  type?: string;
+  minimum?: number;
+  maximum?: number;
+  meta?: ScoreMetadata;
+}
+
+interface JustificationData {
+  meta: {
+    description: string;
+  };
+  type?: string;
+}
+
 interface ResumeMatchingScore {
   data: {
-    justification: {
-      type: string;
-      meta: {
-        description: string;
-      }
-    };
-    score: {
-      type: string;
-      minimum: number;
-      maximum: number;
-      meta: {
-        description: string;
-      };
-      value: number;
-    }
+    justification: JustificationData;
+    score: ScoreData;
   }
 }
 
-interface ResumeDocument {
+interface ResumeItemData {
+  upload_id: string;
+  job_id: string;
+  timestamp: string;
+  content: ResumeContent;
+  file_info: ResumeFileInfo;
+  matching_score: ResumeMatchingScore;
+}
+
+// Exported for potential use in other parts of the codebase
+export interface ResumeDocument {
   id: string;
-  item_data: {
-    upload_id: string;
-    job_id: string;
-    timestamp: string;
-    content: ResumeContent;
-    file_info: ResumeFileInfo;
-    matching_score: ResumeMatchingScore;
-  }
+  item_data: ResumeItemData;
 }
 
 interface ResumeResponse {
-  documents: ResumeDocument[];
+  documents: Array<{
+    id: string;
+    item_data: ResumeItemData;
+  }>;
 }
 
 // Mock jobs data with skill requirements
-export const jobs = [
-  { 
-    id: "1", 
-    title: "Full Stack Developer",
-    mainSkill: "React",
-    requiredSkills: ["TypeScript", "Node.js", "PostgreSQL"]
-  },
-  { 
-    id: "2", 
-    title: "UI/UX Designer",
-    mainSkill: "Figma",
-    requiredSkills: ["Adobe XD", "User Research", "Prototyping"]
-  },
-  { 
-    id: "3", 
-    title: "Data Analyst",
-    mainSkill: "Python",
-    requiredSkills: ["SQL", "Data Visualization", "Statistics"]
-  },
-]
+export const jobs: Job[] = [
+  { id: 'job1', title: 'Full Stack Developer' },
+  { id: 'job2', title: 'Frontend Developer' },
+  { id: 'job3', title: 'Backend Developer' },
+  { id: 'job4', title: 'DevOps Engineer' },
+  { id: 'job5', title: 'UI/UX Designer' }
+];
 
 // Mock API response data
 export const mockResumeResponse: ResumeResponse = {
@@ -206,15 +229,14 @@ export const mockResumeResponse: ResumeResponse = {
 };
 
 // Helper function for skill color
-export const getSkillColor = (score: number): string => {
-  if (score >= 0.9) return "bg-green-500"
-  if (score >= 0.8) return "bg-blue-500"
-  if (score >= 0.7) return "bg-yellow-500"
-  return "bg-red-500"
+export const getSkillColor = (score: number) => {
+  if (score >= 80) return 'bg-green-600'
+  if (score >= 60) return 'bg-yellow-600'
+  return 'bg-red-600'
 }
 
 // Helper function to transform API response to UI format
-export const transformApiResponseToUiFormat = (response: ResumeResponse) => {
+export const transformApiResponseToUiFormat = (response: ResumeResponse): CandidateMatch[] => {
   return response.documents.map(doc => ({
     id: doc.id,
     name: `${doc.item_data.content.data.profile.first_name} ${doc.item_data.content.data.profile.last_name}`,
@@ -230,9 +252,12 @@ export const transformApiResponseToUiFormat = (response: ResumeResponse) => {
       ])
     ),
     summary: doc.item_data.matching_score.data.justification.meta.description,
-    stage: 'new', // Default stage for new matches
+    stage: 'new',
     otherMatches: [
-      { jobTitle: "Similar Role", score: Math.round(doc.item_data.matching_score.data.score.value * 85) }
-    ] as OtherMatch[] // Generate a sample match based on the main score
-  }));
-}; 
+      { 
+        jobTitle: "Similar Role", 
+        score: Math.round(doc.item_data.matching_score.data.score.value * 85) 
+      }
+    ]
+  }))
+} 

@@ -329,10 +329,36 @@ MAX_FILE_SIZE = 1024 * 1024 * 5  # 5MB
 ALLOWED_MIME_TYPES = {'application/pdf', 'text/plain'}
 
 async def save_upload(file: UploadFile):
-    if file.size > MAX_FILE_SIZE:
-        raise HTTPException(413, "File too large")
-    if file.content_type not in ALLOWED_MIME_TYPES:
-        raise HTTPException(415, "Unsupported file type")
+    """Save an uploaded file and return info about it"""
+    try:
+        content = await file.read()
+        file_size = len(content)
+        
+        if file_size > MAX_FILE_SIZE:
+            raise HTTPException(413, "File too large")
+            
+        # Create upload directory
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        upload_id = f"1_{timestamp}_{hashlib.sha256(content).hexdigest()[:8]}"
+        upload_dir = UPLOAD_DIR / upload_id
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Save the file
+        file_path = upload_dir / file.filename
+        async with aiofiles.open(file_path, 'wb') as f:
+            await f.write(content)
+            
+        return {
+            "upload_id": upload_id,
+            "file_path": str(file_path),
+            "filename": file.filename,
+            "size": file_size,
+            "timestamp": timestamp
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error saving file: {str(e)}")
+    finally:
+        await file.seek(0)  # Reset file position for subsequent reads
 
 class FileStats:
     def __init__(self, path: Path):

@@ -90,13 +90,6 @@ export default function ResumeProcessingPage() {
       return
     }
 
-    // Validate file size (500MB max)
-    const MAX_FILE_SIZE = 500 * 1024 * 1024 // 500MB in bytes
-    if (file.size > MAX_FILE_SIZE) {
-      setError('File size exceeds 500MB limit')
-      return
-    }
-
     setError('')
     setProcessingStatus('uploading')
     setUploadProgress(0)
@@ -111,10 +104,6 @@ export default function ResumeProcessingPage() {
       const startProcessingTime = Date.now()
       const response = await fetch('/api/resumes', {
         method: 'POST',
-        headers: {
-          // Don't set Content-Type header - browser will set it with boundary for FormData
-          'Accept': 'text/event-stream',
-        },
         body: formData
       })
 

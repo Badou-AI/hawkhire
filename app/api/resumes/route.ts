@@ -14,6 +14,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Validate file type
+    if (!file.name.endsWith('.zip')) {
+      return NextResponse.json(
+        { error: 'Only ZIP files are supported' },
+        { status: 400 }
+      )
+    }
+
     // Forward to FastAPI backend
     const apiFormData = new FormData()
     apiFormData.append('file', file)
