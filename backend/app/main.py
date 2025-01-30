@@ -21,6 +21,7 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 import time
+from slugify import slugify
 
 # Load environment variables
 load_dotenv()
@@ -848,18 +849,283 @@ async def get_index_status(index_name: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting index status: {str(e)}")
 
-@app.post("/v1/analyze-resume")
+async def detect_language(text: str) -> str:
+    """Detect the primary language of the text using the first few paragraphs"""
+    # Use the semantic service to detect language
+    response = await semantic_service.client.post(
+        f"{semantic_service.base_url}/v1/tools/convert_doc2json",
+        json={
+            'text': text[:1000],  # Use first 1000 chars for detection
+            'target_json_schema': {
+                "language": {
+                    "type": "string",
+                    "description": "The ISO language code of the document (e.g., 'en', 'fr')"
+                }
+            },
+            'extraction_steps': 'detect the language of the text and return the ISO language code',
+            'model': os.getenv('AI_MODEL', 'gpt-4')
+        }
+    )
+    response.raise_for_status()
+    result = response.json()
+    return result.get('language', 'en')
+
+async def generate_feedback(
+    knowledge: dict,
+    matching_score: dict,
+    job_description: str,
+    language: str
+) -> str:
+    """Generate comprehensive markdown feedback based on resume analysis"""
+    
+    # Use semantic service to generate detailed feedback
+    response = await semantic_service.client.post(
+        f"{semantic_service.base_url}/v1/tools/convert_doc2json",
+        json={
+            'text': f"""
+Resume Analysis Task:
+Compare the following resume against the job requirements and provide detailed feedback.
+
+Resume Skills and Experience:
+{json.dumps(knowledge.get('data', {}), indent=2)}
+
+Job Description:
+{job_description}
+
+Matching Score: {matching_score.get('data', {}).get('score', {}).get('value', 0)}
+Score Justification: {matching_score.get('data', {}).get('justification', {}).get('meta', {}).get('description', '')}
+            """,
+            'target_json_schema': {
+                "feedback": {
+                    "type": "object",
+                    "required": ["overview", "strengths", "gaps", "improvement_plan"],
+                    "properties": {
+                        "overview": {
+                            "type": "string",
+                            "description": "A detailed overview of how well the candidate matches the position, including key findings"
+                        },
+                        "strengths": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "required": ["skill", "analysis", "relevance"],
+                                "properties": {
+                                    "skill": {"type": "string"},
+                                    "analysis": {"type": "string"},
+                                    "relevance": {"type": "string", "description": "How relevant this strength is to the job requirements"}
+                                }
+                            }
+                        },
+                        "gaps": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "required": ["skill", "importance", "suggestion", "impact"],
+                                "properties": {
+                                    "skill": {"type": "string"},
+                                    "importance": {"type": "string", "enum": ["Critical", "Important", "Nice to have"]},
+                                    "suggestion": {"type": "string"},
+                                    "impact": {"type": "string", "description": "How this gap impacts the candidate's suitability"}
+                                }
+                            }
+                        },
+                        "improvement_plan": {
+                            "type": "object",
+                            "required": ["short_term", "long_term", "rewrite_suggestions"],
+                            "properties": {
+                                "short_term": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": "Immediate actions the candidate can take (1-3 months)"
+                                },
+                                "long_term": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": "Long-term development suggestions (3-12 months)"
+                                },
+                                "rewrite_suggestions": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": "Specific suggestions for resume improvements"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            'extraction_steps': f"""
+1. Analyze the resume content and job requirements thoroughly
+2. Generate comprehensive feedback in {language} language following these steps:
+   - Evaluate overall match quality
+   - Identify and analyze key strengths with concrete examples from the resume
+   - Identify gaps and their impact on candidacy
+   - Create actionable improvement plan
+   - Suggest specific resume improvements
+3. Ensure feedback is:
+   - Specific and actionable
+   - Supported by examples from the resume
+   - Professional but encouraging
+   - In the correct language ({language})
+            """,
+            'model': os.getenv('AI_MODEL', 'gpt-4')
+        }
+    )
+    response.raise_for_status()
+    feedback_data = response.json().get('feedback', {})
+    
+    # Convert the feedback data into markdown format
+    markdown = f"""# Resume Analysis Feedback
+
+## Overview
+{feedback_data.get('overview', '')}
+
+## Key Strengths
+"""
+    
+    for strength in feedback_data.get('strengths', []):
+        markdown += f"""
+### {strength['skill']}
+{strength['analysis']}
+**Relevance to Position**: {strength['relevance']}
+"""
+
+    markdown += "\n## Areas for Improvement\n"
+    
+    for gap in feedback_data.get('gaps', []):
+        markdown += f"""
+### {gap['skill']}
+- **Importance**: {gap['importance']}
+- **Impact**: {gap['impact']}
+- **Suggestion**: {gap['suggestion']}
+"""
+
+    improvement_plan = feedback_data.get('improvement_plan', {})
+    markdown += "\n## Improvement Plan\n"
+
+    markdown += "\n### Short-term Actions (1-3 months)\n"
+    for action in improvement_plan.get('short_term', []):
+        markdown += f"- {action}\n"
+
+    markdown += "\n### Long-term Development (3-12 months)\n"
+    for action in improvement_plan.get('long_term', []):
+        markdown += f"- {action}\n"
+
+    if improvement_plan.get('rewrite_suggestions'):
+        markdown += "\n### Resume Improvement Suggestions\n"
+        for suggestion in improvement_plan.get('rewrite_suggestions', []):
+            markdown += f"- {suggestion}\n"
+    
+    return markdown
+
+@app.post("/v1/analyze-resume", tags=["Resume Analysis"])
 async def analyze_resume(
     resume: UploadFile,
     job_description: str = Form(...),
-    existing_job_id: str = Form(None)
+    existing_job_id: str = Form(None),
+    exclude_fields: str = Form(None)
 ):
-    # Use existing PDF processing
-    text_result = await semantic_service.convert_pdf_to_text(resume)
-    # Use existing analysis logic
-    analysis = await semantic_service.analyze_document(
-        text_result, 
-        job_description,
-        RESUME_INDEX_CONFIG
+    """
+    Analyze a resume against a job description.
+    
+    Returns structured knowledge about the resume, matching score against the job description,
+    and detailed feedback with improvement suggestions.
+    
+    - **resume**: The resume file to analyze (PDF format recommended)
+    - **job_description**: The job description to match against
+    - **existing_job_id**: Optional ID of an existing job posting
+    - **exclude_fields**: Optional comma-separated list of fields to exclude from response
+    """
+    # Read the file content
+    content = await resume.read()
+    
+    # Create the files dictionary for the API request
+    files = {'file': (resume.filename, content, resume.content_type)}
+    
+    # Use the API directly since we have the file content
+    response = await semantic_service.client.post(
+        f"{semantic_service.base_url}/v1/tools/convert_pdf2text",
+        files=files
     )
-    return analysis
+    response.raise_for_status()
+    text_result = response.json()
+    text_content = "\n".join(text_result.get('pages', []))
+
+    # Detect document language
+    doc_language = await detect_language(text_content)
+
+    # Extract structured knowledge from resume
+    knowledge = await semantic_service.extract_knowledge(
+        text_content,
+        {
+            **RESUME_INDEX_CONFIG['mappings']['properties']['content']['properties'],
+            "extraction_language": doc_language  # Add language hint
+        }
+    )
+
+    # Analyze matching score against job description
+    matching = await semantic_service.analyze_document(
+        text_content,
+        job_description,
+        {
+            **RESUME_INDEX_CONFIG['mappings']['properties']['matching_score']['properties'],
+            "response_language": doc_language,  # Add language hint
+            "meta": {
+                "description": "Analyze the match between resume and job description",
+                "response_format": f"Provide analysis in {doc_language} language"
+            }
+        }
+    )
+
+    # Generate comprehensive feedback
+    feedback = await generate_feedback(knowledge, matching, job_description, doc_language)
+
+    # Generate embedding for the resume only if not excluded
+    embedding = None
+    if not exclude_fields or 'embedding' not in exclude_fields.split(','):
+        embedding = await semantic_service.generate_embedding(text_content)
+    
+    # Construct the complete response following the schema
+    response = {
+        "upload_id": hashlib.sha256(content).hexdigest()[:8],
+        "job_id": existing_job_id or "direct_analysis",
+        "timestamp": datetime.now().isoformat(),
+        "content": knowledge,
+        "file_info": {
+            "name": resume.filename,
+            "size": len(content),
+            "mime_type": resume.content_type,
+            "processed_path": None,
+            "language": doc_language
+        },
+        "matching_score": matching,
+        "feedback": feedback
+    }
+    
+    # Add embedding only if not excluded
+    if embedding is not None:
+        response["embedding"] = embedding
+
+    # Remove any other excluded fields
+    if exclude_fields:
+        excluded = exclude_fields.split(',')
+        for field in excluded:
+            if field in response:
+                del response[field]
+    
+    return response
+
+# Add new endpoint to retrieve feedback
+@app.get("/v1/feedback/{feedback_slug}")
+async def get_feedback(feedback_slug: str):
+    """Retrieve feedback content by slug"""
+    import os
+    
+    feedback_path = os.path.join("data", "feedback", f"{feedback_slug}.md")
+    
+    if not os.path.exists(feedback_path):
+        raise HTTPException(status_code=404, detail="Feedback not found")
+        
+    with open(feedback_path, "r", encoding="utf-8") as f:
+        content = f.read()
+        
+    return {"content": content}
