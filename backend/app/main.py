@@ -885,18 +885,11 @@ async def generate_feedback(
 ) -> str:
     """Generate comprehensive markdown feedback based on resume analysis"""
     
-    # Extract and validate the score
-    score = matching_score.get('data', {}).get('score', {}).get('value')
-    if score is None:
-        # Fallback to average of skill scores if matching score is not available
-        skills = knowledge.get('data', {}).get('skills', [])
-        if skills:
-            score = sum(skill.get('score', 0) for skill in skills) / len(skills)
-        else:
-            raise ValueError("No valid score found in matching_score or skills")
-    
-    # Prepare the input text
-    input_text = f"""
+    # Use semantic service to generate detailed feedback
+    response = await semantic_service.client.post(
+        f"{semantic_service.base_url}/v1/tools/convert_doc2json",
+        json={
+            'text': f"""
 Resume Analysis Task:
 Compare the following resume against the job requirements and provide detailed feedback.
 
@@ -906,17 +899,9 @@ Resume Skills and Experience:
 Job Description:
 {job_description}
 
-Matching Score: {score}
+Matching Score: {matching_score.get('data', {}).get('score', {}).get('value', 0)}
 Score Justification: {matching_score.get('data', {}).get('justification', {}).get('meta', {}).get('description', '')}
-    """
-    
-    print(f"Debug - Input Text:\n{input_text}")  # Debug log
-    
-    # Use semantic service to generate detailed feedback
-    response = await semantic_service.client.post(
-        f"{semantic_service.base_url}/v1/tools/convert_doc2json",
-        json={
-            'text': input_text,
+            """,
             'target_json_schema': {
                 "feedback": {
                     "type": "object",
@@ -993,181 +978,56 @@ Score Justification: {matching_score.get('data', {}).get('justification', {}).ge
         }
     )
     response.raise_for_status()
-    
-    # Debug log the raw response
-    print(f"Debug - Raw Response:\n{json.dumps(response.json(), indent=2)}")
-    
-    # Fix: Get feedback data from nested structure
-    feedback_data = response.json().get('data', {}).get('feedback', {})
-    
-    # Debug log the parsed feedback data
-    print(f"Debug - Feedback Data:\n{json.dumps(feedback_data, indent=2)}")
+    feedback_data = response.json().get('feedback', {})
     
     # Convert the feedback data into markdown format
-    first_name = knowledge.get('data', {}).get('profile', {}).get('first_name', '')
-    last_name = knowledge.get('data', {}).get('profile', {}).get('last_name', '')
-    
-    # Format the score percentage
-    score_percentage = int(float(score) * 100)
-    score_text = f"with a matching score of {score_percentage}%"
-    
-    years_exp = knowledge.get('data', {}).get('years_of_experience', 0)
-    
-    markdown = f"""# Resume Feedback
-
-Hello {first_name},
+    markdown = f"""# Resume Analysis Feedback
 
 ## Overview
-You are a strong candidate for the Full Stack Developer role {score_text}. You possess {years_exp} years of experience in React.js and Next.js, demonstrating expertise in building scalable web applications. Your proficiency in JavaScript and TypeScript aligns with the job's essential skills.
+{feedback_data.get('overview', '')}
 
-## Your Key Strengths
+## Key Strengths
 """
     
     for strength in feedback_data.get('strengths', []):
         markdown += f"""
 ### {strength['skill']}
-{strength['analysis'].replace('John', 'You').replace('His', 'Your').replace('he', 'you').replace("'s", 'r')}
+{strength['analysis']}
 **Relevance to Position**: {strength['relevance']}
 """
 
-    markdown += "\n## Areas Where You Can Improve\n"
+    markdown += "\n## Areas for Improvement\n"
     
     for gap in feedback_data.get('gaps', []):
         markdown += f"""
 ### {gap['skill']}
 - **Importance**: {gap['importance']}
-- **Impact**: {gap['impact'].replace('John', 'your').replace('His', 'Your').replace('he', 'you').replace("'s", 'r')}
-- **Suggestion**: {gap['suggestion'].replace('John', 'you').replace('His', 'Your').replace('he', 'you').replace("'s", 'r')}
+- **Impact**: {gap['impact']}
+- **Suggestion**: {gap['suggestion']}
 """
 
     improvement_plan = feedback_data.get('improvement_plan', {})
-    markdown += "\n## Your Personal Development Plan\n"
+    markdown += "\n## Improvement Plan\n"
 
-    markdown += "\n### Recommended Actions (Next 1-3 Months)\n"
+    markdown += "\n### Short-term Actions (1-3 months)\n"
     for action in improvement_plan.get('short_term', []):
-        markdown += f"- {action.replace('John', 'you').replace('His', 'Your').replace('he', 'you').replace("'s", 'r')}\n"
+        markdown += f"- {action}\n"
 
-    markdown += "\n### Long-term Growth (3-12 Months)\n"
+    markdown += "\n### Long-term Development (3-12 months)\n"
     for action in improvement_plan.get('long_term', []):
-        markdown += f"- {action.replace('John', 'you').replace('His', 'Your').replace('he', 'you').replace("'s", 'r')}\n"
+        markdown += f"- {action}\n"
 
     if improvement_plan.get('rewrite_suggestions'):
-        markdown += "\n### How to Enhance Your Resume\n"
+        markdown += "\n### Resume Improvement Suggestions\n"
         for suggestion in improvement_plan.get('rewrite_suggestions', []):
-            markdown += f"- {suggestion.replace('John', 'your').replace('His', 'Your').replace('he', 'you').replace("'s", 'r')}\n"
-    
-    markdown += "\nBest of luck with your career development!\n"
-    
-    # Debug log the final markdown
-    print(f"Debug - Final Markdown:\n{markdown}")
+            markdown += f"- {suggestion}\n"
     
     return markdown
-
-async def store_feedback(upload_id: str, job_title: str, feedback_content: str) -> dict:
-    """Store feedback content in a file and return access info"""
-    # Create feedback directory if it doesn't exist
-    feedback_dir = os.path.join("data", "feedback")
-    os.makedirs(feedback_dir, exist_ok=True)
-    
-    # Generate slug from upload_id and job title
-    job_slug = slugify(job_title) if job_title else "direct-analysis"
-    feedback_slug = f"{upload_id}-{job_slug}"
-    
-    # Save feedback to file
-    feedback_path = os.path.join(feedback_dir, f"{feedback_slug}.md")
-    with open(feedback_path, "w", encoding="utf-8") as f:
-        f.write(feedback_content)
-    
-    return {
-        "content": feedback_content,
-        "slug": feedback_slug,
-        "url": f"/v1/feedback/{feedback_slug}"
-    }
 
 @app.post("/v1/analyze-resume", tags=["Resume Analysis"])
 async def analyze_resume(
     resume: UploadFile,
     job_description: str = Form(...),
-<<<<<<< HEAD
-    existing_job_id: str = Form(""),
-    exclude_fields: str = Form("")
-):
-    """Analyze a resume against a job description"""
-    try:
-        # Read and convert PDF to text
-        pdf_text = await semantic_service.convert_pdf_to_text(resume)
-        
-        # Extract structured content from the resume
-        content = await semantic_service.extract_knowledge(pdf_text['text'], {
-            "title": {
-                "type": "text",
-                "description": "Resume title or headline"
-            },
-            "profile": {
-                "type": "object",
-                "properties": {
-                    "first_name": {"type": "text"},
-                    "last_name": {"type": "text"},
-                    "tel_num": {"type": "text"},
-                    "email": {"type": "text"}
-                }
-            },
-            "years_of_experience": {"type": "integer"},
-            "summary": {"type": "text"},
-            "skills": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "skill": {"type": "text"},
-                        "score": {"type": "number"},
-                        "justification": {"type": "text"}
-                    }
-                }
-            },
-            "topics": {"type": "array", "items": {"type": "string"}}
-        })
-
-        # Generate matching score and feedback
-        matching_analysis = await semantic_service.analyze_document(
-            pdf_text['text'],
-            job_description,
-            {
-                "score": {
-                    "type": "object",
-                    "properties": {
-                        "meta": {
-                            "type": "object",
-                            "properties": {
-                                "value": {"type": "number"},
-                                "explanation": {"type": "text"}
-                            }
-                        }
-                    }
-                }
-            }
-        )
-
-        # Generate detailed feedback
-        timestamp = datetime.now().isoformat()
-        feedback_slug = f"{slugify(content['data']['title'])}-{timestamp}"
-        
-        return {
-            "upload_id": hashlib.md5(pdf_text['text'].encode()).hexdigest(),
-            "job_id": existing_job_id or hashlib.md5(job_description.encode()).hexdigest(),
-            "timestamp": timestamp,
-            "content": content,
-            "matching_score": matching_analysis,
-            "feedback": {
-                "content": matching_analysis['score']['meta']['explanation'],
-                "slug": feedback_slug,
-                "url": f"/feedback/{feedback_slug}"
-            }
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-=======
     existing_job_id: str = Form(None),
     exclude_fields: str = Form(None)
 ):
@@ -1182,8 +1042,6 @@ async def analyze_resume(
     - **existing_job_id**: Optional ID of an existing job posting
     - **exclude_fields**: Optional comma-separated list of fields to exclude from response
     """
-    print(f"Debug - Job Description:\n{job_description}")  # Debug log
-    
     # Read the file content
     content = await resume.read()
     
@@ -1226,14 +1084,7 @@ async def analyze_resume(
     )
 
     # Generate comprehensive feedback
-    feedback_content = await generate_feedback(knowledge, matching, job_description, doc_language)
-
-    # Store feedback and get access info
-    feedback = await store_feedback(
-        upload_id=hashlib.sha256(content).hexdigest()[:8],
-        job_title=knowledge.get('data', {}).get('title', ''),
-        feedback_content=feedback_content
-    )
+    feedback = await generate_feedback(knowledge, matching, job_description, doc_language)
 
     # Generate embedding for the resume only if not excluded
     embedding = None
@@ -1254,7 +1105,7 @@ async def analyze_resume(
             "language": doc_language
         },
         "matching_score": matching,
-        "feedback": feedback  # Now includes content, slug, and url
+        "feedback": feedback
     }
     
     # Add embedding only if not excluded
@@ -1285,4 +1136,3 @@ async def get_feedback(feedback_slug: str):
         content = f.read()
         
     return {"content": content}
->>>>>>> d46f5c6 (feat(resume-analysis): enhance feedback generation with detailed schema and markdown formatting)
