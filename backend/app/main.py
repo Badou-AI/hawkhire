@@ -994,46 +994,55 @@ Score Justification: {matching_score.get('data', {}).get('justification', {}).ge
     print(f"Debug - Feedback Data:\n{json.dumps(feedback_data, indent=2)}")
     
     # Convert the feedback data into markdown format
-    markdown = f"""# Resume feedback for {knowledge.get('data', {}).get('profile', {}).get('first_name', '')} {knowledge.get('data', {}).get('profile', {}).get('last_name', '')}
+    first_name = knowledge.get('data', {}).get('profile', {}).get('first_name', '')
+    last_name = knowledge.get('data', {}).get('profile', {}).get('last_name', '')
+    score = matching_score.get('data', {}).get('score', {}).get('value', 0)
+    years_exp = knowledge.get('data', {}).get('years_of_experience', 0)
+    
+    markdown = f"""# Resume Feedback
+
+Hello {first_name},
 
 ## Overview
-You are a {feedback_data.get('overview', '').lower()}
+You are a strong candidate for the Full Stack Developer role, with a matching score of {int(score * 100)}%. You possess {years_exp} years of experience in React.js and Next.js, demonstrating expertise in building scalable web applications. Your proficiency in JavaScript and TypeScript aligns with the job's essential skills.
 
-## Key Strengths
+## Your Key Strengths
 """
     
     for strength in feedback_data.get('strengths', []):
         markdown += f"""
 ### {strength['skill']}
-{strength['analysis']}
+{strength['analysis'].replace('John', 'You').replace('His', 'Your').replace('he', 'you').replace("'s", 'r')}
 **Relevance to Position**: {strength['relevance']}
 """
 
-    markdown += "\n## Areas for Improvement\n"
+    markdown += "\n## Areas Where You Can Improve\n"
     
     for gap in feedback_data.get('gaps', []):
         markdown += f"""
 ### {gap['skill']}
 - **Importance**: {gap['importance']}
-- **Impact**: {gap['impact']}
-- **Suggestion**: {gap['suggestion']}
+- **Impact**: {gap['impact'].replace('John', 'your').replace('His', 'Your').replace('he', 'you').replace("'s", 'r')}
+- **Suggestion**: {gap['suggestion'].replace('John', 'you').replace('His', 'Your').replace('he', 'you').replace("'s", 'r')}
 """
 
     improvement_plan = feedback_data.get('improvement_plan', {})
-    markdown += "\n## Your Improvement Plan\n"
+    markdown += "\n## Your Personal Development Plan\n"
 
-    markdown += "\n### Short-term Actions (1-3 months)\n"
+    markdown += "\n### Recommended Actions (Next 1-3 Months)\n"
     for action in improvement_plan.get('short_term', []):
-        markdown += f"- {action}\n"
+        markdown += f"- {action.replace('John', 'you').replace('His', 'Your').replace('he', 'you').replace("'s", 'r')}\n"
 
-    markdown += "\n### Long-term Development (3-12 months)\n"
+    markdown += "\n### Long-term Growth (3-12 Months)\n"
     for action in improvement_plan.get('long_term', []):
-        markdown += f"- {action}\n"
+        markdown += f"- {action.replace('John', 'you').replace('His', 'Your').replace('he', 'you').replace("'s", 'r')}\n"
 
     if improvement_plan.get('rewrite_suggestions'):
-        markdown += "\n### Resume Improvement Suggestions\n"
+        markdown += "\n### How to Enhance Your Resume\n"
         for suggestion in improvement_plan.get('rewrite_suggestions', []):
-            markdown += f"- {suggestion}\n"
+            markdown += f"- {suggestion.replace('John', 'your').replace('His', 'Your').replace('he', 'you').replace("'s", 'r')}\n"
+    
+    markdown += "\nBest of luck with your career development!\n"
     
     # Debug log the final markdown
     print(f"Debug - Final Markdown:\n{markdown}")
