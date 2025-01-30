@@ -12,9 +12,10 @@ interface Skill {
 
 interface SkillsBreakdownProps {
   skills: Skill[]
+  isLoading?: boolean
 }
 
-export function SkillsBreakdown({ skills }: SkillsBreakdownProps) {
+export function SkillsBreakdown({ skills, isLoading = false }: SkillsBreakdownProps) {
   // Sort skills by score in descending order
   const sortedSkills = [...skills].sort((a, b) => b.score - a.score)
 
@@ -22,6 +23,36 @@ export function SkillsBreakdown({ skills }: SkillsBreakdownProps) {
     if (score >= 0.8) return 'bg-green-600'
     if (score >= 0.6) return 'bg-yellow-600'
     return 'bg-red-600'
+  }
+
+  if (isLoading) {
+    return (
+      <Card className="p-6">
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold">Skills Analysis</h3>
+            <div className="flex gap-2">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="w-20 h-6 bg-gray-200 animate-pulse rounded" />
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="h-4 w-32 bg-gray-200 animate-pulse rounded" />
+                  <div className="h-4 w-12 bg-gray-200 animate-pulse rounded" />
+                </div>
+                <div className="h-2 bg-gray-200 animate-pulse rounded" />
+                <div className="h-4 w-full bg-gray-200 animate-pulse rounded" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>
+    )
   }
 
   return (

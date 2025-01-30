@@ -91,10 +91,12 @@ export default function ResumeEvaluatorPage() {
             <MatchScore
               score={analysisResults?.matchScore || 0}
               justification="Based on skills and experience match"
+              isLoading={isLoading}
             />
 
             <SkillsBreakdown
               skills={analysisResults?.skills || []}
+              isLoading={isLoading}
             />
 
             <FeedbackView
