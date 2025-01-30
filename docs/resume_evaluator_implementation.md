@@ -1,19 +1,23 @@
 # Smart Resume Evaluator Implementation Plan
 
 ## Overview
-This document outlines the implementation strategy for the AI-powered resume evaluation feature that matches resumes with job descriptions. The system will leverage existing PDF processing infrastructure while adding new capabilities for direct user interaction.
+This document outlines the implementation of the AI-powered resume evaluation feature. The system uses FastAPI for the backend, with a React/Next.js frontend, leveraging AI services for intelligent resume analysis.
 
 ## Architecture Diagram
 
 ```mermaid
 graph TD
-    A[Frontend] -->|Upload Resume & Job Desc| B[API]
+    A[Frontend] -->|Upload Resume & Job Desc| B[FastAPI Backend]
     B --> C[PDF Processing]
     C --> D[Text Extraction]
     D --> E[AI Analysis]
-    E --> F[Result Generation]
-    F --> G[Storage]
-    G --> H[Results Display]
+    E -->|Knowledge Extraction| F[Content Analysis]
+    E -->|Score Generation| G[Match Analysis]
+    E -->|Feedback Generation| H[Feedback Storage]
+    F --> I[Response Assembly]
+    G --> I
+    H --> I
+    I --> J[Results Display]
 ```
 
 ## Core Components
@@ -22,300 +26,231 @@ graph TD
 ```typescript
 components/
 ├── resume-evaluator/
-│   ├── ResumeUpload.tsx       // File upload component
-│   ├── JobDescriptionInput.tsx// Textarea + job selection
-│   ├── AnalysisResults.tsx     // Match visualization
-│   └── SkillGapAnalysis.tsx    // Missing skills display
+│   ├── ResumeUpload.tsx        // File upload component
+│   ├── JobDescriptionInput.tsx // Textarea + job selection
+│   ├── AnalysisResults/
+│   │   ├── MatchScore.tsx      // Score visualization
+│   │   ├── SkillsBreakdown.tsx // Skills with scores
+│   │   ├── FeedbackView.tsx    // Markdown feedback display
+│   │   └── ActionItems.tsx     // Improvement suggestions
+│   └── common/
+│       ├── LoadingState.tsx    // Analysis in progress
+│       └── ErrorState.tsx      // Error handling
 ```
 
-### 2. Backend Services
+### 2. Backend Structure
 ```python
-app/
-├── api/
-│   └── analyze-resume/
-│       ├── route.ts           // Next.js API route
-│       └── analysis.py        # Core AI processing logic
+backend/
+├── app/
+│   ├── main.py                # FastAPI application
+│   ├── config/
+│   │   └── resume_index.json  # Analysis configuration
+│   └── services/
+│       └── semantic.py        # AI service integration
 ```
 
 ### 3. AI Processing Pipeline
-1. PDF/Text Parsing
-2. Semantic Understanding
-3. Skill Extraction
-4. Requirement Matching
-5. Gap Analysis
+1. PDF Text Extraction
+2. Language Detection
+3. Knowledge Extraction
+4. Match Analysis
+5. Feedback Generation
+6. Response Assembly
 
-## Implementation Phases
+## Implementation Status
 
-### Phase 1: Core Analysis Engine
+### Completed Backend Features
 
-#### Backend Modifications
+#### 1. Core Analysis Endpoint
 ```python
 @app.post("/v1/analyze-resume")
 async def analyze_resume(
     resume: UploadFile,
     job_description: str = Form(...),
-    existing_job_id: str = Form(None)
+    existing_job_id: str = Form(None),
+    exclude_fields: str = Form(None)
 ):
-    # Validate inputs
-    if resume.content_type not in ['application/pdf', 'text/plain']:
-        raise HTTPException(400, "Unsupported file type")
-    
-    # Process resume
-    text_content = await semantic_service.convert_pdf_to_text(resume)
-    
-    # Analyze against job description
-    analysis = await semantic_service.analyze_document(
-        text_content, 
-        job_description,
-        RESUME_INDEX_CONFIG
-    )
-    
-    return {
-        "match_score": analysis['score'],
-        "matched_skills": analysis['matching_skills'],
-        "missing_keywords": analysis['missing_keywords'],
-        "recommendations": analysis['suggested_improvements']
-    }
+    # Implemented features:
+    # - PDF text extraction
+    # - Language detection
+    # - Knowledge extraction
+    # - Match analysis
+    # - Comprehensive feedback
+    # - File info tracking
+    # - Optional embedding generation
 ```
 
-#### Frontend Components
-```typescript
-import { ResumeUpload, AnalysisResults } from '@/components/resume-evaluator'
-
-export default function ResumeEvaluatorPage() {
-  const [analysis, setAnalysis] = useState(null)
-  const [loading, setLoading] = useState(false)
-
-  const handleSubmit = async (formData: FormData) => {
-    setLoading(true)
-    try {
-      const response = await fetch('/api/analyze-resume', {
-        method: 'POST',
-        body: formData
-      })
-      setAnalysis(await response.json())
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="max-w-4xl mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-8">AI Resume Evaluator</h1>
-      
-      <form onSubmit={handleSubmit}>
-        <div className="space-y-6">
-          <JobDescriptionInput />
-          <ResumeUpload />
-          
-          <button 
-            type="submit"
-            disabled={loading}
-            className="bg-primary text-white px-6 py-3 rounded-lg disabled:opacity-50"
-          >
-            {loading ? 'Analyzing...' : 'Evaluate Resume'}
-          </button>
-        </div>
-      </form>
-
-      {analysis && <AnalysisResults data={analysis} />}
-    </div>
-  )
-}
-```
-
-### Phase 2: Enhanced Features
-
-1. **Existing Job Integration**
-```typescript
-interface Job {
-  id: string
-  title: string
-  description: string
-}
-
-export function JobSelector() {
-  const [jobs, setJobs] = useState<Job[]>([])
-  
-  useEffect(() => {
-    fetch('/api/jobs')
-      .then(res => res.json())
-      .then(setJobs)
-  }, [])
-
-  return (
-    <Select onValueChange={(value) => setSelectedJob(value)}>
-      <SelectTrigger>
-        <SelectValue placeholder="Select existing job..." />
-      </SelectTrigger>
-      <SelectContent>
-        {jobs.map(job => (
-          <SelectItem key={job.id} value={job.id}>
-            {job.title}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  )
-}
-```
-
-2. **PDF Parsing Enhancements**
+#### 2. Feedback System
 ```python
-async def parse_resume_content(text: str) -> dict:
-    """Enhanced resume parsing with multiple fallback strategies"""
-    try:
-        # First try structured extraction
-        return await semantic_service.extract_knowledge(text)
-    except Exception as e:
-        logger.warning(f"Structured extraction failed: {str(e)}")
-        # Fallback to GPT-4 analysis
-        return await semantic_service.analyze_document(text, "")
+@app.get("/v1/feedback/{feedback_slug}")
+async def get_feedback(feedback_slug: str):
+    """Retrieve stored feedback content"""
 ```
 
-### Phase 3: Security & Validation
-
-1. **File Security Middleware**
-```python
-MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
-ALLOWED_MIME_TYPES = {'application/pdf', 'text/plain'}
-
-async def validate_upload(file: UploadFile):
-    if file.size > MAX_FILE_SIZE:
-        raise HTTPException(413, "File size exceeds 5MB limit")
-    if file.content_type not in ALLOWED_MIME_TYPES:
-        raise HTTPException(415, "Unsupported file type")
-    
-    # Basic malware scanning
-    content = await file.read()
-    if b'%PDF' not in content[:4] and file.content_type == 'application/pdf':
-        raise HTTPException(400, "Invalid PDF file")
-```
-
-2. **Rate Limiting**
-```python
-from fastapi_limiter import Limiter
-limiter = Limiter(key_func=get_remote_address)
-
-@app.post("/v1/analyze-resume")
-@limiter.limit("10/minute")
-async def analyze_resume(..., request: Request):
-```
-
-## Analysis Workflow
-
-1. **Text Normalization**
-   - Convert all text to lowercase
-   - Remove special characters
-   - Expand abbreviations (CEO → Chief Executive Officer)
-
-2. **Skill Matching Algorithm**
-```python
-def match_skills(resume_skills: list, job_skills: list) -> dict:
-    matched = []
-    missing = []
-    
-    # Create normalized versions
-    resume_norm = [skill.lower().strip() for skill in resume_skills]
-    job_norm = [skill.lower().strip() for skill in job_skills]
-    
-    for skill in job_norm:
-        if any(skill in res_skill for res_skill in resume_norm):
-            matched.append(skill)
-        else:
-            missing.append(skill)
-    
-    return {
-        'match_percentage': len(matched) / len(job_norm),
-        'matched': matched,
-        'missing': missing
-    }
-```
-
-## AI Prompt Engineering
-
+#### 3. Response Schema
 ```json
 {
-    "skill_extraction": {
-        "system": "You are an expert resume analyst. Extract technical skills from this resume:",
-        "user": "Return skills as JSON array with categories:\n- programming_languages\n- frameworks\n- tools\n- certifications"
+    "upload_id": "string",
+    "job_id": "string",
+    "timestamp": "string",
+    "content": {
+        "data": {
+            "title": "string",
+            "profile": {},
+            "skills": [],
+            "years_of_experience": "number"
+        }
     },
-    "gap_analysis": {
-        "system": "Analyze gaps between resume and job requirements:",
-        "user": "Identify missing skills from job description and suggest learning resources. Use markdown formatting for readability."
+    "file_info": {
+        "name": "string",
+        "size": "number",
+        "mime_type": "string",
+        "language": "string"
+    },
+    "matching_score": {
+        "data": {
+            "score": {
+                "value": "number"
+            },
+            "justification": {}
+        }
+    },
+    "feedback": {
+        "content": "string",
+        "slug": "string",
+        "url": "string"
     }
 }
+```
+
+### Planned UI Implementation
+
+#### 1. Upload Flow
+- Drag-and-drop resume upload
+- Job description input/selection
+- Progress indication
+- Error handling
+
+#### 2. Results Display
+- Match score visualization
+- Skills breakdown with proficiency levels
+- Interactive feedback sections
+- Improvement suggestions
+- Download/share options
+
+#### 3. Responsive Design
+- Mobile-first approach
+- Tablet optimization
+- Desktop layout
+
+## Security & Validation
+
+### 1. File Validation
+```python
+ALLOWED_MIME_TYPES = {'application/pdf', 'text/plain'}
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+
+async def validate_upload(file: UploadFile):
+    # Size validation
+    # MIME type validation
+    # Content validation
+```
+
+### 2. Parameter Validation
+```python
+class ExcludeFields(BaseModel):
+    fields: List[str]
+    
+    @validator('fields')
+    def validate_fields(cls, v):
+        allowed = {'embedding', 'content', 'file_info'}
+        if not all(f in allowed for f in v):
+            raise ValueError(f"Invalid fields. Allowed: {allowed}")
+        return v
+```
+
+### 3. Feedback Storage
+```python
+def validate_feedback_path(path: str):
+    """Ensure feedback file paths are safe"""
+    if '..' in path or not path.endswith('.md'):
+        raise ValueError("Invalid feedback path")
 ```
 
 ## Testing Strategy
 
-### 1. Unit Tests
+### 1. Backend Tests
 ```python
-def test_skill_matching():
-    resume = ['Python', 'React', 'AWS']
-    job = ['python', 'node.js', 'cloud']
-    result = match_skills(resume, job)
-    assert result['match_percentage'] == 0.66
-    assert 'python' in result['matched']
-    assert 'node.js' in result['missing']
+def test_analyze_resume():
+    # Test full analysis pipeline
+    # Test exclude_fields functionality
+    # Test language detection
+
+def test_feedback_generation():
+    # Test feedback content
+    # Test markdown formatting
+    # Test pronouns replacement
+
+def test_score_extraction():
+    # Test matching_score extraction
+    # Test skills average fallback
+    # Test score formatting
 ```
 
-### 2. Integration Tests
+### 2. Frontend Tests
 ```typescript
-describe('Resume Analysis Flow', () => {
-  it('should process PDF and return analysis', async () => {
-    const file = new File(['test'], 'resume.pdf', { type: 'application/pdf' })
-    const response = await analyzeResume(file, 'Sample job description')
-    
-    expect(response).toHaveProperty('match_score')
-    expect(response.matched_skills).toBeInstanceOf(Array)
-  })
+describe('ResumeEvaluator', () => {
+    it('handles file upload correctly', () => {})
+    it('displays analysis results properly', () => {})
+    it('shows appropriate loading states', () => {})
+    it('handles errors gracefully', () => {})
 })
 ```
 
-### 3. Performance Testing
-```bash
-# Load test with 100 concurrent requests
-artillery quick --count 100 -n 50 http://localhost:8000/v1/analyze-resume
+### 3. Integration Tests
+```python
+async def test_full_analysis_flow():
+    # Test file upload
+    # Test analysis
+    # Test feedback storage
+    # Test feedback retrieval
 ```
 
 ## Deployment Checklist
 
-1. **Environment Variables**
+1. **Environment Setup**
 ```env
-# Required for AI analysis
 AI_MODEL=gpt-4
-ANALYSIS_TIMEOUT=30
-MAX_SKILLS=50
+SEMANTIC_SERVICE_URL=http://127.0.0.1:8000
+MAX_FILE_SIZE=5242880
 ```
 
 2. **Dependencies**
 ```bash
-# PDF processing requirements
-pip install pdfplumber python-docx
+# Backend
+pip install fastapi uvicorn python-multipart httpx python-slugify
+
+# Frontend
+npm install @radix-ui/react-icons @radix-ui/react-progress marked
 ```
 
 3. **Monitoring**
 - API response times
 - Error rates
-- Model usage costs
+- Feedback storage usage
 - File processing success rate
 
-## Future Enhancements
+## Timeline
 
-1. **Multi-Resume Comparison**
-2. **Interview Question Generator**
-3. **Salary Estimation**
-4. **Company Culture Fit Analysis**
-5. **Versioned Analysis History**
+| Phase | Task | Status |
+|-------|------|--------|
+| Backend Core | Basic Analysis | ✅ Completed |
+| Backend Core | Feedback System | ✅ Completed |
+| Frontend | Upload UI | 🏗️ In Progress |
+| Frontend | Results Display | 📅 Planned |
+| Frontend | Responsive Design | 📅 Planned |
+| Testing | Backend Tests | 📅 Planned |
+| Testing | Frontend Tests | 📅 Planned |
+| Deploy | Production Setup | 📅 Planned |
 
-## Timeline & Milestones
-
-| Phase       | Duration | Deliverables                      |
-|-------------|----------|-----------------------------------|
-| Core MVP    | 2 weeks  | Basic PDF analysis & UI          |
-| Job Matching| 1 week   | Existing job integration         |
-| Security    | 3 days   | Rate limits & file validation    |
-| Optimization| 1 week   | Caching & performance tuning     |
-
-This plan leverages existing infrastructure while adding new AI-powered capabilities. The implementation focuses on accuracy, performance, and security while maintaining flexibility for future enhancements.
+This implementation plan reflects our current progress and outlines the remaining work, particularly focusing on the UI implementation phase starting tomorrow.
