@@ -144,7 +144,7 @@ class SemanticService:
                 }
             },
                 'extraction_steps': 'tout les champs sont requis. le document est un cv',
-                'model': 'gpt-4'
+                'model': os.getenv('AI_MODEL', 'gpt-4')
             }
         )
         response.raise_for_status()
@@ -159,7 +159,7 @@ class SemanticService:
                 'text': f"cv: {text}\n### job: {job_description}",
                 'target_json_schema': schema,
                 'extraction_steps': 'anlysze the matching of the cv with the job description and provide a score and justification',
-                'model': 'gpt-4'
+                'model': os.getenv('AI_MODEL', 'gpt-4')
             }
         )
         response.raise_for_status()
@@ -323,26 +323,15 @@ async def ensure_job_index(job_id: str, job_title: str = "") -> str:
     
     return index_name
 
-async def save_upload(file: UploadFile, job_id: str) -> Dict:
-    """Save an uploaded file and return its metadata"""
-    content = await file.read()
-    upload_id = generate_upload_id(content, job_id)
-    
-    # Create upload directory
-    upload_path = UPLOAD_DIR / upload_id
-    upload_path.mkdir(exist_ok=True)
-    
-    # Save original file
-    file_path = upload_path / file.filename
-    async with aiofiles.open(file_path, 'wb') as out_file:
-        await out_file.write(content)
-    
-    return {
-        "upload_id": upload_id,
-        "original_filename": file.filename,
-        "file_path": str(file_path),
-        "timestamp": datetime.now().isoformat()
-    }
+# Add to file upload processing:
+MAX_FILE_SIZE = 1024 * 1024 * 5  # 5MB
+ALLOWED_MIME_TYPES = {'application/pdf', 'text/plain'}
+
+async def save_upload(file: UploadFile):
+    if file.size > MAX_FILE_SIZE:
+        raise HTTPException(413, "File too large")
+    if file.content_type not in ALLOWED_MIME_TYPES:
+        raise HTTPException(415, "Unsupported file type")
 
 class FileStats:
     def __init__(self, path: Path):
@@ -449,7 +438,10 @@ Nous recherchons un(e) ingénieur(e) talentueux(se) spécialisé(e) en deep lear
                 "processed_path": str(dest_path)
             },
             "matching_score": extracted_matching_score,
-            "embedding": embedding
+            "embedding": embedding,
+            "skills": [
+                {"skill": "Deep Learning", "score": 0.9, "justification": "5+ years experience..."}
+            ]
         }
         
         # Index the document
@@ -501,7 +493,7 @@ async def process_zip_file(zip_file: UploadFile, job_id: str, job_title: str = "
     print(f"Using index: {index_name}")
     
     # Save the upload
-    upload_info = await save_upload(zip_file, job_id)
+    upload_info = await save_upload(zip_file)
     temp_dir = tempfile.mkdtemp()  # Create a temporary directory that won't auto-delete
     
     try:
@@ -855,3 +847,19 @@ async def get_index_status(index_name: str):
         raise HTTPException(status_code=e.response.status_code, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting index status: {str(e)}")
+
+@app.post("/v1/analyze-resume")
+async def analyze_resume(
+    resume: UploadFile,
+    job_description: str = Form(...),
+    existing_job_id: str = Form(None)
+):
+    # Use existing PDF processing
+    text_result = await semantic_service.convert_pdf_to_text(resume)
+    # Use existing analysis logic
+    analysis = await semantic_service.analyze_document(
+        text_result, 
+        job_description,
+        RESUME_INDEX_CONFIG
+    )
+    return analysis
