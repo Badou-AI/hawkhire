@@ -18,7 +18,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-import { AlertCircle, CheckCircle2, XCircle, Timer, ChevronLeft, ChevronRight, Database, Settings2 } from 'lucide-react'
+import { AlertCircle, CheckCircle2, XCircle, Timer, Database, Settings2 } from 'lucide-react'
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import Link from "next/link"
@@ -259,37 +259,56 @@ export default function ResumeProcessingPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="container mx-auto p-6 space-y-6">
+      {/* Header Section */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Resume Processing</h1>
+        <div>
+          <h1 className="text-3xl font-bold">Resume Processing</h1>
+          <p className="text-muted-foreground mt-1">Upload and analyze resumes for job positions</p>
+        </div>
+        <Link href="/resume-processing/matches">
+          <Button variant="outline" className="gap-2">
+            <Database className="h-4 w-4" />
+            View All Matches
+          </Button>
+        </Link>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-4">
-        <Card className="md:col-span-3">
+      <div className="grid gap-6 md:grid-cols-12">
+        {/* Main Upload Section */}
+        <Card className="md:col-span-8">
           <CardHeader>
-            <CardTitle>Upload Resumes</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Settings2 className="h-5 w-5" />
+              Processing Configuration
+            </CardTitle>
             <CardDescription>
-              Upload a ZIP file containing resumes in PDF, DOC, or DOCX format
+              Configure job position and upload resumes for analysis
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <Select 
-                value={selectedJob?.title} 
-                onValueChange={(value) => setSelectedJob(jobs.find(job => job.title === value) || null)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select job position" />
-                </SelectTrigger>
-                <SelectContent>
-                  {jobs.map(job => (
-                    <SelectItem key={job.id} value={job.title}>
-                      {job.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="space-y-6">
+              {/* Job Selection */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Job Position</label>
+                <Select 
+                  value={selectedJob?.title} 
+                  onValueChange={(value) => setSelectedJob(jobs.find(job => job.title === value) || null)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select job position" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {jobs.map(job => (
+                      <SelectItem key={job.id} value={job.title}>
+                        {job.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
+              {/* Error Display */}
               {error && (
                 <div className="flex items-center gap-2 p-4 text-sm text-red-600 bg-red-50 rounded-lg">
                   <AlertCircle className="h-4 w-4" />
@@ -297,6 +316,7 @@ export default function ResumeProcessingPage() {
                 </div>
               )}
 
+              {/* File Upload */}
               <FileDropzone
                 onFileSelect={handleFileUpload}
                 disabled={processingStatus !== 'idle'}
@@ -306,6 +326,7 @@ export default function ResumeProcessingPage() {
                 maxSize={500}
               />
 
+              {/* Processing Status */}
               {processingStatus !== 'idle' && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
@@ -330,263 +351,176 @@ export default function ResumeProcessingPage() {
                   {processingStatus !== 'error' && <Progress value={getProcessingProgress()} />}
                 </div>
               )}
-
-              {processingStatus === 'completed' && candidateMatches.length > 0 && (
-                <div className="pt-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold">Top Matches</h3>
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => {
-                            const container = document.getElementById('matches-container')
-                            if (container) {
-                              container.scrollLeft -= container.clientWidth / 3
-                            }
-                          }}
-                        >
-                          <ChevronLeft className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => {
-                            const container = document.getElementById('matches-container')
-                            if (container) {
-                              container.scrollLeft += container.clientWidth / 3
-                            }
-                          }}
-                        >
-                          <ChevronRight className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <Link href="/resume-processing/matches" className="inline-block">
-                        <Button variant="outline" size="sm">View All</Button>
-                      </Link>
-                    </div>
-                  </div>
-                  <div 
-                    id="matches-container"
-                    className="overflow-x-auto hide-scrollbar scroll-smooth"
-                  >
-                    <div className="grid grid-flow-col auto-cols-[calc(33.33%-0.75rem)] gap-3 pb-4">
-                      {candidateMatches.map((candidate) => (
-                        <Card key={candidate.id}>
-                          <CardContent className="p-4">
-                            <div className="space-y-4">
-                              <div className="flex items-start gap-3">
-                                <Avatar className="h-12 w-12">
-                                  <AvatarImage src={candidate.avatar} alt={candidate.name} />
-                                  <AvatarFallback>{candidate.name.charAt(0)}</AvatarFallback>
-                                </Avatar>
-                                <div>
-                                  <h4 className="font-semibold">{candidate.name}</h4>
-                                  <p className="text-sm text-muted-foreground">
-                                    {candidate.experience}
-                                  </p>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center justify-between py-2.5 px-3 bg-muted rounded-lg">
-                                <span className="text-sm font-medium">Match Score</span>
-                                <span className="text-2xl font-bold text-green-600">
-                                  {candidate.matchScore}%
-                                </span>
-                              </div>
-
-                              <div>
-                                <p className="text-sm">
-                                  {candidate.summary}
-                                </p>
-                              </div>
-
-                              <div className="space-y-2.5">
-                                <p className="text-sm font-medium">Skill Assessment</p>
-                                {Object.entries(candidate.skillRatings).map(([skill, score]) => (
-                                  <div key={skill} className="space-y-1">
-                                    <div className="flex justify-between text-xs">
-                                      <span className="font-medium">{skill}</span>
-                                      <span className="text-muted-foreground">{score}%</span>
-                                    </div>
-                                    <div className="h-1.5 rounded-full bg-secondary">
-                                      <div 
-                                        className={cn("h-full rounded-full transition-all", getSkillColor(score))}
-                                        style={{ width: `${score}%` }}
-                                      />
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-
-                              {candidate.otherMatches && candidate.otherMatches.length > 0 && (
-                                <div>
-                                  <p className="text-sm font-medium mb-2">Also Suitable For</p>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {candidate.otherMatches.map(match => (
-                                      <Badge 
-                                        key={match.jobTitle} 
-                                        variant="outline"
-                                        className="text-xs font-normal"
-                                      >
-                                        {match.jobTitle} ({match.score}%)
-                                      </Badge>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           </CardContent>
         </Card>
 
-        <div className="space-y-6">
+        {/* Stats Section */}
+        <div className="md:col-span-4 space-y-6">
+          {/* Processing Stats */}
           <Card>
             <CardHeader>
-              <CardTitle>Processing Status</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Timer className="h-5 w-5" />
+                Processing Stats
+              </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <div className="text-sm text-muted-foreground mb-1">TOTAL FILES</div>
-                <div className="text-2xl font-bold">
-                  {processingStatus === 'idle' ? (
-                    <span className="text-muted-foreground">Ready to process</span>
-                  ) : stats.totalFiles}
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <div className="text-sm text-muted-foreground mb-1">PROCESSED</div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-xl font-bold text-green-600">{stats.processedCount}</span>
-                    {processingStatus === 'processing' && (
-                      <span className="text-xs text-muted-foreground">
-                        {((stats.processedCount / stats.totalFiles) * 100).toFixed(1)}%
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground mb-1">FAILED</div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-xl font-bold text-red-600">{stats.failedCount}</span>
-                    {stats.failedCount > 0 && (
-                      <span className="text-xs text-muted-foreground">
-                        {((stats.failedCount / stats.totalFiles) * 100).toFixed(1)}%
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {processingStatus === 'completed' && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground pt-2">
-                  <Timer className="h-4 w-4" />
-                  <span>Processed {stats.totalFiles} files in {formatTime(processingTime)}</span>
-                </div>
-              )}
-
-              <div className="pt-4 border-t">
+            <CardContent>
+              <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Badge variant="secondary" className="mb-2">Supported</Badge>
-                    <div className="text-xl font-bold">{stats.supported}</div>
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Total Files</p>
+                    <p className="text-2xl font-bold">{stats.totalFiles}</p>
                   </div>
-                  <div>
-                    <Badge variant="destructive" className="mb-2">Unsupported</Badge>
-                    <div className="text-xl font-bold">{stats.unsupported}</div>
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Processed</p>
+                    <p className="text-2xl font-bold text-green-600">{stats.processedCount}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Failed</p>
+                    <p className="text-2xl font-bold text-red-600">{stats.failedCount}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Processing Time</p>
+                    <p className="text-2xl font-bold">{formatTime(processingTime)}</p>
                   </div>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <Button 
-                className="w-full" 
-                variant="outline" 
-                disabled={processingStatus !== 'completed'}
-              >
-                View Processed Resumes ({stats.supported})
-              </Button>
-              <Button 
-                className="w-full" 
-                variant="outline" 
-                disabled={stats.failedCount === 0}
-              >
-                View Failed Items ({stats.failedCount})
-              </Button>
-              <Button 
-                className="w-full" 
-                variant="outline" 
-                disabled={stats.unsupported === 0}
-              >
-                View Unsupported Files ({stats.unsupported})
-              </Button>
-            </CardContent>
-          </Card>
-
-          {selectedJob && (
+          {/* Index Status */}
+          {indexStatus && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Database className="h-4 w-4" />
+                  <Database className="h-5 w-5" />
                   Index Status
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {indexStatus ? (
-                  <>
-                    <div>
-                      <div className="text-sm text-muted-foreground mb-1">INDEX NAME</div>
-                      <div className="text-sm font-medium truncate">{indexStatus.name}</div>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Status</span>
+                      <Badge variant={indexStatus.status === 'active' ? 'default' : 'secondary'}>
+                        {indexStatus.status}
+                      </Badge>
                     </div>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <div className="text-sm text-muted-foreground mb-1">DOCUMENTS</div>
-                        <div className="text-xl font-bold">{indexStatus.document_count}</div>
-                      </div>
-                      <div>
-                        <div className="text-sm text-muted-foreground mb-1">STATUS</div>
-                        <Badge variant={indexStatus.status === 'active' ? 'default' : 'secondary'}>
-                          {indexStatus.status}
-                        </Badge>
-                      </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Documents</span>
+                      <span className="font-medium">{indexStatus.document_count}</span>
                     </div>
-
-                    {indexStatus.created_at && (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground pt-2">
-                        <Settings2 className="h-4 w-4" />
-                        <span>Created {new Date(indexStatus.created_at).toLocaleDateString()}</span>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="text-sm text-muted-foreground">
-                    No index information available
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Created</span>
+                      <span className="font-medium">
+                        {new Date(indexStatus.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
                   </div>
-                )}
+                </div>
               </CardContent>
             </Card>
           )}
         </div>
       </div>
+
+      {/* Matches Section */}
+      {processingStatus === 'completed' && candidateMatches.length > 0 && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Top Matches</CardTitle>
+              <CardDescription>Best matching candidates for the position</CardDescription>
+            </div>
+            <Link href="/resume-processing/matches">
+              <Button variant="outline" size="sm">View All Matches</Button>
+            </Link>
+          </CardHeader>
+          <CardContent>
+            <div 
+              id="matches-container"
+              className="overflow-x-auto hide-scrollbar scroll-smooth"
+            >
+              <div className="grid grid-flow-col auto-cols-[minmax(300px,_1fr)] gap-4 pb-4">
+                {candidateMatches.map((candidate) => (
+                  <Card key={candidate.id} className="border-0 shadow-md">
+                    <CardContent className="p-4">
+                      <div className="space-y-4">
+                        <div className="flex items-start gap-3">
+                          <Avatar className="h-12 w-12">
+                            <AvatarImage src={candidate.avatar} alt={candidate.name} />
+                            <AvatarFallback>{candidate.name.charAt(0)}</AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <h4 className="font-semibold">{candidate.name}</h4>
+                            <p className="text-sm text-muted-foreground">
+                              {candidate.experience}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between py-2.5 px-3 bg-muted rounded-lg">
+                          <span className="text-sm font-medium">Match Score</span>
+                          <span className="text-2xl font-bold text-green-600">
+                            {candidate.matchScore}%
+                          </span>
+                        </div>
+
+                        <div>
+                          <p className="text-sm line-clamp-2">
+                            {candidate.summary}
+                          </p>
+                        </div>
+
+                        <div className="space-y-2.5">
+                          <p className="text-sm font-medium">Top Skills</p>
+                          {Object.entries(candidate.skillRatings).slice(0, 3).map(([skill, score]) => (
+                            <div key={skill} className="space-y-1">
+                              <div className="flex justify-between text-xs">
+                                <span className="font-medium">{skill}</span>
+                                <span className="text-muted-foreground">{score}%</span>
+                              </div>
+                              <div className="h-1.5 rounded-full bg-secondary">
+                                <div 
+                                  className={cn("h-full rounded-full transition-all", getSkillColor(score))}
+                                  style={{ width: `${score}%` }}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {candidate.otherMatches && candidate.otherMatches.length > 0 && (
+                          <div>
+                            <p className="text-sm font-medium mb-2">Also Suitable For</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {candidate.otherMatches.slice(0, 2).map(match => (
+                                <Badge 
+                                  key={match.jobTitle} 
+                                  variant="outline"
+                                  className="text-xs font-normal"
+                                >
+                                  {match.jobTitle} ({match.score}%)
+                                </Badge>
+                              ))}
+                              {candidate.otherMatches.length > 2 && (
+                                <Badge variant="outline" className="text-xs font-normal">
+                                  +{candidate.otherMatches.length - 2} more
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 } 
