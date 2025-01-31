@@ -13,7 +13,9 @@ import { FileDropzone } from "@/components/resume-evaluator/FileDropzone"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import { Plus, FileText, Brain, TrendingUp, Target, ScrollText } from "lucide-react"
+import { FileText, Brain, TrendingUp, Target, ScrollText } from "lucide-react"
+import ReactMarkdown from 'react-markdown'
+import { ArrowLeft } from "lucide-react"
 
 // Add missing interfaces at the top after imports
 interface SkillAnalysis {
@@ -151,7 +153,6 @@ export default function ResumeEvaluatorPage() {
   const [jobDescription, setJobDescription] = useState("")
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysis, setAnalysis] = useState<ResumeAnalysis | null>(null)
-  const [showUpload, setShowUpload] = useState(true)
 
   const handleFileUpload = async () => {
     if (!jobDescription) {
@@ -167,7 +168,6 @@ export default function ResumeEvaluatorPage() {
       
       // Use mock data instead of actual API call
       setAnalysis(mockAnalysisData)
-      setShowUpload(false)
     } catch (error) {
       console.error('Error analyzing resume:', error)
     } finally {
@@ -191,19 +191,30 @@ export default function ResumeEvaluatorPage() {
   const resetAnalysis = () => {
     setAnalysis(null)
     setJobDescription("")
-    setShowUpload(true)
   }
 
   return (
-    <div className="container mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-6">Resume Evaluator</h1>
+    <div className="p-6">
+      {analysis && (
+        <div className="flex items-center justify-between mb-6 pb-4 border-b">
+          <h1 className="text-2xl font-bold">Analysis Results</h1>
+          <button
+            onClick={resetAnalysis}
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Start New Analysis
+          </button>
+        </div>
+      )}
+
+      {!analysis && <h1 className="text-2xl font-bold mb-6">Resume Evaluator</h1>}
 
       <div className="space-y-6">
         {/* Upload and Job Description Section */}
-        <div className="grid gap-6 md:grid-cols-2">
-          {/* Upload Section - Collapsible */}
-          <div>
-            {showUpload ? (
+        <div className="max-w-xl mx-auto space-y-6">
+          {!analysis && (
+            <>
               <Card>
                 <CardHeader>
                   <CardTitle>Upload Resume</CardTitle>
@@ -218,29 +229,12 @@ export default function ResumeEvaluatorPage() {
                   />
                 </CardContent>
               </Card>
-            ) : (
-              <Button 
-                className="w-full h-auto py-8 flex flex-col gap-2"
-                onClick={resetAnalysis}
-              >
-                <Plus className="h-6 w-6" />
-                <span>Analyze New Resume</span>
-              </Button>
-            )}
-          </div>
 
-          {/* Job Description - Switches to read-only */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Job Description</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {analysis ? (
-                <div className="bg-muted rounded-lg p-4 min-h-[200px] text-sm">
-                  {jobDescription}
-                </div>
-              ) : (
-                <>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Job Description</CardTitle>
+                </CardHeader>
+                <CardContent>
                   <Textarea
                     placeholder="Paste the job description here..."
                     value={jobDescription}
@@ -250,87 +244,104 @@ export default function ResumeEvaluatorPage() {
                   <Button 
                     className="w-full mt-4" 
                     disabled={!jobDescription || isAnalyzing}
-                    onClick={() => {/* Trigger analysis */}}
+                    onClick={handleFileUpload}
                   >
                     {isAnalyzing ? "Analyzing..." : "Analyze Resume"}
                   </Button>
-                </>
-              )}
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </div>
 
         {/* Analysis Results */}
         {analysis && (
           <div className="space-y-6">
-            {/* Combined Score and Skills Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Match Analysis</CardTitle>
-                <CardDescription>Overall match score and detailed skills breakdown</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-8">
-                {/* Score Circle */}
-                <div className="flex justify-center">
-                  <div className="relative w-40 h-40">
-                    <svg className="w-full h-full" viewBox="0 0 100 100">
-                      <circle
-                        className="text-muted stroke-current"
-                        strokeWidth="10"
-                        fill="transparent"
-                        r="40"
-                        cx="50"
-                        cy="50"
-                      />
-                      <circle
-                        className="text-primary stroke-current"
-                        strokeWidth="10"
-                        strokeLinecap="round"
-                        fill="transparent"
-                        r="40"
-                        cx="50"
-                        cy="50"
-                        strokeDasharray={`${analysis.matchScore * 2.51327} 251.327`}
-                        transform="rotate(-90 50 50)"
-                      />
-                      <text
-                        x="50"
-                        y="50"
-                        className="text-3xl font-bold"
-                        textAnchor="middle"
-                        dy="0.3em"
-                        fill="currentColor"
-                      >
-                        {analysis.matchScore}%
-                      </text>
-                    </svg>
+            {/* Two Column Layout for Job Description and Analysis */}
+            <div className="grid md:grid-cols-2 gap-6">
+              {/* Job Description */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Job Description</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="bg-muted rounded-lg p-4 h-[600px] overflow-y-auto hide-scrollbar prose prose-sm max-w-none">
+                    <ReactMarkdown>{jobDescription}</ReactMarkdown>
                   </div>
-                </div>
+                </CardContent>
+              </Card>
 
-                {/* Skills Grid */}
-                <div className="grid grid-cols-2 gap-4">
-                  {analysis.skills.map((skill, index) => (
-                    <Card key={index} className="border shadow-sm">
-                      <CardContent className="p-4 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium">{skill.skill}</span>
-                          <Badge variant="outline">{skill.level}</Badge>
-                        </div>
-                        <div className="h-2 rounded-full bg-secondary">
-                          <div
-                            className={cn("h-full rounded-full transition-all", getSkillLevelColor(skill.level))}
-                            style={{ width: `${skill.score}%` }}
+              {/* Combined Score and Skills Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Match Analysis</CardTitle>
+                  <CardDescription>Overall match score and detailed skills breakdown</CardDescription>
+                </CardHeader>
+                <CardContent className="h-[600px] overflow-y-auto hide-scrollbar">
+                  <div className="space-y-8">
+                    {/* Score Circle */}
+                    <div className="flex justify-center">
+                      <div className="relative w-40 h-40">
+                        <svg className="w-full h-full" viewBox="0 0 100 100">
+                          <circle
+                            className="text-muted stroke-current"
+                            strokeWidth="10"
+                            fill="transparent"
+                            r="40"
+                            cx="50"
+                            cy="50"
                           />
-                        </div>
-                        <p className="text-xs text-muted-foreground line-clamp-2">
-                          {skill.description}
-                        </p>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                          <circle
+                            className="text-primary stroke-current"
+                            strokeWidth="10"
+                            strokeLinecap="round"
+                            fill="transparent"
+                            r="40"
+                            cx="50"
+                            cy="50"
+                            strokeDasharray={`${analysis.matchScore * 2.51327} 251.327`}
+                            transform="rotate(-90 50 50)"
+                          />
+                          <text
+                            x="50"
+                            y="50"
+                            className="text-3xl font-bold"
+                            textAnchor="middle"
+                            dy="0.3em"
+                            fill="currentColor"
+                          >
+                            {analysis.matchScore}%
+                          </text>
+                        </svg>
+                      </div>
+                    </div>
+
+                    {/* Skills Grid */}
+                    <div className="grid grid-cols-1 gap-4">
+                      {analysis.skills.map((skill, index) => (
+                        <Card key={index} className="border shadow-sm">
+                          <CardContent className="p-4 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium">{skill.skill}</span>
+                              <Badge variant="outline">{skill.level}</Badge>
+                            </div>
+                            <div className="h-2 rounded-full bg-secondary">
+                              <div
+                                className={cn("h-full rounded-full transition-all", getSkillLevelColor(skill.level))}
+                                style={{ width: `${skill.score}%` }}
+                              />
+                            </div>
+                            <p className="text-xs text-muted-foreground line-clamp-2">
+                              {skill.description}
+                            </p>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
 
             {/* Feedback Section in Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
