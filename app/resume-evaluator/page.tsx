@@ -13,7 +13,7 @@ import { FileDropzone } from "@/components/resume-evaluator/FileDropzone"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import { FileText, Brain, TrendingUp, Target, ScrollText } from "lucide-react"
+import { Brain, TrendingUp, Target, ScrollText } from "lucide-react"
 import ReactMarkdown from 'react-markdown'
 import { ArrowLeft } from "lucide-react"
 import { useSearchParams } from 'next/navigation'
@@ -407,16 +407,16 @@ export default function ResumeEvaluatorPage() {
         {/* Analysis Results */}
         {analysis && (
           <div className="space-y-6">
-            {/* Two Column Layout for Job Description and Analysis */}
+            {/* Two Column Layout for Overview and Analysis */}
             <div className="grid md:grid-cols-2 gap-6">
-              {/* Job Description */}
+              {/* Overview Card */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Job Description</CardTitle>
+                  <CardTitle>Analysis Overview</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="bg-muted rounded-lg p-4 h-[600px] overflow-y-auto hide-scrollbar prose prose-sm max-w-none">
-                    <ReactMarkdown>{jobDescription}</ReactMarkdown>
+                    <ReactMarkdown>{analysis.feedback.overview}</ReactMarkdown>
                   </div>
                 </CardContent>
               </Card>
@@ -449,20 +449,13 @@ export default function ResumeEvaluatorPage() {
                             r="40"
                             cx="50"
                             cy="50"
-                            strokeDasharray={`${analysis.matchScore * 2.51327} 251.327`}
+                            strokeDasharray={`${Math.round(analysis.matchScore) * 2.51327} 251.327`}
                             transform="rotate(-90 50 50)"
                           />
-                          <text
-                            x="50"
-                            y="50"
-                            className="text-3xl font-bold"
-                            textAnchor="middle"
-                            dy="0.3em"
-                            fill="currentColor"
-                          >
-                            {analysis.matchScore}%
-                          </text>
                         </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="text-3xl font-bold">{Math.round(analysis.matchScore)}%</span>
+                        </div>
                       </div>
                     </div>
 
@@ -495,19 +488,6 @@ export default function ResumeEvaluatorPage() {
 
             {/* Feedback Section in Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {/* Overview Card */}
-              <Card className="col-span-full">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <FileText className="h-5 w-5" />
-                    Overview
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p>{analysis.feedback.overview}</p>
-                </CardContent>
-              </Card>
-
               {/* Key Strengths Card */}
               <Card className="md:col-span-2">
                 <CardHeader>
