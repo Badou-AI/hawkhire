@@ -55,14 +55,20 @@ CREATE TABLE company_members (
 ```
 
 ### Storage Buckets
-- company-logos: For company logo images
-- company-covers: For company cover images
-- company-documents: For verification documents
+- company-logos: For company logo images (max 2MB, PNG/JPG)
+- company-covers: For company cover images (max 5MB, PNG/JPG)
+- company-documents: For verification documents (max 20MB, PDF/DOCX)
+- Add retention policies:
+  - Logos/covers: Permanent until deleted
+  - Documents: Auto-delete after 6 months of verification
+  - Temp uploads: Auto-delete after 7 days
 
 ### Row Level Security Policies
-- Public read access for verified companies
-- Write access only for company admins
-- Verification status updates only for platform admins
+- Verified companies: Public read access
+- Company admins: Full write access to their org data
+- Platform admins: Verification status updates + audit access
+- Team members: Read access based on role permissions
+- Add tier-based access controls for storage limits
 
 ## 2. Company Registration Flow
 
@@ -99,25 +105,20 @@ CREATE TABLE company_members (
 ## 3. Role-Based Access Control
 
 ### Company Roles
-1. Owner/Admin
-   - Full access to company settings
-   - Can manage all team members
-   - Can create and manage all job posts
+1. Owner
+   - All admin privileges + ownership transfer
+   - Manage billing and subscriptions
+   - Delete organization
 
-2. HR Manager
-   - Can manage job posts
-   - Can view and manage applications
-   - Can invite team members
+2. Admin
+   - Full access except ownership/billing
+   - Manage all team members and roles
+   - Configure organization settings
 
-3. Recruiter
-   - Can create job drafts
-   - Can review applications
-   - Limited team management
-
-4. Interviewer
-   - Can view assigned applications
-   - Can provide feedback
-   - Can schedule interviews
+3. Member
+   - Basic access to job posts/applications
+   - View team directory
+   - Limited editing capabilities
 
 ### Permission Sets
 ```typescript
@@ -215,18 +216,33 @@ GET /api/companies/:id/verification-status
 - Permission checks
 - Role assignment logic
 - File upload handling
+- Add test cases for:
+  - Storage quota enforcement
+  - Role escalation prevention
+  - Verification workflow states
+  - Slug generation uniqueness
 
 ### Integration Tests
 - Complete registration flow
 - Team management operations
 - Verification process
 - API endpoints
+- Add scenarios:
+  - Storage limit exceeded during upload
+  - Cross-organization data isolation
+  - Verification document expiration
+  - Bulk member invitations
 
 ### E2E Tests
 - Company registration
 - Team invitation flow
 - Profile management
 - Role-based access
+- Add new cases:
+  - Ownership transfer flow
+  - Storage quota warning notifications
+  - Tier upgrade/downgrade process
+  - Multi-admin concurrent edits
 
 ## Questions for Review
 1. Should we implement a staging area for company profile changes?
@@ -241,3 +257,16 @@ GET /api/companies/:id/verification-status
 4. Begin role-based access control implementation
 
 Would you like to proceed with any specific aspect of this implementation plan? 
+
+## 8. Storage Management
+- Tier-based storage limits:
+  - Free: 5GB
+  - Pro: 50GB 
+  - Enterprise: 500GB
+- File type restrictions per bucket
+- Automated cleanup of temp files
+- Storage usage dashboard
+- Over-quota handling:
+  - Email notifications at 80%, 90%, 100%
+  - Read-only mode when exceeded
+  - Grace period for upgrades 
