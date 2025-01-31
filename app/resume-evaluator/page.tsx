@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils"
 import { FileText, Brain, TrendingUp, Target, ScrollText } from "lucide-react"
 import ReactMarkdown from 'react-markdown'
 import { ArrowLeft } from "lucide-react"
+import { useSearchParams } from 'next/navigation'
 
 // Add missing interfaces at the top after imports
 interface SkillAnalysis {
@@ -33,11 +34,11 @@ interface ResumeAnalysis {
     strengths: Array<{
       skill: string
       analysis: string
-      relevance: string
+      relevance: "Critical" | "Important" | "Critique" | "Bon à avoir"
     }>
     gaps: Array<{
       skill: string
-      importance: "Critical" | "Important" | "Nice to have"
+      importance: "Critical" | "Important" | "Nice to have" | "Critique" | "Bon à avoir"
       suggestion: string
       impact: string
     }>
@@ -49,7 +50,22 @@ interface ResumeAnalysis {
   }
 }
 
-// Add mock data after interfaces
+// Add language detection function
+const detectLanguage = (text: string): string => {
+  // Simple language detection based on common French words
+  const frenchIndicators = ['emploi', 'poste', 'entreprise', 'société', 'développeur', 'compétences', 'expérience', 'nous recherchons', 'responsabilités']
+  const lowerText = text.toLowerCase()
+  
+  for (const indicator of frenchIndicators) {
+    if (lowerText.includes(indicator)) {
+      return 'fr'
+    }
+  }
+  
+  return 'en'
+}
+
+// Add English mock data back
 const mockAnalysisData: ResumeAnalysis = {
   matchScore: 85,
   skills: [
@@ -149,25 +165,153 @@ const mockAnalysisData: ResumeAnalysis = {
   }
 }
 
+// Add French mock data
+const mockAnalysisDataFr: ResumeAnalysis = {
+  matchScore: 85,
+  skills: [
+    {
+      skill: "React.js",
+      level: "Expert",
+      score: 90,
+      description: "Solide expérience dans le développement d'applications avec React.js et l'implémentation des meilleures pratiques."
+    },
+    {
+      skill: "HTML5",
+      level: "Expert",
+      score: 90,
+      description: "Expert en utilisation de HTML5 pour créer des structures web sémantiques et bien organisées."
+    },
+    {
+      skill: "JavaScript (ES6+)",
+      level: "Expert",
+      score: 85,
+      description: "Maîtrise des fonctionnalités modernes de JavaScript pour créer des applications web interactives."
+    },
+    {
+      skill: "CSS3",
+      level: "Expert",
+      score: 85,
+      description: "Connaissance approfondie de CSS3 pour le style et la création d'interfaces utilisateur attrayantes."
+    },
+    {
+      skill: "Git",
+      level: "Expert",
+      score: 80,
+      description: "Maîtrise de Git pour le contrôle de version et la collaboration pendant le développement."
+    },
+    {
+      skill: "Next.js",
+      level: "Expert",
+      score: 80,
+      description: "Expérience dans le développement d'applications à grande échelle avec Next.js, y compris le rendu côté serveur."
+    }
+  ],
+  feedback: {
+    overview: "Vous êtes un excellent candidat pour le poste de Développeur Full Stack avec un score de correspondance de 85%. Vous possédez 5 ans d'expérience en React.js et Next.js, démontrant une expertise dans la création d'applications web évolutives. Votre maîtrise de JavaScript et TypeScript correspond aux compétences essentielles du poste.",
+    strengths: [
+      {
+        skill: "React.js",
+        analysis: "Solide expérience dans le développement d'applications avec React.js et l'implémentation des meilleures pratiques.",
+        relevance: "Critique"
+      },
+      {
+        skill: "Next.js",
+        analysis: "Expérience dans le développement d'applications à grande échelle avec rendu côté serveur.",
+        relevance: "Critique"
+      },
+      {
+        skill: "JavaScript (ES6+)",
+        analysis: "Maîtrise des fonctionnalités JavaScript modernes pour créer des applications interactives.",
+        relevance: "Important"
+      }
+    ],
+    gaps: [
+      {
+        skill: "Python",
+        importance: "Critique",
+        suggestion: "Acquérir de l'expérience avec Python et les frameworks comme FastAPI ou Django.",
+        impact: "Le manque de connaissances backend limite votre capacité à travailler efficacement dans un environnement full-stack."
+      },
+      {
+        skill: "Technologies de Base de Données",
+        importance: "Important",
+        suggestion: "Se familiariser avec PostgreSQL et Redis.",
+        impact: "Le manque d'expérience avec ces bases de données peut limiter votre capacité à gérer efficacement les données."
+      },
+      {
+        skill: "Services Cloud",
+        importance: "Bon à avoir",
+        suggestion: "Explorer les fondamentaux d'AWS ou GCP.",
+        impact: "Une connaissance limitée des services cloud peut réduire l'efficacité dans le déploiement."
+      }
+    ],
+    improvementPlan: {
+      shortTerm: [
+        "S'inscrire à un cours de développement Python axé sur FastAPI ou Django",
+        "Pratiquer la création d'APIs RESTful avec Python",
+        "Apprendre les fondamentaux de PostgreSQL et Redis"
+      ],
+      longTerm: [
+        "Acquérir de l'expérience pratique avec les services cloud AWS ou GCP",
+        "Comprendre et mettre en œuvre des pipelines CI/CD pour les projets full stack",
+        "Explorer Docker et Kubernetes pour la conteneurisation"
+      ],
+      resumeSuggestions: [
+        "Mettre en avant les compétences en programmation backend dans votre CV",
+        "Ajouter des projets ou certifications liés à Python ou aux services cloud",
+        "Souligner les formations ou certifications liées aux technologies de base de données"
+      ]
+    }
+  }
+}
+
 export default function ResumeEvaluatorPage() {
+  const searchParams = useSearchParams()
   const [jobDescription, setJobDescription] = useState("")
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysis, setAnalysis] = useState<ResumeAnalysis | null>(null)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const useMockData = searchParams.get('mock') === 'true'
 
-  const handleFileUpload = async () => {
-    if (!jobDescription) {
-      // Show error about job description being required
+  const handleFileUpload = async (file: File) => {
+    setSelectedFile(file)
+  }
+
+  const handleAnalyzeClick = async () => {
+    if (!selectedFile || !jobDescription) {
       return
     }
 
     setIsAnalyzing(true)
     
     try {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      
-      // Use mock data instead of actual API call
-      setAnalysis(mockAnalysisData)
+      if (useMockData) {
+        // Simulate API delay
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        
+        // Use mock data based on detected language
+        const language = detectLanguage(jobDescription)
+        setAnalysis(language === 'fr' ? mockAnalysisDataFr : mockAnalysisData)
+      } else {
+        // Use the existing working API endpoint
+        const formData = new FormData()
+        formData.append('resume', selectedFile)
+        formData.append('job_description', jobDescription)
+        formData.append('existing_job_id', '')
+        formData.append('exclude_fields', 'embedding')
+
+        const response = await fetch('/api/analyze-resume', {
+          method: 'POST',
+          body: formData
+        })
+
+        if (!response.ok) {
+          throw new Error('Failed to analyze resume')
+        }
+
+        const result = await response.json()
+        setAnalysis(result)
+      }
     } catch (error) {
       console.error('Error analyzing resume:', error)
     } finally {
@@ -191,6 +335,7 @@ export default function ResumeEvaluatorPage() {
   const resetAnalysis = () => {
     setAnalysis(null)
     setJobDescription("")
+    setSelectedFile(null)
   }
 
   return (
@@ -218,13 +363,18 @@ export default function ResumeEvaluatorPage() {
               <Card>
                 <CardHeader>
                   <CardTitle>Upload Resume</CardTitle>
+                  {selectedFile && (
+                    <CardDescription>
+                      Selected file: {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
+                    </CardDescription>
+                  )}
                 </CardHeader>
                 <CardContent>
                   <FileDropzone
                     onFileSelect={handleFileUpload}
                     disabled={isAnalyzing}
                     acceptedTypes={['.pdf', '.doc', '.docx']}
-                    description="Upload your resume"
+                    description={selectedFile ? "Click to change file" : "Upload your resume"}
                     fileTypeDescription="PDF, DOC, or DOCX"
                   />
                 </CardContent>
@@ -243,8 +393,8 @@ export default function ResumeEvaluatorPage() {
                   />
                   <Button 
                     className="w-full mt-4" 
-                    disabled={!jobDescription || isAnalyzing}
-                    onClick={handleFileUpload}
+                    disabled={!jobDescription || !selectedFile || isAnalyzing}
+                    onClick={handleAnalyzeClick}
                   >
                     {isAnalyzing ? "Analyzing..." : "Analyze Resume"}
                   </Button>
