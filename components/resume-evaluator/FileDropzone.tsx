@@ -61,7 +61,10 @@ export function FileDropzone({
       onDragOver={handleDragOver}
       onClick={() => {
         if (!disabled) {
-          document.getElementById('file-upload')?.click()
+          const input = document.getElementById('file-upload') as HTMLInputElement
+          if (input) {
+            input.click()
+          }
         }
       }}
     >
@@ -92,7 +95,22 @@ export function FileDropzone({
         onChange={(e) => {
           const file = e.target.files?.[0]
           if (file) {
+            // Check file type
+            const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase()
+            if (!acceptedTypes.includes(fileExtension)) {
+              console.error(`Invalid file type. Accepted types: ${acceptedTypes.join(', ')}`)
+              return
+            }
+
+            // Check file size
+            if (file.size > maxSize * 1024 * 1024) {
+              console.error(`File size exceeds ${maxSize}MB limit`)
+              return
+            }
+
             onFileSelect(file)
+            // Reset the input value to allow selecting the same file again
+            e.target.value = ''
           }
         }}
         disabled={disabled}

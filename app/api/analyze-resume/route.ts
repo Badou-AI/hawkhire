@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
     const resume = formData.get('resume') as File;
-    const jobDescription = formData.get('jobDescription') as string;
+    const jobDescription = formData.get('job_description') as string;
 
     if (!resume) {
       return Response.json({ error: 'Resume file is required' }, { status: 400 });
@@ -88,9 +88,48 @@ export async function POST(req: NextRequest) {
     
     // Transform the response to match our UI components' expected format
     return Response.json({
-      matchScore: analysis.matching_score.data.score.meta.value,
-      skills: analysis.content.data.skills,
-      feedback: analysis.feedback.content
+      matchScore: analysis.matching_score.data.score.meta.value * 100, // Convert to percentage
+      skills: analysis.content.data.skills.map(skill => ({
+        skill: skill.skill,
+        level: skill.score >= 0.8 ? "Expert" : skill.score >= 0.6 ? "Proficient" : "Basic",
+        score: skill.score * 100, // Convert to percentage
+        description: skill.justification
+      })),
+      feedback: {
+        overview: analysis.feedback.content,
+        strengths: analysis.content.data.skills
+          .filter(skill => skill.score >= 0.7)
+          .map(skill => ({
+            skill: skill.skill,
+            analysis: skill.justification,
+            relevance: skill.score >= 0.8 ? "Critical" : "Important"
+          })),
+        gaps: analysis.content.data.skills
+          .filter(skill => skill.score < 0.7)
+          .map(skill => ({
+            skill: skill.skill,
+            importance: skill.score < 0.5 ? "Critical" : "Important",
+            suggestion: `Improve your ${skill.skill} skills through practice and learning.`,
+            impact: skill.justification
+          })),
+        improvementPlan: {
+          shortTerm: [
+            "Focus on improving identified critical gaps",
+            "Take online courses in weak areas",
+            "Practice with real-world projects"
+          ],
+          longTerm: [
+            "Gain professional experience in key areas",
+            "Pursue relevant certifications",
+            "Build a portfolio demonstrating improved skills"
+          ],
+          resumeSuggestions: [
+            "Highlight your strongest skills more prominently",
+            "Add specific metrics and achievements",
+            "Include relevant certifications and training"
+          ]
+        }
+      }
     });
 
   } catch (error) {
