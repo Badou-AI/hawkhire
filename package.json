@@ -17,8 +17,8 @@
     "supabase:stop": "npx supabase stop",
     "supabase:status": "npx supabase status",
     "db:setup": "npm run supabase:start && npm run db:migrate",
-    "setup": "chmod +x scripts/setup-dev.sh && ./scripts/setup-dev.sh",
-    "dev:fresh": "npm run setup && npm run dev"
+    "setup": "sh scripts/setup-dev.sh",
+    "dev:fresh": "sh scripts/setup-dev.sh && npm run dev"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^16.5.0",

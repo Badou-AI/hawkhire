@@ -24,20 +24,24 @@ sleep 5
 # Run migrations in order
 echo "🔄 Running migrations..."
 
-# Initial schema
+# 1. Initial schema
 echo "1️⃣ Creating initial schema..."
 docker exec -i hawkhire_db psql -U postgres -d postgres < supabase/migrations/20240320000000_initial_schema.sql
 
-# Auth schema and functions
-echo "2️⃣ Setting up auth schema..."
-docker exec -i hawkhire_db psql -U postgres -d postgres < supabase/migrations/20240320001000_fix_auth_schema.sql
+# 2. Create testimonials and news tables first
+echo "2️⃣ Creating testimonials and news tables..."
+docker exec -i hawkhire_db psql -U postgres -d postgres < supabase/migrations/20240320005000_create_testimonials_and_news.sql
 
-# Auth functions
+# 3. Auth functions (moved before auth schema to ensure functions exist)
 echo "3️⃣ Creating auth functions..."
 docker exec -i hawkhire_db psql -U postgres -d postgres < supabase/migrations/20240320002000_auth_functions.sql
 
-# Fix policies
-echo "4️⃣ Setting up policies..."
+# 4. Auth schema (after functions are created)
+echo "4️⃣ Setting up auth schema..."
+docker exec -i hawkhire_db psql -U postgres -d postgres < supabase/migrations/20240320001000_fix_auth_schema.sql
+
+# 5. Fix policies (now that all tables and functions exist)
+echo "5️⃣ Setting up policies..."
 docker exec -i hawkhire_db psql -U postgres -d postgres < supabase/migrations/20240320003000_fix_policies.sql
 
 # Verify setup
