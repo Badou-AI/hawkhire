@@ -1,18 +1,8 @@
 import type { Metadata } from "next"
-import { Libre_Franklin, Mulish } from 'next/font/google'
+import { Inter } from "next/font/google"
 import "./globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
-import { Toaster } from "@/components/ui/toaster"
 
-const libreFranklin = Libre_Franklin({ 
-  subsets: ["latin"],
-  variable: '--font-libre-franklin',
-})
-
-const mulish = Mulish({ 
-  subsets: ["latin"],
-  variable: '--font-mulish',
-})
+const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "HR Dashboard",
@@ -25,18 +15,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${libreFranklin.variable} ${mulish.variable} font-sans`}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="light"
-          enableSystem
-          disableTransitionOnChange
-        >
-          {children}
-          <Toaster />
-        </ThemeProvider>
-      </body>
+    <html lang="en">
+      <body className={inter.className}>{children}</body>
     </html>
   )
 }
