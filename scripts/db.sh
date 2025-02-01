@@ -46,7 +46,15 @@ case "$1" in
     "migrate")
         check_docker
         echo "Running migrations..."
-        docker exec hawkhire_db psql -U postgres -d hawkhire -f /docker-entrypoint-initdb.d/20240129120000_organization_enhancements.sql
+        # Get the script's directory path
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+        
+        # Run all SQL files in the migrations directory
+        for migration in "$PROJECT_ROOT"/supabase/migrations/*.sql; do
+            echo "Applying migration: $(basename "$migration")"
+            docker exec -i hawkhire_db psql -U postgres -d postgres < "$migration"
+        done
         ;;
     
     "psql")
