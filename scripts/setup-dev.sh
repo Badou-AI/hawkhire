@@ -26,23 +26,32 @@ echo "🔄 Running migrations..."
 
 # 1. Initial schema
 echo "1️⃣ Creating initial schema..."
-docker exec -i hawkhire_db psql -U postgres -d postgres < supabase/migrations/20240320000000_initial_schema.sql
+docker exec -i hawkhire_db psql -U postgres -d postgres < supabase/migrations/20240320100000_initial_schema.sql
 
-# 2. Create testimonials and news tables first
+# 2. Create testimonials and news tables
 echo "2️⃣ Creating testimonials and news tables..."
-docker exec -i hawkhire_db psql -U postgres -d postgres < supabase/migrations/20240320005000_create_testimonials_and_news.sql
+docker exec -i hawkhire_db psql -U postgres -d postgres < supabase/migrations/20240320200000_create_testimonials_and_news.sql
 
-# 3. Auth functions (moved before auth schema to ensure functions exist)
+# 3. Auth functions
 echo "3️⃣ Creating auth functions..."
-docker exec -i hawkhire_db psql -U postgres -d postgres < supabase/migrations/20240320002000_auth_functions.sql
+docker exec -i hawkhire_db psql -U postgres -d postgres < supabase/migrations/20240320300000_auth_functions.sql
 
-# 4. Auth schema (after functions are created)
+# 4. Auth schema
 echo "4️⃣ Setting up auth schema..."
-docker exec -i hawkhire_db psql -U postgres -d postgres < supabase/migrations/20240320001000_fix_auth_schema.sql
+docker exec -i hawkhire_db psql -U postgres -d postgres < supabase/migrations/20240320400000_fix_auth_schema.sql
 
-# 5. Fix policies (now that all tables and functions exist)
+# 5. Fix policies
 echo "5️⃣ Setting up policies..."
-docker exec -i hawkhire_db psql -U postgres -d postgres < supabase/migrations/20240320003000_fix_policies.sql
+docker exec -i hawkhire_db psql -U postgres -d postgres < supabase/migrations/20240320500000_fix_policies.sql
+
+# 6. Create companies tables
+echo "6️⃣ Creating companies tables..."
+docker exec -i hawkhire_db psql -U postgres -d postgres < supabase/migrations/20240320600000_create_companies_table.sql
+docker exec -i hawkhire_db psql -U postgres -d postgres < supabase/migrations/20240320700000_create_companies.sql
+
+# Apply seed data
+echo "7️⃣ Seeding development data..."
+docker exec -i hawkhire_db psql -U postgres -d postgres < supabase/seed.sql
 
 # Verify setup
 echo "✅ Verifying setup..."

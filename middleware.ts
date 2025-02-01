@@ -1,54 +1,40 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
-import { NextResponse, type NextRequest } from 'next/server'
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-  const response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  })
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value
-        },
-        set(name: string, value: string, options: CookieOptions) {
-          response.cookies.set({
-            name,
-            value,
-            ...options,
-          })
-        },
-        remove(name: string, options: CookieOptions) {
-          response.cookies.set({
-            name,
-            value: '',
-            ...options,
-          })
-        },
+  console.log('🚀 Middleware running for path:', request.nextUrl.pathname)
+  
+  // DEV ONLY: Set admin user with full permissions
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔑 Setting development auth headers')
+    const headers = new Headers(request.headers)
+    
+    // Set admin user ID
+    headers.set('x-user-id', 'd0714948-f2aa-4eb1-9d6d-0fe71c1c6856')
+    
+    // Set RLS claims for full access
+    headers.set('x-role', 'admin')
+    headers.set('x-organization-id', '123e4567-e89b-12d3-a456-426614174000') // Your org ID from seed
+    
+    console.log('✅ Development headers set')
+    return NextResponse.next({
+      request: {
+        headers: headers,
       },
-    }
-  )
-
-  const { data: { session } } = await supabase.auth.getSession()
-
-  // If no session and trying to access protected route
-  if (!session && request.nextUrl.pathname.startsWith('/(protected)')) {
-    return NextResponse.redirect(new URL('/sign-in', request.url))
+    })
   }
-
-  // If session exists and trying to access auth routes
-  if (session && request.nextUrl.pathname.startsWith('/auth/')) {
-    return NextResponse.redirect(new URL('/', request.url))
-  }
-
-  return response
+  
+  return NextResponse.next()
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
-} 
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
+    '/((?!_next/static|_next/image|favicon.ico).*)',
+  ],
+}
