@@ -203,7 +203,13 @@ export function JobsList() {
                   <div className="h-12 w-12 bg-gray-100 rounded-lg flex items-center justify-center">
                     <span className="text-gray-400 font-medium">AD</span>
                   </div>
-                  <p className="text-sm text-gray-500">Advertisement Space</p>
+                  <p className="text-sm text-gray-500">Advertisement Space</p>git commit -m "feat(organizations): implement company registration
+- Update registration form to use organizations table
+- Add Supabase storage integration for logo uploads
+- Fix form validation and error handling
+- Add proper toast notifications
+- Ensure proper file type and size validation
+- Add organization type and industry selection"
                   <Button variant="outline" size="sm">Place Ad</Button>
                 </div>
               </Card>

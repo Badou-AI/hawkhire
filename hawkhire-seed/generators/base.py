@@ -1,0 +1,1 @@
+"""Base generator class and utilities.""" 
