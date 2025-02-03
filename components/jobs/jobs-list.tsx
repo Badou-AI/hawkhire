@@ -197,7 +197,7 @@ export function JobsList() {
               </Card>
             </Link>
             
-            {(index + 1) % 6 === 0 && (
+            {/* {(index + 1) % 6 === 0 && (
               <Card className="flex h-full flex-col p-6 border-2 border-dashed border-gray-200">
                 <div className="flex flex-col items-center justify-center h-full text-center space-y-2">
                   <div className="h-12 w-12 bg-gray-100 rounded-lg flex items-center justify-center">
@@ -207,7 +207,7 @@ export function JobsList() {
                   <Button variant="outline" size="sm">Place Ad</Button>
                 </div>
               </Card>
-            )}
+            )} */}
           </div>
         ))}
       </div>

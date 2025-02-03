@@ -173,14 +173,14 @@ export default function JobDetails({ job }: JobDetailsProps) {
                 <div className="mt-8">
                   <h3 className="text-lg font-medium">Required Skills</h3>
                   <div className="mt-4 flex flex-wrap gap-2">
-                    {job.skills.map((skill) => (
+                    {job?.skills?.map((skill) => (
                       <span
                         key={skill}
                         className="rounded-full bg-primary/10 px-3 py-1 text-sm text-primary"
                       >
                         {skill}
                       </span>
-                    ))}
+                    )) || 'No skills listed'}
                   </div>
                 </div>
 
