@@ -1,3 +1,8 @@
-python-dotenv==1.0.0
-faker==22.6.0
-supabase==2.3.4 
+# requirements.txt
+faker
+python-dotenv
+psycopg2-binary
+supabase
+tqdm
+python-jose
+passlib
