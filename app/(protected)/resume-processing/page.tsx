@@ -26,7 +26,7 @@ import { useRouter } from "next/navigation"
 
 // Import data from shared data file
 import { jobs, mockResumeResponse, transformApiResponseToUiFormat, getSkillColor } from "./data"
-
+import { FileDropzone } from "@/components/resume-evaluator/FileDropzone"
 // Add new types
 interface IndexStatus {
   name: string;
