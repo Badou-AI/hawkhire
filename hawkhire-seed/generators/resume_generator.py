@@ -77,7 +77,7 @@ class ResumeGenerator(BaseGenerator):
                 }
 
             # Upload file to storage
-            file_data = await self.storage.upload_mock_resume(
+            file_data = self.storage.upload_mock_resume(
                 candidate_id if candidate_id else str(uuid4())
             )
             if not file_data:

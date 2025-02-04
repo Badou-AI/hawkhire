@@ -99,8 +99,6 @@ class JobGenerator(BaseGenerator):
         # Select type and status keys
         job_type_key = random.choice(list(JOB_TYPES.keys()))
         remote_key = random.choice(list(REMOTE_OPTIONS.keys()))
-        experience_key = random.choice(list(EXPERIENCE_LEVELS.keys()))
-        education_key = random.choice(list(EDUCATION_LEVELS.keys()))
         status_key = random.choice(list(JOB_STATUSES.keys()))
         
         return {
@@ -109,39 +107,17 @@ class JobGenerator(BaseGenerator):
             "title": title,
             "description": description,
             "requirements": requirements,
-            "skills": [
-                {
-                    'code': skill_key,
-                    'localized': self.skills_cache[skill_key]
-                }
-                for skill_key in selected_skills
-            ],
-            "status": {
-                'code': status_key,
-                'localized': JOB_STATUSES[status_key]
-            },
             "location": self.generate_location(),
-            "job_type": {
-                'code': job_type_key,
-                'localized': JOB_TYPES[job_type_key]
-            },
             "salary_min": salary_min,
             "salary_max": salary_max,
             "salary_currency": "USD",
-            "remote": {
-                'code': remote_key,
-                'localized': REMOTE_OPTIONS[remote_key]
-            },
-            "experience_level": {
-                'code': experience_key,
-                'localized': EXPERIENCE_LEVELS[experience_key]
-            },
-            "education_requirement": {
-                'code': education_key,
-                'localized': EDUCATION_LEVELS[education_key]
-            },
-            "application_deadline": datetime.now() + timedelta(days=random.randint(7, 60)),
+            "job_type": job_type_key,
+            "remote": remote_key == 'REMOTE',
+            "skills": selected_skills,
+            "status": status_key,
             "rating": round(random.uniform(3.5, 5.0), 1),
+            "is_mock": True,
+            "mock_batch_id": self.mock_batch_id,
             "created_at": self.generate_date_in_range(),
             "updated_at": datetime.now()
         }
@@ -176,8 +152,9 @@ class JobGenerator(BaseGenerator):
         query = """
             INSERT INTO jobs (
                 id, organization_id, title, description, requirements,
-                location, job_type, remote, skills, status,
-                created_at, updated_at
+                location, salary_min, salary_max, salary_currency,
+                job_type, remote, skills, status, rating,
+                is_mock, mock_batch_id, created_at, updated_at
             ) VALUES %s
         """
         
@@ -187,14 +164,20 @@ class JobGenerator(BaseGenerator):
             (
                 item['id'], 
                 item['organization_id'], 
-                json.dumps(item['title']),  # Serialize the entire title object
-                json.dumps(item['description']),  # Serialize the entire description object
-                json.dumps(item['requirements']),  # Serialize requirements as JSONB
-                json.dumps(item['location']), 
-                item['job_type']['code'],  # Using the code as text
-                item['remote']['code'] == 'REMOTE',  # Convert to boolean
-                [skill['code'] for skill in item['skills']],  # Convert to text array
-                item['status']['code'],  # Using the code as text
+                json.dumps(item['title']),  # JSONB
+                json.dumps(item['description']),  # JSONB
+                json.dumps(item['requirements']),  # JSONB
+                json.dumps(item['location']),  # JSONB
+                item['salary_min'],
+                item['salary_max'],
+                item['salary_currency'],
+                item['job_type'],
+                item['remote'],
+                item['skills'],
+                item['status'],
+                item['rating'],
+                item['is_mock'],
+                item['mock_batch_id'],
                 item['created_at'],
                 item['updated_at']
             )

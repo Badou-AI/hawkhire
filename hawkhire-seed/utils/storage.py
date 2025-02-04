@@ -58,13 +58,13 @@ class StorageManager:
             print(f"Uploading resume {sample_resume.name} to {file_path}")
             
             with open(sample_resume, 'rb') as f:
-                self.supabase.storage.from_(self.bucket_name).upload(
-                    file_path,
-                    f
-                )
-
-            file_url = self.supabase.storage.from_(self.bucket_name).get_url(file_path)
-            print(f"Resume uploaded successfully. URL: {file_url}")
+                # Upload file and get response
+                bucket = self.supabase.storage.from_(self.bucket_name)
+                bucket.upload(file_path, f)
+                
+                # Get public URL
+                file_url = bucket.get_public_url(file_path)
+                print(f"Resume uploaded successfully. URL: {file_url}")
 
             return {
                 "file_path": file_path,

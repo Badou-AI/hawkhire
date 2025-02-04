@@ -66,17 +66,17 @@ class UserGenerator(BaseGenerator):
 
         # Create user in Supabase Auth
         try:
-            auth_response = await self.supabase.auth.sign_up({
+            # Create the user with admin API
+            auth_response = await self.supabase.auth.admin.create_user({
                 "email": email,
                 "password": self.default_password,
-                "options": {
-                    "data": {
-                        "first_name": first_name,
-                        "last_name": last_name,
-                        "user_type": user_type,
-                        "is_mock": True,
-                        "mock_batch_id": self.mock_batch_id
-                    }
+                "email_confirm": True,
+                "user_metadata": {
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "user_type": user_type,
+                    "is_mock": True,
+                    "mock_batch_id": self.mock_batch_id
                 }
             })
             
