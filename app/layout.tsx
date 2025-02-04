@@ -1,7 +1,6 @@
 import type { Metadata } from "next"
 import { Libre_Franklin, Mulish } from 'next/font/google'
 import "./globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
 
 const libreFranklin = Libre_Franklin({ 
   subsets: ["latin"],
@@ -24,16 +23,9 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en">
       <body className={`${libreFranklin.variable} ${mulish.variable} font-sans`}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="light"
-          enableSystem
-          disableTransitionOnChange
-        >
-          {children}
-        </ThemeProvider>
+        {children}
       </body>
     </html>
   )
