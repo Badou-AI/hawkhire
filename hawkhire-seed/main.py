@@ -13,7 +13,10 @@ from tqdm import tqdm
 from config.settings import (
     NUM_ORGANIZATIONS,
     NUM_USERS,
-    MOCK_BATCH_SIZE
+    MOCK_BATCH_SIZE,
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY,
+    DATABASE_URL
 )
 from utils.database import DatabaseManager
 from utils.storage import StorageManager
@@ -41,11 +44,18 @@ class MockDataOrchestrator:
         
         self.batch_id = self.org_generator.mock_batch_id
 
+    async def initialize(self):
+        """Initialize orchestrator components"""
+        await self.storage.initialize()
+
     async def generate_all(self):
         """Generate complete mock dataset"""
         try:
             print("\n=== Starting Mock Data Generation ===\n")
             start_time = datetime.now()
+
+            # Initialize components
+            await self.initialize()
 
             # Generate organizations first
             print("Generating Organizations...")
@@ -191,8 +201,14 @@ class MockDataOrchestrator:
 
 async def main():
     """Main execution function"""
+    # Debug prints
+    print(f"SUPABASE_URL: {SUPABASE_URL[:20]}...")
+    print(f"SUPABASE_ANON_KEY: {SUPABASE_ANON_KEY[:10]}...")
+    print(f"DATABASE_URL: {DATABASE_URL[:20]}...")
+
     orchestrator = MockDataOrchestrator()
     try:
+        await orchestrator.initialize()  # Initialize components first
         await orchestrator.generate_all()
     except KeyboardInterrupt:
         print("\nGeneration interrupted by user.")
@@ -204,3 +220,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+

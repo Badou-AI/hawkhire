@@ -277,11 +277,11 @@ class ResumeGenerator(BaseGenerator):
         """Clean up mock resumes from both storage and database"""
         try:
             # Get mock resume file paths
-            query = "SELECT file_path FROM resumes WHERE is_mock = true"
-            mock_file_paths = [row[0] for row in self.db.execute_query(query)]
+            query = "SELECT file_path FROM resumes WHERE is_mock = true AND mock_batch_id = %s"
+            mock_file_paths = [row[0] for row in self.db.execute_query(query, [self.mock_batch_id])]
             
-            # Delete files from storage
-            await self.storage.cleanup_mock_files(mock_file_paths)
+            if self.storage:
+                await self.storage.cleanup_mock_files(mock_file_paths)
             
             # Delete database records
             self.db.cleanup_mock_data(self.mock_batch_id)

@@ -18,6 +18,7 @@ class BaseGenerator:
         self.db = db
         self.storage = storage
         self.mock_batch_id = str(uuid4())
+        self.batch_id = self.mock_batch_id
         self.faker_instances = {
             'en': Faker('en_US'),
             'fr': Faker('fr_FR')
@@ -43,13 +44,13 @@ class BaseGenerator:
             self.faker_instances[locale] = Faker(locale)
         return self.faker_instances[locale]
 
-    def generate_localized_text(self, generator_method: str, **kwargs) -> Dict[str, str]:
-        """Generate text in all supported languages using specified faker method"""
+    def generate_localized_text(self, min_chars: int = 50, max_chars: int = 200) -> Dict[str, str]:
+        """Generate localized text without requiring a specific generator method"""
         return {
-            lang: getattr(self.faker_instances[lang], generator_method)(**kwargs)
-            for lang in LANGUAGES
+            'en': self.faker_instances['en'].text(max_nb_chars=random.randint(min_chars, max_chars)),
+            'fr': self.faker_instances['fr'].text(max_nb_chars=random.randint(min_chars, max_chars))
         }
-    
+
     def generate_localized_field(
         self,
         field_method: str,
@@ -66,11 +67,11 @@ class BaseGenerator:
             for locale in locales
         }
 
-    def generate_localized_paragraph(self, num_sentences: int = 3) -> Dict[str, str]:
-        """Generate a localized paragraph"""
+    def generate_localized_paragraph(self, num_sentences: int = 5) -> Dict[str, str]:
+        """Generate a localized paragraph with specified number of sentences"""
         return {
-            'en': ' '.join([self.faker_instances['en_US'].sentence() for _ in range(num_sentences)]),
-            'fr': ' '.join([self.faker_instances['fr_FR'].sentence() for _ in range(num_sentences)])
+            'en': ' '.join(self.faker_instances['en'].sentences(num_sentences)),
+            'fr': ' '.join(self.faker_instances['fr'].sentences(num_sentences))
         }
 
     def generate_localized_list(
@@ -154,13 +155,22 @@ class BaseGenerator:
             'longitude': float(self.faker_instances['en'].longitude())
         }
 
-    def generate_location(self) -> Dict[str, Any]:
-        """Generate a location object with localized fields"""
+    def generate_location(self) -> Dict[str, Dict[str, str]]:
+        """Generate a localized location object"""
         return {
-            'city': self.generate_localized_text('city'),
-            'state': self.generate_localized_text('state'),
-            'country': self.generate_localized_text('country'),
-            'coordinates': self.generate_random_coordinates()
+            'city': self.generate_localized_field('city'),
+            'state': {  # Use state_abbr for English and region for French
+                'en': self.faker_instances['en'].state(),
+                'fr': self.faker_instances['fr'].region()
+            },
+            'country': {
+                'en': self.faker_instances['en'].country(),
+                'fr': self.faker_instances['fr'].country()
+            },
+            'postal_code': {
+                'en': self.faker_instances['en'].postcode(),
+                'fr': self.faker_instances['fr'].postcode()
+            }
         }
 
     def generate_contact_info(self) -> Dict[str, str]:

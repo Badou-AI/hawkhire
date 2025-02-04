@@ -7,6 +7,8 @@ verification records.
 from typing import Dict, List, Optional
 from datetime import datetime
 import random
+from uuid import uuid4
+import json
 from .base import BaseGenerator
 from config.settings import (
     INDUSTRIES,
@@ -21,54 +23,50 @@ class OrganizationGenerator(BaseGenerator):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def generate_organization(self) -> Dict:
-        """Generate a single organization with complete profile and localization"""
-        # Generate base company name and description
-        company_name = self.generate_localized_field('company')
-        company_desc = {
-            'en': f"{self.faker_instances['en'].catch_phrase()}. {self.faker_instances['en'].bs()}",
-            'fr': f"{self.faker_instances['fr'].catch_phrase()}. {self.faker_instances['fr'].bs()}"
+    def generate_organization_name(self) -> Dict[str, str]:
+        """Generate a localized organization name"""
+        company_name = self.faker_instances['en'].company()
+        return {
+            'en': company_name,
+            'fr': company_name  # Keep same name for both languages
         }
 
-        # Select keys for lookups
-        industry_key = random.choice(list(INDUSTRIES.keys()))
-        company_type_key = random.choice(list(COMPANY_TYPES.keys()))
-        size_range_key = random.choice(list(COMPANY_SIZES.keys()))
-        verification_status_key = random.choice(list(VERIFICATION_STATUSES.keys()))
-
+    def generate_organization(self) -> Dict:
+        """Generate a single organization with proper JSON serialization"""
+        name = self.generate_organization_name()
+        description = self.generate_localized_paragraph(3)
+        industry = random.choice(list(INDUSTRIES.keys()))
+        company_type = random.choice(list(COMPANY_TYPES.keys()))
+        
+        # Generate a list of languages
+        supported_languages = ['en', 'fr']
+        
+        # Generate a slug from the English name
+        slug = self.generate_url_safe_string(name['en'])
+        
         return {
-            "id": str(self.faker_instances['en'].uuid4()),
-            "name": company_name,
-            "description": company_desc,
-            "tier": random.choice(['free', 'professional', 'enterprise']),
-            "industry": {
-                'code': industry_key,
-                'localized': INDUSTRIES[industry_key]
-            },
-            "company_type": {
-                'code': company_type_key,
-                'localized': COMPANY_TYPES[company_type_key]
-            },
-            "founded_year": random.randint(1950, 2024),
-            "size_range": {
-                'code': size_range_key,
-                'localized': COMPANY_SIZES[size_range_key]
-            },
-            "website_url": self.generate_url_safe_string(company_name['en']),
-            "logo_url": f"https://logo.clearbit.com/{self.faker_instances['en'].domain_name()}",
-            "cover_image_url": f"https://picsum.photos/seed/{random.randint(1, 1000)}/1200/300",
-            "primary_location": self.generate_location(),
-            "additional_locations": [
-                self.generate_location() 
-                for _ in range(random.randint(0, 3))
-            ],
-            "languages": self.get_random_items(LANGUAGES, 1, len(LANGUAGES)),
-            "verification_status": {
-                'code': verification_status_key,
-                'localized': VERIFICATION_STATUSES[verification_status_key]
-            },
-            "created_at": self.generate_date_in_range(),
-            "updated_at": datetime.now()
+            'id': str(uuid4()),
+            'name': json.dumps(name),
+            'slug': slug,
+            'description': json.dumps(description),
+            'tier': 'free',
+            'industry': '{' + industry + '}',  # PostgreSQL array format
+            'company_type': json.dumps(COMPANY_TYPES[company_type]),
+            'founded_year': random.randint(1990, 2023),
+            'size_range': json.dumps(COMPANY_SIZES[random.choice(list(COMPANY_SIZES.keys()))]),
+            'website_url': self.faker_instances['en'].url(),
+            'logo_url': None,
+            'cover_image_url': None,
+            'primary_location': json.dumps(self.generate_location()),
+            'additional_locations': '{}',  # Empty PostgreSQL array
+            'languages': '{' + ','.join(supported_languages) + '}',  # PostgreSQL array format
+            'verification_status': 'pending',  # Direct string, not JSON
+            'verification_notes': None,
+            'members': '{' + self.faker_instances['en'].email() + '}',  # PostgreSQL array with initial member
+            'is_mock': True,
+            'mock_batch_id': self.mock_batch_id,
+            'created_at': datetime.now(),
+            'updated_at': datetime.now()
         }
 
     def generate_organization_member(
@@ -164,13 +162,25 @@ class OrganizationGenerator(BaseGenerator):
             """
             values = [
                 (
-                    item['id'], item['name'], item['description'],
-                    item['tier'], item['industry'], item['company_type'],
-                    item['founded_year'], item['size_range'], item['website_url'],
-                    item['logo_url'], item['cover_image_url'], item['primary_location'],
-                    item['additional_locations'], item['languages'],
-                    item['verification_status'], item['is_mock'], item['mock_batch_id'],
-                    item['created_at'], item['updated_at']
+                    item['id'], 
+                    item['name'],
+                    item['description'], 
+                    item['tier'],
+                    item['industry'],
+                    item['company_type'],
+                    item['founded_year'],
+                    item['size_range'],
+                    item['website_url'],
+                    item['logo_url'],
+                    item['cover_image_url'],
+                    item['primary_location'],
+                    item['additional_locations'],
+                    item['languages'],
+                    item['verification_status'],
+                    item['is_mock'],
+                    item['mock_batch_id'],
+                    item['created_at'],
+                    item['updated_at']
                 )
                 for item in items
             ]

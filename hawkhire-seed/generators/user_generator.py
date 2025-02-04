@@ -231,12 +231,16 @@ class UserGenerator(BaseGenerator):
         """Clean up mock users from both Auth and database"""
         try:
             # Get mock user IDs
-            query = "SELECT id FROM users WHERE is_mock = true"
-            mock_user_ids = [row[0] for row in self.db.execute_query(query)]
+            query = "SELECT id FROM users WHERE is_mock = true AND mock_batch_id = %s"
+            mock_user_ids = [row[0] for row in self.db.execute_query(query, [self.mock_batch_id])]
             
-            # Delete from Supabase Auth
-            for user_id in mock_user_ids:
-                await self.supabase.auth.admin.delete_user(user_id)
+            # Delete from Supabase Auth if available
+            if hasattr(self, 'supabase') and self.supabase:
+                for user_id in mock_user_ids:
+                    try:
+                        await self.supabase.auth.admin.delete_user(user_id)
+                    except Exception as e:
+                        print(f"Error deleting auth user {user_id}: {e}")
             
             # Delete from database
             self.db.cleanup_mock_data(self.mock_batch_id)
