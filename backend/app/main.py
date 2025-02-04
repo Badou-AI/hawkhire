@@ -21,6 +21,7 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 import time
+from slugify import slugify
 
 # Load environment variables
 load_dotenv()
@@ -854,3 +855,86 @@ async def get_index_status(index_name: str):
         raise HTTPException(status_code=e.response.status_code, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting index status: {str(e)}")
+
+@app.post("/v1/analyze-resume")
+async def analyze_resume(
+    resume: UploadFile,
+    job_description: str = Form(...),
+    existing_job_id: str = Form(""),
+    exclude_fields: str = Form("")
+):
+    """Analyze a resume against a job description"""
+    try:
+        # Read and convert PDF to text
+        pdf_text = await semantic_service.convert_pdf_to_text(resume)
+        
+        # Extract structured content from the resume
+        content = await semantic_service.extract_knowledge(pdf_text['text'], {
+            "title": {
+                "type": "text",
+                "description": "Resume title or headline"
+            },
+            "profile": {
+                "type": "object",
+                "properties": {
+                    "first_name": {"type": "text"},
+                    "last_name": {"type": "text"},
+                    "tel_num": {"type": "text"},
+                    "email": {"type": "text"}
+                }
+            },
+            "years_of_experience": {"type": "integer"},
+            "summary": {"type": "text"},
+            "skills": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "skill": {"type": "text"},
+                        "score": {"type": "number"},
+                        "justification": {"type": "text"}
+                    }
+                }
+            },
+            "topics": {"type": "array", "items": {"type": "string"}}
+        })
+
+        # Generate matching score and feedback
+        matching_analysis = await semantic_service.analyze_document(
+            pdf_text['text'],
+            job_description,
+            {
+                "score": {
+                    "type": "object",
+                    "properties": {
+                        "meta": {
+                            "type": "object",
+                            "properties": {
+                                "value": {"type": "number"},
+                                "explanation": {"type": "text"}
+                            }
+                        }
+                    }
+                }
+            }
+        )
+
+        # Generate detailed feedback
+        timestamp = datetime.now().isoformat()
+        feedback_slug = f"{slugify(content['data']['title'])}-{timestamp}"
+        
+        return {
+            "upload_id": hashlib.md5(pdf_text['text'].encode()).hexdigest(),
+            "job_id": existing_job_id or hashlib.md5(job_description.encode()).hexdigest(),
+            "timestamp": timestamp,
+            "content": content,
+            "matching_score": matching_analysis,
+            "feedback": {
+                "content": matching_analysis['score']['meta']['explanation'],
+                "slug": feedback_slug,
+                "url": f"/feedback/{feedback_slug}"
+            }
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
