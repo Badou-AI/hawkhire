@@ -7,6 +7,7 @@ All user data is properly localized and linked to Supabase auth.
 from typing import Dict, List, Optional
 from datetime import datetime
 import random
+import json
 from uuid import uuid4
 from .base import BaseGenerator
 from config.settings import (
@@ -15,13 +16,17 @@ from config.settings import (
     EDUCATION_LEVELS,
     EXPERIENCE_LEVELS,
     REMOTE_OPTIONS,
-    JOB_TYPES
+    JOB_TYPES,
+    SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY
 )
+from supabase import create_client, Client
 
 class UserGenerator(BaseGenerator):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.default_password = DEFAULT_MOCK_PASSWORD
+        self.supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
         self.language_proficiency_levels = {
             'BASIC': {'en': 'Basic', 'fr': 'Basique'},
             'INTERMEDIATE': {'en': 'Intermediate', 'fr': 'Intermédiaire'},
@@ -34,6 +39,23 @@ class UserGenerator(BaseGenerator):
             'ES': {'en': 'Spanish', 'fr': 'Espagnol'},
             'DE': {'en': 'German', 'fr': 'Allemand'}
         }
+        self.job_titles = {
+            'SOFTWARE_ENGINEER': {'en': 'Software Engineer', 'fr': 'Ingénieur Logiciel'},
+            'FRONTEND_DEVELOPER': {'en': 'Frontend Developer', 'fr': 'Développeur Frontend'},
+            'BACKEND_DEVELOPER': {'en': 'Backend Developer', 'fr': 'Développeur Backend'},
+            'FULLSTACK_DEVELOPER': {'en': 'Full Stack Developer', 'fr': 'Développeur Full Stack'},
+            'DATA_SCIENTIST': {'en': 'Data Scientist', 'fr': 'Data Scientist'},
+            'DEVOPS_ENGINEER': {'en': 'DevOps Engineer', 'fr': 'Ingénieur DevOps'},
+            'PRODUCT_MANAGER': {'en': 'Product Manager', 'fr': 'Chef de Produit'},
+            'PROJECT_MANAGER': {'en': 'Project Manager', 'fr': 'Chef de Projet'},
+            'UX_DESIGNER': {'en': 'UX Designer', 'fr': 'Designer UX'},
+            'UI_DESIGNER': {'en': 'UI Designer', 'fr': 'Designer UI'},
+            'QA_ENGINEER': {'en': 'QA Engineer', 'fr': 'Ingénieur QA'},
+            'SYSTEM_ARCHITECT': {'en': 'System Architect', 'fr': 'Architecte Système'},
+            'CLOUD_ENGINEER': {'en': 'Cloud Engineer', 'fr': 'Ingénieur Cloud'},
+            'MOBILE_DEVELOPER': {'en': 'Mobile Developer', 'fr': 'Développeur Mobile'},
+            'DATA_ENGINEER': {'en': 'Data Engineer', 'fr': 'Ingénieur Data'}
+        }
 
     async def generate_user(self, user_type: str = 'candidate') -> Dict:
         """Generate a single user with authentication"""
@@ -44,7 +66,7 @@ class UserGenerator(BaseGenerator):
 
         # Create user in Supabase Auth
         try:
-            user_data = await self.supabase.auth.sign_up({
+            auth_response = await self.supabase.auth.sign_up({
                 "email": email,
                 "password": self.default_password,
                 "options": {
@@ -57,15 +79,20 @@ class UserGenerator(BaseGenerator):
                     }
                 }
             })
+            
+            if not auth_response.user:
+                print(f"Failed to create user {email}: No user data in response")
+                return None
 
             # Generate profile data
+            title_key = random.choice(list(self.job_titles.keys()))
             profile = {
-                "id": user_data.user.id,
+                "id": auth_response.user.id,
                 "email": email,
                 "first_name": first_name,
                 "last_name": last_name,
                 "user_type": user_type,
-                "headline": self.generate_localized_field('job_title'),
+                "headline": self.job_titles[title_key],
                 "summary": self.generate_localized_paragraph(3),
                 "location": self.generate_location(),
                 "preferred_language": random.choice(LANGUAGES),
@@ -110,10 +137,10 @@ class UserGenerator(BaseGenerator):
         
         for _ in range(num_skills):
             proficiency_key = random.choice(list(proficiency_levels.keys()))
-            skill_name = self.generate_localized_field('job_title')  # Using job_title as a proxy for skill
+            title_key = random.choice(list(self.job_titles.keys()))
             
             skills.append({
-                'name': skill_name,
+                'name': self.job_titles[title_key],
                 'proficiency': {
                     'code': proficiency_key,
                     'localized': proficiency_levels[proficiency_key]
@@ -133,10 +160,11 @@ class UserGenerator(BaseGenerator):
                 datetime(2023, 12, 31)
             )
             end_date = self.generate_date_in_range(start_date, datetime.now()) if random.random() > 0.3 else None
+            title_key = random.choice(list(self.job_titles.keys()))
             
             experience = {
                 'company': self.generate_localized_field('company'),
-                'title': self.generate_localized_field('job_title'),
+                'title': self.job_titles[title_key],
                 'description': self.generate_localized_paragraph(2),
                 'start_date': start_date,
                 'end_date': end_date,
@@ -211,14 +239,14 @@ class UserGenerator(BaseGenerator):
         values = [
             (
                 item['id'], item['email'], item['first_name'],
-                item['last_name'], item['user_type'], item['headline'],
-                item['summary'], item['location'], item['preferred_language'],
-                item['contact_info'],
-                item.get('education_level'),  # Optional fields for non-candidates
-                item.get('skills'),
-                item.get('experience'),
-                item.get('languages'),
-                item.get('preferences'),
+                item['last_name'], item['user_type'], json.dumps(item['headline']),
+                json.dumps(item['summary']), json.dumps(item['location']), item['preferred_language'],
+                json.dumps(item['contact_info']),
+                json.dumps(item.get('education_level')) if item.get('education_level') else None,
+                json.dumps(item.get('skills')) if item.get('skills') else None,
+                json.dumps(item.get('experience')) if item.get('experience') else None,
+                json.dumps(item.get('languages')) if item.get('languages') else None,
+                json.dumps(item.get('preferences')) if item.get('preferences') else None,
                 item['is_mock'], item['mock_batch_id'],
                 item['created_at'], item['updated_at']
             )

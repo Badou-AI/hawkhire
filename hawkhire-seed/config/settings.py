@@ -22,10 +22,11 @@ SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 DATABASE_URL = os.getenv('DATABASE_URL')
 
 # Mock Data Configuration
-MOCK_BATCH_SIZE = int(os.getenv('MOCK_BATCH_SIZE', 10))
-NUM_ORGANIZATIONS = int(os.getenv('NUM_ORGANIZATIONS', 4))
-NUM_JOBS_PER_ORGANIZATION = eval(os.getenv('NUM_JOBS_PER_ORGANIZATION', '(2,4)'))
-NUM_USERS = int(os.getenv('NUM_USERS', 8))
+MOCK_BATCH_SIZE = 5  # Smaller batch size for stability
+NUM_ORGANIZATIONS = 4  # 4 organizations
+NUM_JOBS_PER_ORGANIZATION = (2, 4)  # 2-4 jobs per org, total ~12 jobs
+NUM_RESUMES_PER_JOB = (10, 20)  # 10-20 resumes per job
+NUM_USERS = int(os.getenv('NUM_USERS', 180))
 DEFAULT_MOCK_PASSWORD = os.getenv('DEFAULT_MOCK_PASSWORD', 'TestPass123!')
 
 # Localized Constants

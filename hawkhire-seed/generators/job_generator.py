@@ -21,6 +21,23 @@ class JobGenerator(BaseGenerator):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.skills_cache = self._generate_skills_cache()
+        self.job_titles = {
+            'SOFTWARE_ENGINEER': {'en': 'Software Engineer', 'fr': 'Ingénieur Logiciel'},
+            'FRONTEND_DEVELOPER': {'en': 'Frontend Developer', 'fr': 'Développeur Frontend'},
+            'BACKEND_DEVELOPER': {'en': 'Backend Developer', 'fr': 'Développeur Backend'},
+            'FULLSTACK_DEVELOPER': {'en': 'Full Stack Developer', 'fr': 'Développeur Full Stack'},
+            'DATA_SCIENTIST': {'en': 'Data Scientist', 'fr': 'Data Scientist'},
+            'DEVOPS_ENGINEER': {'en': 'DevOps Engineer', 'fr': 'Ingénieur DevOps'},
+            'PRODUCT_MANAGER': {'en': 'Product Manager', 'fr': 'Chef de Produit'},
+            'PROJECT_MANAGER': {'en': 'Project Manager', 'fr': 'Chef de Projet'},
+            'UX_DESIGNER': {'en': 'UX Designer', 'fr': 'Designer UX'},
+            'UI_DESIGNER': {'en': 'UI Designer', 'fr': 'Designer UI'},
+            'QA_ENGINEER': {'en': 'QA Engineer', 'fr': 'Ingénieur QA'},
+            'SYSTEM_ARCHITECT': {'en': 'System Architect', 'fr': 'Architecte Système'},
+            'CLOUD_ENGINEER': {'en': 'Cloud Engineer', 'fr': 'Ingénieur Cloud'},
+            'MOBILE_DEVELOPER': {'en': 'Mobile Developer', 'fr': 'Développeur Mobile'},
+            'DATA_ENGINEER': {'en': 'Data Engineer', 'fr': 'Ingénieur Data'}
+        }
 
     def _generate_skills_cache(self) -> Dict[str, Dict[str, str]]:
         """Generate a cache of skills with translations"""
@@ -48,7 +65,8 @@ class JobGenerator(BaseGenerator):
     def generate_job(self, organization_id: str) -> Dict:
         """Generate a single job posting with proper localization"""
         # Generate base job title and description
-        title = self.generate_localized_field('job_title')
+        title_key = random.choice(list(self.job_titles.keys()))
+        title = self.job_titles[title_key]
         description = self.generate_localized_paragraph(5)
         
         # Generate salary range
@@ -158,22 +176,27 @@ class JobGenerator(BaseGenerator):
         query = """
             INSERT INTO jobs (
                 id, organization_id, title, description, requirements,
-                skills, status, location, job_type, salary_min,
-                salary_max, salary_currency, remote, experience_level,
-                education_requirement, application_deadline, rating,
-                is_mock, mock_batch_id, created_at, updated_at
+                location, job_type, remote, skills, status,
+                created_at, updated_at
             ) VALUES %s
         """
         
+        import json
+        
         values = [
             (
-                item['id'], item['organization_id'], item['title'],
-                item['description'], item['requirements'], item['skills'],
-                item['status'], item['location'], item['job_type'],
-                item['salary_min'], item['salary_max'], item['salary_currency'],
-                item['remote'], item['experience_level'], item['education_requirement'],
-                item['application_deadline'], item['rating'], item['is_mock'],
-                item['mock_batch_id'], item['created_at'], item['updated_at']
+                item['id'], 
+                item['organization_id'], 
+                json.dumps(item['title']),  # Serialize the entire title object
+                json.dumps(item['description']),  # Serialize the entire description object
+                json.dumps(item['requirements']),  # Serialize requirements as JSONB
+                json.dumps(item['location']), 
+                item['job_type']['code'],  # Using the code as text
+                item['remote']['code'] == 'REMOTE',  # Convert to boolean
+                [skill['code'] for skill in item['skills']],  # Convert to text array
+                item['status']['code'],  # Using the code as text
+                item['created_at'],
+                item['updated_at']
             )
             for item in items
         ]

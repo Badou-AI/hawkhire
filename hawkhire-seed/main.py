@@ -15,7 +15,7 @@ from config.settings import (
     NUM_USERS,
     MOCK_BATCH_SIZE,
     SUPABASE_URL,
-    SUPABASE_ANON_KEY,
+    SUPABASE_SERVICE_ROLE_KEY,
     DATABASE_URL
 )
 from utils.database import DatabaseManager
@@ -61,17 +61,17 @@ class MockDataOrchestrator:
             print("Generating Organizations...")
             await self.generate_organizations()
 
-            # Generate users (both candidates and organization members)
-            print("\nGenerating Users...")
+            # Generate organization members (skipping candidates for now)
+            print("\nGenerating Organization Members...")
             await self.generate_users()
 
             # Generate jobs for organizations
             print("\nGenerating Jobs...")
             await self.generate_jobs()
 
-            # Generate resumes and applications
-            print("\nGenerating Resumes and Applications...")
-            await self.generate_resumes()
+            # Generate resumes as direct submissions
+            print("\nGenerating Resume Submissions...")
+            await self.generate_resume_submissions()
 
             end_time = datetime.now()
             duration = end_time - start_time
@@ -100,76 +100,48 @@ class MockDataOrchestrator:
                 pbar.update(batch_size)
 
     async def generate_users(self):
-        """Generate user data including both candidates and organization members"""
-        # Generate candidate users
-        num_candidates = NUM_USERS
-        with tqdm(total=num_candidates, desc="Candidates") as pbar:
-            for i in range(0, num_candidates, MOCK_BATCH_SIZE):
-                batch_size = min(MOCK_BATCH_SIZE, num_candidates - i)
-                batch = []
-                
-                for _ in range(batch_size):
-                    user = await self.user_generator.generate_user(user_type='candidate')
-                    if user:
-                        batch.append(user)
-                        self.users.append(user)
-                
-                if batch:
-                    self.user_generator.save_batch(batch)
-                pbar.update(batch_size)
-
-        # Generate organization members
-        print("\nGenerating Organization Members...")
-        with tqdm(total=len(self.organizations), desc="Org Members") as pbar:
+        """Generate one admin member per organization"""
+        with tqdm(total=len(self.organizations), desc="Org Admins") as pbar:
             for org in self.organizations:
-                # Generate 1-5 members per organization
-                num_members = random.randint(1, 5)
-                batch = []
-                
-                for _ in range(num_members):
-                    user = await self.user_generator.generate_user(user_type='organization')
-                    if user:
-                        member = self.org_generator.generate_organization_member(
-                            org['id'],
-                            user['id']
-                        )
-                        batch.append(member)
-                
-                if batch:
-                    self.org_generator.save_batch(batch, table='organization_members')
+                # Generate one admin member per organization
+                user = await self.user_generator.generate_user(user_type='organization')
+                if user:
+                    member = self.org_generator.generate_organization_member(
+                        org['id'],
+                        user['id'],
+                        role='admin'  # Set as admin
+                    )
+                    self.org_generator.save_batch([member], table='organization_members')
+                    self.users.append(user)
                 pbar.update(1)
+                # Add delay between user creations to avoid rate limits
+                await asyncio.sleep(2)  # 2 second delay
 
     async def generate_jobs(self):
         """Generate jobs for organizations"""
         with tqdm(total=len(self.organizations), desc="Organizations") as pbar:
             for org in self.organizations:
-                # Generate 1-5 jobs per organization
+                # Generate 2-4 jobs per organization
                 jobs = self.job_generator.generate_jobs_for_organization(
                     org['id'],
-                    min_jobs=1,
-                    max_jobs=5
+                    min_jobs=2,
+                    max_jobs=4
                 )
                 self.jobs.extend(jobs)
                 pbar.update(1)
 
-    async def generate_resumes(self):
-        """Generate resumes for candidates"""
-        # Filter candidate users
-        candidates = [u for u in self.users if u.get('user_type') == 'candidate']
-        
-        with tqdm(total=len(candidates), desc="Resumes") as pbar:
-            for candidate in candidates:
-                # Generate 1-3 resumes per candidate
-                num_resumes = random.randint(1, 3)
+    async def generate_resume_submissions(self):
+        """Generate direct resume submissions for jobs without requiring candidate accounts"""
+        with tqdm(total=len(self.jobs), desc="Job Applications") as pbar:
+            for job in self.jobs:
+                # Generate 10-20 resume submissions per job
+                num_submissions = random.randint(10, 20)
                 batch = []
                 
-                for _ in range(num_resumes):
-                    # Randomly associate with a job or leave as general resume
-                    job_id = random.choice(self.jobs)['id'] if random.random() > 0.5 else None
-                    
+                for _ in range(num_submissions):
                     resume = await self.resume_generator.generate_resume(
-                        candidate['id'],
-                        job_id
+                        candidate_id=None,  # No candidate account needed
+                        job_id=job['id']
                     )
                     if resume:
                         batch.append(resume)
@@ -194,18 +166,13 @@ class MockDataOrchestrator:
         print(f"Duration: {duration}")
         print("\nGenerated Data:")
         print(f"- Organizations: {len(self.organizations)}")
+        print(f"- Organization Members: {len(self.users)}")
         print(f"- Jobs: {len(self.jobs)}")
-        print(f"- Users: {len(self.users)}")
-        print(f"- Resumes: {len(self.resumes)}")
+        print(f"- Resume Submissions: {len(self.resumes)}")
         print("\nMock data generation completed successfully!")
 
 async def main():
     """Main execution function"""
-    # Debug prints
-    print(f"SUPABASE_URL: {SUPABASE_URL[:20]}...")
-    print(f"SUPABASE_ANON_KEY: {SUPABASE_ANON_KEY[:10]}...")
-    print(f"DATABASE_URL: {DATABASE_URL[:20]}...")
-
     orchestrator = MockDataOrchestrator()
     try:
         await orchestrator.initialize()  # Initialize components first

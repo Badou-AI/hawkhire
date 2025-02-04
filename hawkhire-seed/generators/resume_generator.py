@@ -61,24 +61,37 @@ class ResumeGenerator(BaseGenerator):
 
     async def generate_resume(
         self,
-        user_id: str,
+        candidate_id: Optional[str] = None,
         job_id: Optional[str] = None
     ) -> Dict:
         """Generate a single resume record with file storage"""
         try:
+            # Generate mock candidate info for direct submissions
+            mock_candidate_info = None
+            if candidate_id is None:
+                mock_candidate_info = {
+                    "first_name": self.faker_instances['en'].first_name(),
+                    "last_name": self.faker_instances['en'].last_name(),
+                    "email": self.faker_instances['en'].email(),
+                    "phone": self.faker_instances['en'].phone_number()
+                }
+
             # Upload file to storage
-            file_data = await self.storage.upload_mock_resume(user_id)
+            file_data = await self.storage.upload_mock_resume(
+                candidate_id if candidate_id else str(uuid4())
+            )
             if not file_data:
                 raise Exception("Failed to upload resume file")
 
             # Generate parsed content (simulating resume parsing)
-            parsed_content = self.generate_parsed_content()
+            parsed_content = self.generate_parsed_content(mock_candidate_info)
             status_key = 'PROCESSED'
 
             # Create resume record
             resume = {
                 "id": str(uuid4()),
-                "user_id": user_id,
+                "candidate_id": candidate_id,  # Can be None for direct submissions
+                "candidate_info": mock_candidate_info,  # Only set for direct submissions
                 "job_id": job_id,
                 "file_path": file_data['file_path'],
                 "file_name": file_data['file_name'],
@@ -99,17 +112,20 @@ class ResumeGenerator(BaseGenerator):
             return resume
 
         except Exception as e:
-            print(f"Error generating resume for user {user_id}: {e}")
+            print(f"Error generating resume for {'user ' + candidate_id if candidate_id else 'direct submission'}: {e}")
             return None
 
-    def generate_parsed_content(self) -> Dict:
+    def generate_parsed_content(self, mock_candidate_info: Optional[Dict] = None) -> Dict:
         """Generate simulated parsed content from resume"""
+        # Use provided mock candidate info or generate new contact info
+        contact_info = {
+            "email": mock_candidate_info['email'] if mock_candidate_info else self.faker_instances['en'].email(),
+            "phone": mock_candidate_info['phone'] if mock_candidate_info else self.faker_instances['en'].phone_number(),
+            "address": self.generate_location()
+        }
+
         return {
-            "contact_info": {
-                "email": self.faker_instances['en'].email(),
-                "phone": self.faker_instances['en'].phone_number(),
-                "address": self.generate_location()
-            },
+            "contact_info": contact_info,
             "education": self.generate_education_history(),
             "experience": self.generate_work_experience(),
             "skills": self.generate_skills(),
