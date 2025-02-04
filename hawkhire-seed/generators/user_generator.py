@@ -12,22 +12,27 @@ from .base import BaseGenerator
 from config.settings import (
     DEFAULT_MOCK_PASSWORD,
     LANGUAGES,
-    EDUCATION_LEVELS
+    EDUCATION_LEVELS,
+    EXPERIENCE_LEVELS,
+    REMOTE_OPTIONS,
+    JOB_TYPES
 )
 
 class UserGenerator(BaseGenerator):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.default_password = DEFAULT_MOCK_PASSWORD
-        self.education_translations = self._generate_education_translations()
-
-    def _generate_education_translations(self) -> Dict[str, Dict[str, str]]:
-        """Generate translations for education levels"""
-        return {
-            'HIGH_SCHOOL': {'en': 'High School', 'fr': 'Lycée'},
-            'BACHELOR': {'en': 'Bachelor\'s Degree', 'fr': 'Licence'},
-            'MASTER': {'en': 'Master\'s Degree', 'fr': 'Master'},
-            'PHD': {'en': 'PhD', 'fr': 'Doctorat'}
+        self.language_proficiency_levels = {
+            'BASIC': {'en': 'Basic', 'fr': 'Basique'},
+            'INTERMEDIATE': {'en': 'Intermediate', 'fr': 'Intermédiaire'},
+            'ADVANCED': {'en': 'Advanced', 'fr': 'Avancé'},
+            'NATIVE': {'en': 'Native', 'fr': 'Langue Maternelle'}
+        }
+        self.available_languages = {
+            'EN': {'en': 'English', 'fr': 'Anglais'},
+            'FR': {'en': 'French', 'fr': 'Français'},
+            'ES': {'en': 'Spanish', 'fr': 'Espagnol'},
+            'DE': {'en': 'German', 'fr': 'Allemand'}
         }
 
     async def generate_user(self, user_type: str = 'candidate') -> Dict:
@@ -73,10 +78,11 @@ class UserGenerator(BaseGenerator):
 
             # Add candidate-specific fields
             if user_type == 'candidate':
+                education_key = random.choice(list(EDUCATION_LEVELS.keys()))
                 profile.update({
                     "education_level": {
-                        "code": random.choice(EDUCATION_LEVELS),
-                        "localized": self.education_translations[random.choice(EDUCATION_LEVELS)]
+                        "code": education_key,
+                        "localized": EDUCATION_LEVELS[education_key]
                     },
                     "skills": self.generate_candidate_skills(),
                     "experience": self.generate_work_experience(),
@@ -92,33 +98,34 @@ class UserGenerator(BaseGenerator):
 
     def generate_candidate_skills(self) -> Dict[str, List[Dict]]:
         """Generate candidate skills with proficiency levels"""
-        skills_en = [
-            "Python", "JavaScript", "React", "Node.js", "AWS",
-            "Project Management", "Communication", "Team Leadership"
-        ]
-        skills_fr = [
-            "Python", "JavaScript", "React", "Node.js", "AWS",
-            "Gestion de Projet", "Communication", "Leadership d'équipe"
-        ]
-        
-        num_skills = random.randint(3, 8)
-        selected_indices = random.sample(range(len(skills_en)), num_skills)
-        
-        return {
-            'en': [{
-                'name': skills_en[i],
-                'proficiency': random.choice(['Beginner', 'Intermediate', 'Advanced', 'Expert'])
-            } for i in selected_indices],
-            'fr': [{
-                'name': skills_fr[i],
-                'proficiency': random.choice(['Débutant', 'Intermédiaire', 'Avancé', 'Expert'])
-            } for i in selected_indices]
+        proficiency_levels = {
+            'BEGINNER': {'en': 'Beginner', 'fr': 'Débutant'},
+            'INTERMEDIATE': {'en': 'Intermediate', 'fr': 'Intermédiaire'},
+            'ADVANCED': {'en': 'Advanced', 'fr': 'Avancé'},
+            'EXPERT': {'en': 'Expert', 'fr': 'Expert'}
         }
+        
+        skills = []
+        num_skills = random.randint(3, 8)
+        
+        for _ in range(num_skills):
+            proficiency_key = random.choice(list(proficiency_levels.keys()))
+            skill_name = self.generate_localized_field('job_title')  # Using job_title as a proxy for skill
+            
+            skills.append({
+                'name': skill_name,
+                'proficiency': {
+                    'code': proficiency_key,
+                    'localized': proficiency_levels[proficiency_key]
+                }
+            })
+        
+        return skills
 
-    def generate_work_experience(self) -> Dict[str, List[Dict]]:
+    def generate_work_experience(self) -> List[Dict]:
         """Generate work experience entries"""
+        experiences = []
         num_entries = random.randint(1, 4)
-        experience = {'en': [], 'fr': []}
         
         for _ in range(num_entries):
             start_date = self.generate_date_in_range(
@@ -127,72 +134,65 @@ class UserGenerator(BaseGenerator):
             )
             end_date = self.generate_date_in_range(start_date, datetime.now()) if random.random() > 0.3 else None
             
-            company_name = self.generate_localized_field('company')
-            job_title = self.generate_localized_field('job_title')
-            description = self.generate_localized_paragraph(2)
-            
-            experience['en'].append({
-                'company': company_name['en'],
-                'title': job_title['en'],
-                'description': description['en'],
+            experience = {
+                'company': self.generate_localized_field('company'),
+                'title': self.generate_localized_field('job_title'),
+                'description': self.generate_localized_paragraph(2),
                 'start_date': start_date,
                 'end_date': end_date,
-                'is_current': end_date is None
-            })
+                'is_current': end_date is None,
+                'location': self.generate_location(),
+                'achievements': self.generate_localized_list('bs', 3)  # Using bs for achievements
+            }
             
-            experience['fr'].append({
-                'company': company_name['fr'],
-                'title': job_title['fr'],
-                'description': description['fr'],
-                'start_date': start_date,
-                'end_date': end_date,
-                'is_current': end_date is None
-            })
+            experiences.append(experience)
         
-        return experience
+        return experiences
 
     def generate_language_proficiency(self) -> List[Dict]:
         """Generate language proficiency list"""
-        languages = [
-            {'code': 'en', 'en': 'English', 'fr': 'Anglais'},
-            {'code': 'fr', 'en': 'French', 'fr': 'Français'},
-            {'code': 'es', 'en': 'Spanish', 'fr': 'Espagnol'},
-            {'code': 'de', 'en': 'German', 'fr': 'Allemand'}
-        ]
-        
-        proficiency_levels = {
-            'en': ['Basic', 'Intermediate', 'Advanced', 'Native'],
-            'fr': ['Basique', 'Intermédiaire', 'Avancé', 'Langue Maternelle']
-        }
-        
         num_languages = random.randint(1, 3)
-        selected_languages = random.sample(languages, num_languages)
+        selected_languages = random.sample(list(self.available_languages.keys()), num_languages)
         
         return [{
-            'language': lang,
+            'language': {
+                'code': lang_code,
+                'localized': self.available_languages[lang_code]
+            },
             'proficiency': {
-                'en': random.choice(proficiency_levels['en']),
-                'fr': random.choice(proficiency_levels['fr'])
+                'code': random.choice(list(self.language_proficiency_levels.keys())),
+                'localized': self.language_proficiency_levels[
+                    random.choice(list(self.language_proficiency_levels.keys()))
+                ]
             }
-        } for lang in selected_languages]
+        } for lang_code in selected_languages]
 
     def generate_job_preferences(self) -> Dict:
         """Generate job preferences"""
+        job_type_keys = random.sample(list(JOB_TYPES.keys()), random.randint(1, 2))
+        remote_key = random.choice(list(REMOTE_OPTIONS.keys()))
+        
         return {
             'desired_salary_range': {
                 'min': random.randint(40000, 80000),
                 'max': random.randint(81000, 150000),
                 'currency': 'USD'
             },
-            'preferred_job_types': self.get_random_items(
-                ['FULL_TIME', 'PART_TIME', 'CONTRACT'],
-                1, 2
-            ),
+            'preferred_job_types': [
+                {
+                    'code': job_type,
+                    'localized': JOB_TYPES[job_type]
+                }
+                for job_type in job_type_keys
+            ],
             'preferred_locations': [
                 self.generate_location()
                 for _ in range(random.randint(1, 3))
             ],
-            'remote_preference': random.choice(['REMOTE', 'HYBRID', 'ONSITE']),
+            'remote_preference': {
+                'code': remote_key,
+                'localized': REMOTE_OPTIONS[remote_key]
+            },
             'willing_to_relocate': random.choice([True, False])
         }
 

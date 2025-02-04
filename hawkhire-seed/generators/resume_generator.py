@@ -9,26 +9,44 @@ from datetime import datetime
 import random
 from pathlib import Path
 import json
+from uuid import uuid4
 from .base import BaseGenerator
 from config.settings import (
     SAMPLE_RESUMES_DIR,
-    ALLOWED_MIME_TYPES
+    ALLOWED_MIME_TYPES,
+    EDUCATION_LEVELS,
+    EXPERIENCE_LEVELS,
+    LANGUAGES
 )
 
 class ResumeGenerator(BaseGenerator):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.status_translations = self._generate_status_translations()
-        self._ensure_sample_resumes_exist()
-
-    def _generate_status_translations(self) -> Dict[str, Dict[str, str]]:
-        """Generate translations for resume statuses"""
-        return {
+        self.resume_status_translations = {
             'PENDING': {'en': 'Pending', 'fr': 'En attente'},
             'PROCESSED': {'en': 'Processed', 'fr': 'Traité'},
             'FAILED': {'en': 'Failed', 'fr': 'Échec'},
             'ARCHIVED': {'en': 'Archived', 'fr': 'Archivé'}
         }
+        self.certification_translations = {
+            'AWS_CERT': {
+                'en': 'AWS Certified Solutions Architect',
+                'fr': 'Architecte Solutions AWS Certifié'
+            },
+            'PMP': {
+                'en': 'Project Management Professional (PMP)',
+                'fr': 'Professionnel en Gestion de Projet (PMP)'
+            },
+            'SCRUM': {
+                'en': 'Certified Scrum Master',
+                'fr': 'Scrum Master Certifié'
+            },
+            'GOOGLE_CLOUD': {
+                'en': 'Google Cloud Professional',
+                'fr': 'Professionnel Google Cloud'
+            }
+        }
+        self._ensure_sample_resumes_exist()
 
     def _ensure_sample_resumes_exist(self):
         """Ensure sample resume directory exists and contains files"""
@@ -55,10 +73,11 @@ class ResumeGenerator(BaseGenerator):
 
             # Generate parsed content (simulating resume parsing)
             parsed_content = self.generate_parsed_content()
+            status_key = 'PROCESSED'
 
             # Create resume record
             resume = {
-                "id": str(self.faker_instances['en'].uuid4()),
+                "id": str(uuid4()),
                 "user_id": user_id,
                 "job_id": job_id,
                 "file_path": file_data['file_path'],
@@ -66,8 +85,8 @@ class ResumeGenerator(BaseGenerator):
                 "file_size": file_data['file_size'],
                 "mime_type": file_data['mime_type'],
                 "status": {
-                    "code": "PROCESSED",
-                    "localized": self.status_translations['PROCESSED']
+                    "code": status_key,
+                    "localized": self.resume_status_translations[status_key]
                 },
                 "parsed_content": parsed_content,
                 "metadata": self.generate_resume_metadata(),
@@ -93,7 +112,7 @@ class ResumeGenerator(BaseGenerator):
             },
             "education": self.generate_education_history(),
             "experience": self.generate_work_experience(),
-            "skills": self.generate_candidate_skills(),
+            "skills": self.generate_skills(),
             "languages": self.generate_language_proficiency(),
             "certifications": self.generate_certifications(),
             "summary": self.generate_localized_paragraph(2)
@@ -101,20 +120,21 @@ class ResumeGenerator(BaseGenerator):
 
     def generate_education_history(self) -> Dict[str, List[Dict]]:
         """Generate education history entries"""
-        num_entries = random.randint(1, 3)
         education = {'en': [], 'fr': []}
+        num_entries = random.randint(1, 3)
         
         for _ in range(num_entries):
             start_year = random.randint(2010, 2020)
             duration = random.randint(2, 4)
+            education_level_key = random.choice(list(EDUCATION_LEVELS.keys()))
             
             institution = self.generate_localized_field('university')
-            degree = self.generate_localized_field('job_title')  # Using job_title for degree names
+            field_of_study = self.generate_localized_field('job_title')
             
             education['en'].append({
                 'institution': institution['en'],
-                'degree': degree['en'],
-                'field': self.faker_instances['en'].bs(),
+                'degree': EDUCATION_LEVELS[education_level_key]['en'],
+                'field': field_of_study['en'],
                 'start_year': start_year,
                 'end_year': start_year + duration,
                 'gpa': round(random.uniform(3.0, 4.0), 2)
@@ -122,8 +142,8 @@ class ResumeGenerator(BaseGenerator):
             
             education['fr'].append({
                 'institution': institution['fr'],
-                'degree': degree['fr'],
-                'field': self.faker_instances['fr'].bs(),
+                'degree': EDUCATION_LEVELS[education_level_key]['fr'],
+                'field': field_of_study['fr'],
                 'start_year': start_year,
                 'end_year': start_year + duration,
                 'gpa': round(random.uniform(10, 20), 2)  # French grading system
@@ -131,39 +151,71 @@ class ResumeGenerator(BaseGenerator):
         
         return education
 
+    def generate_skills(self) -> Dict[str, List[Dict]]:
+        """Generate skills with proficiency levels"""
+        skills = {'en': [], 'fr': []}
+        num_skills = random.randint(5, 10)
+        
+        for _ in range(num_skills):
+            skill_name = self.generate_localized_field('job_title')
+            proficiency = random.randint(1, 5)
+            
+            skills['en'].append({
+                'name': skill_name['en'],
+                'proficiency': proficiency,
+                'years': random.randint(1, 8)
+            })
+            
+            skills['fr'].append({
+                'name': skill_name['fr'],
+                'proficiency': proficiency,
+                'years': random.randint(1, 8)
+            })
+        
+        return skills
+
+    def generate_language_proficiency(self) -> List[Dict]:
+        """Generate language proficiency entries"""
+        num_languages = random.randint(1, 3)
+        available_languages = [lang for lang in LANGUAGES]
+        selected_languages = random.sample(available_languages, min(num_languages, len(available_languages)))
+        
+        proficiency_levels = {
+            'BASIC': {'en': 'Basic', 'fr': 'Basique'},
+            'INTERMEDIATE': {'en': 'Intermediate', 'fr': 'Intermédiaire'},
+            'ADVANCED': {'en': 'Advanced', 'fr': 'Avancé'},
+            'NATIVE': {'en': 'Native', 'fr': 'Langue Maternelle'}
+        }
+
+        return [
+            {
+                'language': lang,
+                'proficiency': {
+                    'code': random.choice(list(proficiency_levels.keys())),
+                    'localized': proficiency_levels[random.choice(list(proficiency_levels.keys()))]
+                }
+            }
+            for lang in selected_languages
+        ]
+
     def generate_certifications(self) -> Dict[str, List[Dict]]:
         """Generate certification entries"""
-        certifications = {
-            'en': [
-                'AWS Certified Solutions Architect',
-                'Project Management Professional (PMP)',
-                'Certified Scrum Master',
-                'Google Cloud Professional'
-            ],
-            'fr': [
-                'Architecte Solutions AWS Certifié',
-                'Professionnel en Gestion de Projet (PMP)',
-                'Scrum Master Certifié',
-                'Professionnel Google Cloud'
-            ]
-        }
-        
         num_certs = random.randint(0, 3)
-        selected_indices = random.sample(range(len(certifications['en'])), num_certs)
+        cert_keys = random.sample(list(self.certification_translations.keys()), num_certs)
         
         return {
             'en': [{
-                'name': certifications['en'][i],
+                'name': self.certification_translations[cert_key]['en'],
                 'issuer': self.faker_instances['en'].company(),
                 'date_obtained': self.generate_date_in_range(),
                 'expires': random.choice([True, False])
-            } for i in selected_indices],
+            } for cert_key in cert_keys],
             'fr': [{
-                'name': certifications['fr'][i],
+                'name': self.certification_translations[cert_key]['fr'],
                 'issuer': self.faker_instances['fr'].company(),
                 'date_obtained': self.generate_date_in_range(),
                 'expires': random.choice([True, False])
-            } for i in selected_indices]
+            } for cert_key in cert_keys]
         }
 
     def generate_resume_metadata(self) -> Dict:
@@ -174,7 +226,7 @@ class ResumeGenerator(BaseGenerator):
             "processing_time": random.uniform(0.5, 2.0),
             "confidence_score": random.uniform(0.7, 1.0),
             "language_detection": {
-                "primary": random.choice(['en', 'fr']),
+                "primary": random.choice(LANGUAGES),
                 "confidence": random.uniform(0.8, 1.0)
             },
             "processing_steps": [

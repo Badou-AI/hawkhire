@@ -20,32 +20,6 @@ from config.settings import (
 class OrganizationGenerator(BaseGenerator):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.industry_translations = self._generate_industry_translations()
-        self.company_type_translations = self._generate_company_type_translations()
-
-    def _generate_industry_translations(self) -> Dict[str, Dict[str, str]]:
-        """Generate translations for industries"""
-        return {
-            'Technology': {'en': 'Technology', 'fr': 'Technologie'},
-            'Healthcare': {'en': 'Healthcare', 'fr': 'Santé'},
-            'Finance': {'en': 'Finance', 'fr': 'Finance'},
-            'Education': {'en': 'Education', 'fr': 'Éducation'},
-            'Manufacturing': {'en': 'Manufacturing', 'fr': 'Fabrication'},
-            'Retail': {'en': 'Retail', 'fr': 'Commerce de détail'},
-            'Construction': {'en': 'Construction', 'fr': 'Construction'},
-            'Media': {'en': 'Media', 'fr': 'Médias'}
-        }
-
-    def _generate_company_type_translations(self) -> Dict[str, Dict[str, str]]:
-        """Generate translations for company types"""
-        return {
-            'Public': {'en': 'Public Company', 'fr': 'Société Publique'},
-            'Private': {'en': 'Private Company', 'fr': 'Société Privée'},
-            'Startup': {'en': 'Startup', 'fr': 'Startup'},
-            'Non-profit': {'en': 'Non-profit', 'fr': 'Organisation à but non lucratif'},
-            'Government': {'en': 'Government', 'fr': 'Gouvernement'},
-            'Educational': {'en': 'Educational Institution', 'fr': 'Institution Éducative'}
-        }
 
     def generate_organization(self) -> Dict:
         """Generate a single organization with complete profile and localization"""
@@ -56,16 +30,11 @@ class OrganizationGenerator(BaseGenerator):
             'fr': f"{self.faker_instances['fr'].catch_phrase()}. {self.faker_instances['fr'].bs()}"
         }
 
-        # Select industry and company type with translations
-        industry = random.choice(list(self.industry_translations.keys()))
-        company_type = random.choice(list(self.company_type_translations.keys()))
-
-        # Generate size range with localization
-        size_range = random.choice(COMPANY_SIZES)
-        size_range_localized = {
-            'en': size_range,
-            'fr': size_range.replace('-', ' à ') + ' employés'
-        }
+        # Select keys for lookups
+        industry_key = random.choice(list(INDUSTRIES.keys()))
+        company_type_key = random.choice(list(COMPANY_TYPES.keys()))
+        size_range_key = random.choice(list(COMPANY_SIZES.keys()))
+        verification_status_key = random.choice(list(VERIFICATION_STATUSES.keys()))
 
         return {
             "id": str(self.faker_instances['en'].uuid4()),
@@ -73,17 +42,17 @@ class OrganizationGenerator(BaseGenerator):
             "description": company_desc,
             "tier": random.choice(['free', 'professional', 'enterprise']),
             "industry": {
-                'code': industry,
-                'localized': self.industry_translations[industry]
+                'code': industry_key,
+                'localized': INDUSTRIES[industry_key]
             },
             "company_type": {
-                'code': company_type,
-                'localized': self.company_type_translations[company_type]
+                'code': company_type_key,
+                'localized': COMPANY_TYPES[company_type_key]
             },
             "founded_year": random.randint(1950, 2024),
             "size_range": {
-                'code': size_range,
-                'localized': size_range_localized
+                'code': size_range_key,
+                'localized': COMPANY_SIZES[size_range_key]
             },
             "website_url": self.generate_url_safe_string(company_name['en']),
             "logo_url": f"https://logo.clearbit.com/{self.faker_instances['en'].domain_name()}",
@@ -95,8 +64,8 @@ class OrganizationGenerator(BaseGenerator):
             ],
             "languages": self.get_random_items(LANGUAGES, 1, len(LANGUAGES)),
             "verification_status": {
-                'code': random.choice(VERIFICATION_STATUSES),
-                'localized': self.get_localized_term(random.choice(VERIFICATION_STATUSES).lower())
+                'code': verification_status_key,
+                'localized': VERIFICATION_STATUSES[verification_status_key]
             },
             "created_at": self.generate_date_in_range(),
             "updated_at": datetime.now()
@@ -108,7 +77,7 @@ class OrganizationGenerator(BaseGenerator):
         user_id: str
     ) -> Dict:
         """Generate an organization member with localized content"""
-        role = random.choice(ORGANIZATION_ROLES)
+        role_key = random.choice(list(ORGANIZATION_ROLES.keys()))
         title = self.generate_localized_field('job_title')
         
         return {
@@ -116,8 +85,8 @@ class OrganizationGenerator(BaseGenerator):
             "organization_id": organization_id,
             "user_id": user_id,
             "role": {
-                'code': role,
-                'localized': self.get_localized_term(role.lower())
+                'code': role_key,
+                'localized': ORGANIZATION_ROLES[role_key]
             },
             "title": title,
             "permissions": self.generate_permissions(),
@@ -133,20 +102,20 @@ class OrganizationGenerator(BaseGenerator):
         verified_by: Optional[str] = None
     ) -> Dict:
         """Generate an organization verification record with localized content"""
-        status = random.choice(VERIFICATION_STATUSES)
+        status_key = random.choice(list(VERIFICATION_STATUSES.keys()))
         notes = {
             'en': self.faker_instances['en'].text(max_nb_chars=200),
             'fr': self.faker_instances['fr'].text(max_nb_chars=200)
-        } if status != "pending" else None
+        } if status_key != "PENDING" else None
 
         return {
             "id": str(self.faker_instances['en'].uuid4()),
             "organization_id": organization_id,
             "status": {
-                'code': status,
-                'localized': self.get_localized_term(status.lower())
+                'code': status_key,
+                'localized': VERIFICATION_STATUSES[status_key]
             },
-            "verified_by": verified_by if status != "pending" else None,
+            "verified_by": verified_by if status_key != "PENDING" else None,
             "notes": notes,
             "created_at": self.generate_date_in_range()
         }
@@ -164,7 +133,8 @@ class OrganizationGenerator(BaseGenerator):
         # Add localized permission descriptions
         permission_descriptions = {
             'en': {
-                k: f"Can {k.replace('_', ' ')}" for k, v in permissions.items() if v
+                k: f"Can {k.replace('_', ' ')}" 
+                for k, v in permissions.items() if v
             },
             'fr': {
                 'edit_organization': 'Peut modifier l\'organisation',
