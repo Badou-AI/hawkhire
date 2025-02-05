@@ -1144,13 +1144,226 @@ async def get_feedback(feedback_slug: str):
         
     return {"content": content}
 
-@app.get("/v1/jobs")
-async def list_jobs():
+@app.get("/v1/jobs", tags=["Jobs"])
+async def list_jobs(
+    select: str = None,
+    page: int = 0,
+    page_size: int = 10,
+    id: int = None,
+    order: str = None
+):
     """
-    Fetch all jobs from Supabase database
+    Fetch jobs from Supabase database with various query options
+    
+    Parameters:
+    - select: Comma-separated list of columns to return
+    - page: Page number (0-based)
+    - page_size: Number of items per page
+    - id: Filter by specific job ID
+    - order: Order by column (prefix with - for descending)
     """
     try:
-        response = supabase.table('jobs').select("*").execute()
-        return response.data
+        query = supabase.table('jobs')
+        
+        # Handle column selection
+        if select:
+            columns = select.replace(" ", "").split(",")
+            query = query.select(",".join(columns))
+        else:
+            query = query.select("*")
+            
+        # Handle filtering
+        if id is not None:
+            query = query.eq('id', id)
+            
+        # Handle ordering
+        if order:
+            if order.startswith('-'):
+                query = query.order(order[1:], desc=True)
+            else:
+                query = query.order(order)
+                
+        # Handle pagination
+        start = page * page_size
+        end = start + page_size - 1
+        query = query.range(start, end)
+        
+        response = query.execute()
+        
+        return {
+            "data": response.data,
+            "page": page,
+            "page_size": page_size,
+            "total": len(response.data)  # Note: This is page total, not overall total
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/v1/jobs/{job_id}", tags=["Jobs"])
+async def get_job(job_id: int, select: str = None):
+    """
+    Fetch a specific job by ID with optional column selection
+    
+    Parameters:
+    - job_id: The ID of the job to fetch
+    - select: Comma-separated list of columns to return
+    """
+    try:
+        query = supabase.table('jobs')
+        
+        # Handle column selection
+        if select:
+            columns = select.replace(" ", "").split(",")
+            query = query.select(",".join(columns))
+        else:
+            query = query.select("*")
+            
+        response = query.eq('id', job_id).execute()
+        
+        if not response.data:
+            raise HTTPException(status_code=404, detail=f"Job with ID {job_id} not found")
+            
+        return response.data[0]
+        
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/v1/jobs/with/{related_table}", tags=["Jobs"])
+async def get_jobs_with_related(
+    related_table: str,
+    select: str = None,
+    page: int = 0,
+    page_size: int = 10,
+    order: str = None
+):
+    """
+    Fetch jobs with related table data
+    
+    Parameters:
+    - related_table: Name of the related table to include
+    - select: Comma-separated list of columns to return
+    - page: Page number (0-based)
+    - page_size: Number of items per page
+    - order: Order by column (prefix with - for descending)
+    """
+    try:
+        # Validate related table name to prevent injection
+        allowed_tables = ['companies', 'applications', 'categories']  # Add your actual related tables
+        if related_table not in allowed_tables:
+            raise HTTPException(status_code=400, detail=f"Invalid related table. Allowed tables: {', '.join(allowed_tables)}")
+        
+        query = supabase.table('jobs')
+        
+        # Build the select statement
+        if select:
+            base_columns = select.replace(" ", "").split(",")
+        else:
+            base_columns = ["*"]
+            
+        # Add the related table to the selection
+        select_statement = f"{','.join(base_columns)},{related_table}(*)"
+        query = query.select(select_statement)
+        
+        # Handle ordering
+        if order:
+            if order.startswith('-'):
+                query = query.order(order[1:], desc=True)
+            else:
+                query = query.order(order)
+                
+        # Handle pagination
+        start = page * page_size
+        end = start + page_size - 1
+        query = query.range(start, end)
+        
+        response = query.execute()
+        
+        return {
+            "data": response.data,
+            "page": page,
+            "page_size": page_size,
+            "total": len(response.data)  # Note: This is page total, not overall total
+        }
+        
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/v1/jobs/search", tags=["Jobs"])
+async def search_jobs(
+    query: str = None,
+    category: str = None,
+    location: str = None,
+    min_salary: float = None,
+    max_salary: float = None,
+    employment_type: str = None,
+    page: int = 0,
+    page_size: int = 10,
+    order: str = None
+):
+    """
+    Search jobs with multiple filter criteria
+    
+    Parameters:
+    - query: Search term for job title or description
+    - category: Job category
+    - location: Job location
+    - min_salary: Minimum salary
+    - max_salary: Maximum salary
+    - employment_type: Type of employment (full-time, part-time, etc.)
+    - page: Page number (0-based)
+    - page_size: Number of items per page
+    - order: Order by column (prefix with - for descending)
+    """
+    try:
+        db_query = supabase.table('jobs').select("*")
+        
+        # Apply filters
+        if query:
+            db_query = db_query.or_(f"title.ilike.%{query}%,description.ilike.%{query}%")
+        if category:
+            db_query = db_query.eq('category', category)
+        if location:
+            db_query = db_query.ilike('location', f'%{location}%')
+        if min_salary is not None:
+            db_query = db_query.gte('salary', min_salary)
+        if max_salary is not None:
+            db_query = db_query.lte('salary', max_salary)
+        if employment_type:
+            db_query = db_query.eq('employment_type', employment_type)
+            
+        # Handle ordering
+        if order:
+            if order.startswith('-'):
+                db_query = db_query.order(order[1:], desc=True)
+            else:
+                db_query = db_query.order(order)
+                
+        # Handle pagination
+        start = page * page_size
+        end = start + page_size - 1
+        db_query = db_query.range(start, end)
+        
+        response = db_query.execute()
+        
+        return {
+            "data": response.data,
+            "page": page,
+            "page_size": page_size,
+            "total": len(response.data),  # Note: This is page total, not overall total
+            "filters_applied": {
+                "query": query,
+                "category": category,
+                "location": location,
+                "min_salary": min_salary,
+                "max_salary": max_salary,
+                "employment_type": employment_type
+            }
+        }
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
