@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, HTTPException, Form
+from fastapi import FastAPI, UploadFile, HTTPException, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 import httpx
@@ -10,7 +10,7 @@ import shutil
 from pathlib import Path
 import aiofiles
 import mimetypes
-from typing import Dict, List
+from typing import Dict, List, Optional, Union, Any
 import humanize
 import hashlib
 from datetime import datetime
@@ -23,6 +23,8 @@ from functools import partial
 import time
 from slugify import slugify
 from supabase import create_client, Client
+from pydantic import BaseModel, Field, UUID4
+from fastapi.encoders import jsonable_encoder
 
 # Load environment variables
 load_dotenv()
@@ -1144,13 +1146,172 @@ async def get_feedback(feedback_slug: str):
         
     return {"content": content}
 
-@app.get("/v1/jobs", tags=["Jobs"])
+class JobStatus(str, Enum):
+    """Job status options"""
+    DRAFT = "DRAFT"
+    PUBLISHED = "PUBLISHED"
+    ARCHIVED = "ARCHIVED"
+    CLOSED = "CLOSED"
+
+class JobType(str, Enum):
+    """Job type options"""
+    FULL_TIME = "FULL_TIME"
+    PART_TIME = "PART_TIME"
+    CONTRACT = "CONTRACT"
+    FREELANCE = "FREELANCE"
+    INTERNSHIP = "INTERNSHIP"
+
+class LocalizedText(BaseModel):
+    """Model for multilingual text"""
+    en: str = Field(..., example="English text")
+    fr: str = Field(..., example="Texte français")
+
+class LocalizedLocation(BaseModel):
+    """Model for multilingual location fields"""
+    city: LocalizedText = Field(..., example={
+        "en": "New York",
+        "fr": "New York"
+    })
+    state: LocalizedText = Field(..., example={
+        "en": "New York",
+        "fr": "New York"
+    })
+    country: LocalizedText = Field(..., example={
+        "en": "United States",
+        "fr": "États-Unis"
+    })
+    postal_code: LocalizedText = Field(..., example={
+        "en": "10001",
+        "fr": "10001"
+    })
+
+class JobBase(BaseModel):
+    """Base model for job data"""
+    organization_id: UUID4 = Field(
+        ..., 
+        description="ID of the organization posting the job",
+        example="f6560f9b-c8c4-45ae-8265-18d435a56202"
+    )
+    title: LocalizedText = Field(
+        ..., 
+        description="Job title in English and French",
+        example={
+            "en": "Senior Software Engineer",
+            "fr": "Ingénieur Logiciel Senior"
+        }
+    )
+    description: LocalizedText = Field(
+        ..., 
+        description="Job description in English and French",
+        example={
+            "en": "We are looking for a senior software engineer...",
+            "fr": "Nous recherchons un ingénieur logiciel senior..."
+        }
+    )
+    requirements: Dict[str, List[str]] = Field(
+        default={"en": [], "fr": []},
+        description="Job requirements in English and French",
+        example={
+            "en": [
+                "5+ years of experience with Python",
+                "Strong knowledge of cloud services"
+            ],
+            "fr": [
+                "5+ ans d'expérience en Python",
+                "Solide connaissance des services cloud"
+            ]
+        }
+    )
+    skills: List[str] = Field(
+        default=[],
+        description="Required skills (uppercase constants)",
+        example=["PYTHON", "AWS", "DOCKER"]
+    )
+    status: JobStatus = Field(
+        default=JobStatus.DRAFT,
+        description="Job status",
+        example="DRAFT"
+    )
+    location: LocalizedLocation = Field(
+        ...,
+        description="Job location details"
+    )
+    job_type: JobType = Field(
+        ...,
+        description="Type of employment",
+        example="FULL_TIME"
+    )
+    salary_min: Optional[int] = Field(
+        None,
+        description="Minimum salary",
+        example=80000
+    )
+    salary_max: Optional[int] = Field(
+        None,
+        description="Maximum salary",
+        example=120000
+    )
+    salary_currency: str = Field(
+        default="USD",
+        description="Salary currency code",
+        example="USD"
+    )
+    remote: bool = Field(
+        default=False,
+        description="Whether the job is remote",
+        example=True
+    )
+    rating: Optional[float] = Field(
+        None,
+        description="Job rating",
+        example=4.5
+    )
+    is_mock: bool = Field(
+        default=False,
+        description="Whether this is mock data",
+        example=False
+    )
+    mock_batch_id: Optional[UUID4] = Field(
+        None,
+        description="ID of the mock data batch",
+        example="550e8400-e29b-41d4-a716-446655440000"
+    )
+
+class JobCreate(JobBase):
+    """Model for creating a new job"""
+    pass
+
+class JobUpdate(JobBase):
+    """Model for updating an existing job"""
+    pass
+
+class JobInDB(JobBase):
+    """Model for job data as stored in the database"""
+    id: UUID4
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+        json_encoders = {
+            UUID4: str,
+            datetime: lambda v: v.isoformat()
+        }
+
+class JobList(BaseModel):
+    """Response model for job listing"""
+    data: List[JobInDB]
+    page: int
+    page_size: int
+    total: int
+
+@app.get("/v1/jobs", tags=["Jobs"], response_model=JobList)
 async def list_jobs(
     select: str = None,
-    page: int = 0,
-    page_size: int = 10,
-    id: int = None,
-    order: str = None
+    page: int = Query(0, ge=0, description="Page number (0-based)"),
+    page_size: int = Query(10, ge=1, le=100, description="Number of items per page"),
+    id: Optional[UUID4] = None,
+    order: str = Query(None, description="Order by column (prefix with - for descending)")
 ):
     """
     Fetch jobs from Supabase database with various query options
@@ -1158,8 +1319,8 @@ async def list_jobs(
     Parameters:
     - select: Comma-separated list of columns to return
     - page: Page number (0-based)
-    - page_size: Number of items per page
-    - id: Filter by specific job ID
+    - page_size: Number of items per page (max 100)
+    - id: Filter by specific job ID (UUID)
     - order: Order by column (prefix with - for descending)
     """
     try:
@@ -1174,7 +1335,7 @@ async def list_jobs(
             
         # Handle filtering
         if id is not None:
-            query = query.eq('id', id)
+            query = query.eq('id', str(id))  # Convert UUID to string for Supabase query
             
         # Handle ordering
         if order:
@@ -1183,6 +1344,10 @@ async def list_jobs(
             else:
                 query = query.order(order)
                 
+        # Get total count before pagination
+        count_response = query.execute()
+        total_count = len(count_response.data)
+                
         # Handle pagination
         start = page * page_size
         end = start + page_size - 1
@@ -1190,23 +1355,25 @@ async def list_jobs(
         
         response = query.execute()
         
-        return {
-            "data": response.data,
-            "page": page,
-            "page_size": page_size,
-            "total": len(response.data)  # Note: This is page total, not overall total
-        }
+        return JobList(
+            data=[JobInDB(**job) for job in response.data],
+            page=page,
+            page_size=page_size,
+            total=total_count
+        )
         
     except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/v1/jobs/{job_id}", tags=["Jobs"])
-async def get_job(job_id: int, select: str = None):
+async def get_job(job_id: UUID4, select: str = None):
     """
     Fetch a specific job by ID with optional column selection
     
     Parameters:
-    - job_id: The ID of the job to fetch
+    - job_id: The ID of the job to fetch (UUID)
     - select: Comma-separated list of columns to return
     """
     try:
@@ -1219,7 +1386,7 @@ async def get_job(job_id: int, select: str = None):
         else:
             query = query.select("*")
             
-        response = query.eq('id', job_id).execute()
+        response = query.eq('id', str(job_id)).execute()  # Convert UUID to string for Supabase query
         
         if not response.data:
             raise HTTPException(status_code=404, detail=f"Job with ID {job_id} not found")
@@ -1366,4 +1533,86 @@ async def search_jobs(
         }
         
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/v1/jobs", tags=["Jobs"], response_model=JobInDB)
+async def create_job(job: JobCreate):
+    """
+    Create a new job posting
+    
+    Parameters:
+    - job: Job data including title, description, organization_id, etc.
+    
+    Returns:
+    - The created job data
+    """
+    try:
+        # Convert the job data to a JSON-serializable format
+        job_data = jsonable_encoder(job)
+        response = supabase.table('jobs').insert(job_data).execute()
+        
+        if not response.data:
+            raise HTTPException(status_code=500, detail="Failed to create job")
+            
+        return JobInDB(**response.data[0])
+        
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/v1/jobs/bulk", tags=["Jobs"])
+async def create_jobs_bulk(jobs: List[JobCreate]):
+    """
+    Create multiple job postings in bulk
+    
+    Parameters:
+    - jobs: List of job data objects
+    
+    Returns:
+    - The created jobs data
+    """
+    try:
+        # Convert all jobs to JSON-serializable dictionaries
+        jobs_data = [jsonable_encoder(job) for job in jobs]
+        
+        response = supabase.table('jobs').insert(jobs_data).execute()
+        
+        if not response.data:
+            raise HTTPException(status_code=500, detail="Failed to create jobs")
+            
+        return {
+            "message": f"Successfully created {len(response.data)} jobs",
+            "data": [JobInDB(**job) for job in response.data]
+        }
+        
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/v1/jobs/upsert", tags=["Jobs"], response_model=JobInDB)
+async def upsert_job(job: JobUpdate):
+    """
+    Create or update a job posting (upsert operation)
+    
+    Parameters:
+    - job: Job data including title, description, organization_id, etc.
+    
+    Returns:
+    - The created or updated job data
+    """
+    try:
+        # Convert the job data to a JSON-serializable format
+        job_data = jsonable_encoder(job)
+        response = supabase.table('jobs').upsert(job_data).execute()
+        
+        if not response.data:
+            raise HTTPException(status_code=500, detail="Failed to upsert job")
+            
+        return JobInDB(**response.data[0])
+        
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
         raise HTTPException(status_code=500, detail=str(e))
