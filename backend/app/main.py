@@ -22,9 +22,16 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 import time
 from slugify import slugify
+from supabase import create_client, Client
 
 # Load environment variables
 load_dotenv()
+
+# Initialize Supabase client
+supabase: Client = create_client(
+    os.getenv("SUPABASE_URL"),
+    os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+)
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -1136,3 +1143,14 @@ async def get_feedback(feedback_slug: str):
         content = f.read()
         
     return {"content": content}
+
+@app.get("/v1/jobs")
+async def list_jobs():
+    """
+    Fetch all jobs from Supabase database
+    """
+    try:
+        response = supabase.table('jobs').select("*").execute()
+        return response.data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
