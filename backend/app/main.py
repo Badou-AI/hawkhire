@@ -23,7 +23,7 @@ from functools import partial
 import time
 from slugify import slugify
 from supabase import create_client, Client
-from pydantic import BaseModel, Field, UUID4
+from pydantic import BaseModel, Field, UUID4, HttpUrl, constr
 from fastapi.encoders import jsonable_encoder
 
 # Load environment variables
@@ -1611,6 +1611,656 @@ async def upsert_job(job: JobUpdate):
             raise HTTPException(status_code=500, detail="Failed to upsert job")
             
         return JobInDB(**response.data[0])
+        
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Organization-related enums
+class OrganizationTier(str, Enum):
+    """Organization tier options"""
+    FREE = "FREE"
+    STARTER = "STARTER"
+    PROFESSIONAL = "PROFESSIONAL"
+    ENTERPRISE = "ENTERPRISE"
+    OTHER = "OTHER"
+
+class OrganizationIndustry(str, Enum):
+    """Industry options"""
+    TECHNOLOGY = "TECHNOLOGY"
+    HEALTHCARE = "HEALTHCARE"
+    FINANCE = "FINANCE"
+    EDUCATION = "EDUCATION"
+    RETAIL = "RETAIL"
+    MANUFACTURING = "MANUFACTURING"
+    ENERGY = "ENERGY"
+    TRANSPORTATION = "TRANSPORTATION"
+    CONSTRUCTION = "CONSTRUCTION"
+    AGRICULTURE = "AGRICULTURE"
+    OTHER = "OTHER"
+
+class OrganizationCompanyType(str, Enum):
+    """Company type options"""
+    STARTUP = "STARTUP"
+    SMB = "SMB"
+    ENTERPRISE = "ENTERPRISE"
+    NONPROFIT = "NONPROFIT"
+    GOVERNMENT = "GOVERNMENT"
+    EDUCATION = "EDUCATION"
+    OTHER = "OTHER"
+
+class OrganizationSizeRange(str, Enum):
+    """Company size range options"""
+    MICRO = "1-10"
+    SMALL = "11-50"
+    MEDIUM = "51-200"
+    LARGE = "201-1000"
+    XLARGE = "1001-5000"
+    ENTERPRISE = "5000+"
+
+class OrganizationVerificationStatus(str, Enum):
+    """Organization verification status options"""
+    PENDING = "PENDING"
+    VERIFIED = "VERIFIED"
+    REJECTED = "REJECTED"
+
+class OrganizationBase(BaseModel):
+    """Base model for organization data"""
+    name: LocalizedText = Field(..., description="Organization name in English and French")
+    description: LocalizedText = Field(..., description="Organization description in English and French")
+    tier: OrganizationTier = Field(
+        default=OrganizationTier.FREE,
+        description="Organization subscription tier"
+    )
+    industry: OrganizationIndustry = Field(
+        ...,
+        description="Primary industry of the organization"
+    )
+    company_type: OrganizationCompanyType = Field(
+        ...,
+        description="Type of company/organization"
+    )
+    founded_year: int = Field(
+        ...,
+        ge=1800,
+        le=datetime.now().year,
+        description="Year the organization was founded"
+    )
+    size_range: OrganizationSizeRange = Field(
+        ...,
+        description="Range of number of employees"
+    )
+    website_url: HttpUrl = Field(
+        ...,
+        description="Organization's website URL"
+    )
+    logo_url: str = Field(
+        default="/placeholders/organization-logo.png",
+        description="URL to organization's logo"
+    )
+    cover_image_url: Optional[str] = Field(
+        default="/placeholders/organization-cover.png",
+        description="URL to organization's cover image"
+    )
+    primary_location: LocalizedLocation = Field(
+        ...,
+        description="Primary location of the organization"
+    )
+    additional_locations: List[LocalizedLocation] = Field(
+        default=[],
+        description="Additional organization locations"
+    )
+    languages: List[str] = Field(
+        default=["en"],
+        min_items=1,
+        description="Languages supported by the organization"
+    )
+    verification_status: OrganizationVerificationStatus = Field(
+        default=OrganizationVerificationStatus.PENDING,
+        description="Organization verification status"
+    )
+    is_mock: bool = Field(
+        default=False,
+        description="Whether this is mock data"
+    )
+    mock_batch_id: Optional[UUID4] = Field(
+        None,
+        description="ID of the mock data batch"
+    )
+
+class OrganizationCreate(OrganizationBase):
+    """Model for creating a new organization"""
+    pass
+
+class OrganizationUpdate(OrganizationBase):
+    """Model for updating an organization"""
+    pass
+
+class OrganizationInDB(OrganizationBase):
+    """Model for organization data as stored in the database"""
+    id: UUID4
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+        json_encoders = {
+            UUID4: str,
+            datetime: lambda v: v.isoformat()
+        }
+
+class OrganizationList(BaseModel):
+    """Response model for organization listing"""
+    data: List[OrganizationInDB]
+    page: int
+    page_size: int
+    total: int
+
+@app.get("/v1/organizations", tags=["Organizations"], response_model=OrganizationList)
+async def list_organizations(
+    select: str = None,
+    page: int = Query(0, ge=0, description="Page number (0-based)"),
+    page_size: int = Query(10, ge=1, le=100, description="Number of items per page"),
+    id: Optional[UUID4] = None,
+    order: str = Query(None, description="Order by column (prefix with - for descending)")
+):
+    """
+    Fetch organizations from Supabase database with various query options
+    """
+    try:
+        query = supabase.table('organizations')
+        
+        # Handle column selection
+        if select:
+            columns = select.replace(" ", "").split(",")
+            query = query.select(",".join(columns))
+        else:
+            query = query.select("*")
+            
+        # Handle filtering
+        if id is not None:
+            query = query.eq('id', str(id))
+            
+        # Handle ordering
+        if order:
+            if order.startswith('-'):
+                query = query.order(order[1:], desc=True)
+            else:
+                query = query.order(order)
+                
+        # Get total count before pagination
+        count_response = query.execute()
+        total_count = len(count_response.data)
+                
+        # Handle pagination
+        start = page * page_size
+        end = start + page_size - 1
+        query = query.range(start, end)
+        
+        response = query.execute()
+        
+        # Transform the data to match the Pydantic model
+        transformed_data = []
+        for org in response.data:
+            try:
+                # Ensure enums are uppercase
+                org['tier'] = org.get('tier', 'FREE').upper()
+                org['verification_status'] = org.get('verification_status', 'PENDING').upper()
+                
+                # Handle industry field - it might be a stringified JSON
+                industry = org.get('industry')
+                if isinstance(industry, str):
+                    try:
+                        if industry.startswith('{'):
+                            # It's a stringified JSON, try to parse it
+                            industry = 'TECHNOLOGY' if 'TECHNOLOGY' in industry.upper() else 'OTHER'
+                        else:
+                            industry = industry.upper()
+                    except:
+                        industry = 'OTHER'
+                org['industry'] = industry
+                
+                # Handle company_type field - it might be a stringified JSON
+                company_type = org.get('company_type')
+                if isinstance(company_type, str):
+                    try:
+                        if company_type.startswith('{'):
+                            # It's a stringified JSON, try to parse it
+                            parsed = json.loads(company_type)
+                            company_type = parsed.get('en', '').upper()
+                            # Map common variations to enum values
+                            company_type_mapping = {
+                                'PRIVATE COMPANY': 'ENTERPRISE',
+                                'PUBLIC COMPANY': 'ENTERPRISE',
+                                'STARTUP COMPANY': 'STARTUP',
+                                'SMALL BUSINESS': 'SMB'
+                            }
+                            company_type = company_type_mapping.get(company_type, 'OTHER')
+                        else:
+                            company_type = company_type.upper()
+                    except:
+                        company_type = 'OTHER'
+                org['company_type'] = company_type
+                
+                # Handle size_range field - it might be a stringified JSON
+                size_range = org.get('size_range')
+                if isinstance(size_range, str):
+                    try:
+                        if size_range.startswith('{'):
+                            # It's a stringified JSON, try to parse it
+                            parsed = json.loads(size_range)
+                            size_range = parsed.get('en', '1-10')
+                        # Ensure it matches one of our enum values
+                        valid_ranges = ['1-10', '11-50', '51-200', '201-1000', '1001-5000', '5000+']
+                        if size_range not in valid_ranges:
+                            # Try to map to closest range
+                            if '1001-5000' in size_range:
+                                size_range = '1001-5000'
+                            elif '5000+' in size_range:
+                                size_range = '5000+'
+                            else:
+                                size_range = '1-10'  # Default
+                    except:
+                        size_range = '1-10'
+                org['size_range'] = size_range
+                
+                # Ensure logo_url has a default value
+                if org.get('logo_url') is None:
+                    org['logo_url'] = "/placeholders/organization-logo.png"
+                
+                # Ensure cover_image_url has a default value
+                if org.get('cover_image_url') is None:
+                    org['cover_image_url'] = "/placeholders/organization-cover.png"
+                
+                # Handle localized text fields
+                for field in ['name', 'description']:
+                    field_value = org.get(field)
+                    if isinstance(field_value, str):
+                        if field_value.startswith('{'):
+                            try:
+                                # Try to parse stringified JSON
+                                parsed = json.loads(field_value)
+                                org[field] = parsed
+                            except:
+                                org[field] = {'en': field_value, 'fr': field_value}
+                        else:
+                            org[field] = {'en': field_value, 'fr': field_value}
+                    elif not isinstance(field_value, dict):
+                        org[field] = {'en': '', 'fr': ''}
+                
+                # Handle location fields
+                primary_location = org.get('primary_location')
+                if isinstance(primary_location, str):
+                    try:
+                        # Try to parse stringified JSON
+                        org['primary_location'] = json.loads(primary_location)
+                    except:
+                        org['primary_location'] = {
+                            'city': {'en': '', 'fr': ''},
+                            'state': {'en': '', 'fr': ''},
+                            'country': {'en': '', 'fr': ''},
+                            'postal_code': {'en': '', 'fr': ''}
+                        }
+                elif not isinstance(primary_location, dict):
+                    org['primary_location'] = {
+                        'city': {'en': '', 'fr': ''},
+                        'state': {'en': '', 'fr': ''},
+                        'country': {'en': '', 'fr': ''},
+                        'postal_code': {'en': '', 'fr': ''}
+                    }
+                
+                # Handle additional_locations
+                additional_locations = org.get('additional_locations')
+                if isinstance(additional_locations, str):
+                    try:
+                        # Try to parse stringified JSON
+                        org['additional_locations'] = json.loads(additional_locations)
+                    except:
+                        org['additional_locations'] = []
+                elif not isinstance(additional_locations, list):
+                    org['additional_locations'] = []
+                
+                # Ensure languages is a list with at least one item
+                languages = org.get('languages')
+                if isinstance(languages, str):
+                    try:
+                        # Try to parse stringified JSON
+                        org['languages'] = json.loads(languages)
+                    except:
+                        org['languages'] = ['en']
+                elif not isinstance(languages, list) or not languages:
+                    org['languages'] = ['en']
+                
+                transformed_data.append(org)
+            except Exception as e:
+                print(f"Error transforming organization data: {str(e)}")
+                continue
+        
+        return OrganizationList(
+            data=[OrganizationInDB(**org) for org in transformed_data],
+            page=page,
+            page_size=page_size,
+            total=total_count
+        )
+        
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/v1/organizations/{org_id}", tags=["Organizations"])
+async def get_organization(org_id: UUID4, select: str = None):
+    """
+    Fetch a specific organization by ID with optional column selection
+    
+    Parameters:
+    - org_id: The ID of the organization to fetch (UUID)
+    - select: Comma-separated list of columns to return
+    """
+    try:
+        query = supabase.table('organizations')
+        
+        # Handle column selection
+        if select:
+            columns = select.replace(" ", "").split(",")
+            query = query.select(",".join(columns))
+        else:
+            query = query.select("*")
+            
+        response = query.eq('id', str(org_id)).execute()  # Convert UUID to string for Supabase query
+        
+        if not response.data:
+            raise HTTPException(status_code=404, detail=f"Organization with ID {org_id} not found")
+            
+        return response.data[0]
+        
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/v1/organizations/with/{related_table}", tags=["Organizations"])
+async def get_organizations_with_related(
+    related_table: str,
+    select: str = None,
+    page: int = 0,
+    page_size: int = 10,
+    order: str = None
+):
+    """
+    Fetch organizations with related table data
+    
+    Parameters:
+    - related_table: Name of the related table to include
+    - select: Comma-separated list of columns to return
+    - page: Page number (0-based)
+    - page_size: Number of items per page
+    - order: Order by column (prefix with - for descending)
+    """
+    try:
+        # Validate related table name to prevent injection
+        allowed_tables = ['jobs', 'applications', 'categories']  # Add your actual related tables
+        if related_table not in allowed_tables:
+            raise HTTPException(status_code=400, detail=f"Invalid related table. Allowed tables: {', '.join(allowed_tables)}")
+        
+        query = supabase.table('organizations')
+        
+        # Build the select statement
+        if select:
+            base_columns = select.replace(" ", "").split(",")
+        else:
+            base_columns = ["*"]
+            
+        # Add the related table to the selection
+        select_statement = f"{','.join(base_columns)},{related_table}(*)"
+        query = query.select(select_statement)
+        
+        # Handle ordering
+        if order:
+            if order.startswith('-'):
+                query = query.order(order[1:], desc=True)
+            else:
+                query = query.order(order)
+                
+        # Handle pagination
+        start = page * page_size
+        end = start + page_size - 1
+        query = query.range(start, end)
+        
+        response = query.execute()
+        
+        return {
+            "data": response.data,
+            "page": page,
+            "page_size": page_size,
+            "total": len(response.data)  # Note: This is page total, not overall total
+        }
+        
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/v1/organizations/search", tags=["Organizations"])
+async def search_organizations(
+    query: str = None,
+    category: str = None,
+    location: str = None,
+    min_size: int = None,
+    max_size: int = None,
+    industry: str = None,
+    page: int = 0,
+    page_size: int = 10,
+    order: str = None
+):
+    """
+    Search organizations with multiple filter criteria
+    
+    Parameters:
+    - query: Search term for organization name or description
+    - category: Organization category
+    - location: Organization location
+    - min_size: Minimum number of employees
+    - max_size: Maximum number of employees
+    - industry: Primary industry of the organization
+    - page: Page number (0-based)
+    - page_size: Number of items per page
+    - order: Order by column (prefix with - for descending)
+    """
+    try:
+        db_query = supabase.table('organizations').select("*")
+        
+        # Apply filters
+        if query:
+            db_query = db_query.or_(f"name.ilike.%{query}%,description.ilike.%{query}%")
+        if category:
+            db_query = db_query.eq('industry', category)
+        if location:
+            db_query = db_query.ilike('location', f'%{location}%')
+        if min_size is not None:
+            db_query = db_query.gte('size_range', min_size)
+        if max_size is not None:
+            db_query = db_query.lte('size_range', max_size)
+        if industry:
+            db_query = db_query.eq('industry', industry)
+            
+        # Handle ordering
+        if order:
+            if order.startswith('-'):
+                db_query = db_query.order(order[1:], desc=True)
+            else:
+                db_query = db_query.order(order)
+                
+        # Handle pagination
+        start = page * page_size
+        end = start + page_size - 1
+        db_query = db_query.range(start, end)
+        
+        response = db_query.execute()
+        
+        return {
+            "data": response.data,
+            "page": page,
+            "page_size": page_size,
+            "total": len(response.data),  # Note: This is page total, not overall total
+            "filters_applied": {
+                "query": query,
+                "category": category,
+                "location": location,
+                "min_size": min_size,
+                "max_size": max_size,
+                "industry": industry
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/v1/organizations", tags=["Organizations"], response_model=OrganizationInDB)
+async def create_organization(org: OrganizationCreate):
+    """
+    Create a new organization posting
+    
+    Parameters:
+    - org: Organization data including name, description, etc.
+    
+    Returns:
+    - The created organization data
+    """
+    try:
+        # Convert the organization data to a JSON-serializable format
+        org_data = jsonable_encoder(org)
+        response = supabase.table('organizations').insert(org_data).execute()
+        
+        if not response.data:
+            raise HTTPException(status_code=500, detail="Failed to create organization")
+            
+        return OrganizationInDB(**response.data[0])
+        
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/v1/organizations/bulk", tags=["Organizations"])
+async def create_organizations_bulk(orgs: List[OrganizationCreate]):
+    """
+    Create multiple organization postings in bulk
+    
+    Parameters:
+    - orgs: List of organization data objects
+    
+    Returns:
+    - The created organizations data
+    """
+    try:
+        # Convert all organizations to JSON-serializable dictionaries
+        orgs_data = [jsonable_encoder(org) for org in orgs]
+        
+        response = supabase.table('organizations').insert(orgs_data).execute()
+        
+        if not response.data:
+            raise HTTPException(status_code=500, detail="Failed to create organizations")
+            
+        return {
+            "message": f"Successfully created {len(response.data)} organizations",
+            "data": [OrganizationInDB(**org) for org in response.data]
+        }
+        
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/v1/organizations/upsert", tags=["Organizations"], response_model=OrganizationInDB)
+async def upsert_organization(org: OrganizationUpdate):
+    """
+    Create or update an organization posting (upsert operation)
+    
+    Parameters:
+    - org: Organization data including name, description, etc.
+    
+    Returns:
+    - The created or updated organization data
+    """
+    try:
+        # Convert the organization data to a JSON-serializable format
+        org_data = jsonable_encoder(org)
+        response = supabase.table('organizations').upsert(org_data).execute()
+        
+        if not response.data:
+            raise HTTPException(status_code=500, detail="Failed to upsert organization")
+            
+        return OrganizationInDB(**response.data[0])
+        
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.patch("/v1/organizations/{org_id}", tags=["Organizations"], response_model=OrganizationInDB)
+async def update_organization(
+    org_id: UUID4,
+    org_update: OrganizationUpdate
+):
+    """
+    Update an existing organization
+    
+    Parameters:
+    - org_id: The ID of the organization to update
+    - org_update: The updated organization data
+    
+    Returns:
+    - The updated organization data
+    """
+    try:
+        # Check if organization exists
+        check_response = supabase.table('organizations').select("id").eq('id', str(org_id)).execute()
+        if not check_response.data:
+            raise HTTPException(status_code=404, detail=f"Organization with ID {org_id} not found")
+        
+        # Convert the organization data to a JSON-serializable format
+        update_data = jsonable_encoder(org_update)
+        response = supabase.table('organizations').update(update_data).eq('id', str(org_id)).execute()
+        
+        if not response.data:
+            raise HTTPException(status_code=500, detail="Failed to update organization")
+            
+        return OrganizationInDB(**response.data[0])
+        
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/v1/organizations/{org_id}", tags=["Organizations"])
+async def delete_organization(org_id: UUID4):
+    """
+    Delete an organization
+    
+    Parameters:
+    - org_id: The ID of the organization to delete
+    
+    Returns:
+    - Success message
+    """
+    try:
+        # Check if organization exists
+        check_response = supabase.table('organizations').select("id").eq('id', str(org_id)).execute()
+        if not check_response.data:
+            raise HTTPException(status_code=404, detail=f"Organization with ID {org_id} not found")
+        
+        # Delete the organization
+        response = supabase.table('organizations').delete().eq('id', str(org_id)).execute()
+        
+        if not response.data:
+            raise HTTPException(status_code=500, detail="Failed to delete organization")
+            
+        return {
+            "message": "Organization deleted successfully",
+            "id": org_id
+        }
         
     except Exception as e:
         if isinstance(e, HTTPException):
