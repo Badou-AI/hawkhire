@@ -2121,17 +2121,30 @@ async def search_organizations(
 async def create_organization(org: OrganizationCreate):
     """
     Create a new organization posting
-    
-    Parameters:
-    - org: Organization data including name, description, etc.
-    
-    Returns:
-    - The created organization data
     """
     try:
         # Convert the organization data to a JSON-serializable format
         org_data = jsonable_encoder(org)
-        response = supabase.table('organizations').insert(org_data).execute()
+        
+        # Transform the data to match existing format
+        transformed_data = {
+            **org_data,
+            # Convert company_type to localized format
+            'company_type': {
+                'en': org_data['company_type'],
+                'fr': org_data['company_type']
+            },
+            # Convert size_range to localized format
+            'size_range': {
+                'en': org_data['size_range'],
+                'fr': org_data['size_range']
+            },
+            # Set NULL for empty logo/cover
+            'logo_url': org_data.get('logo_url') if org_data.get('logo_url') != "/placeholders/organization-logo.png" else None,
+            'cover_image_url': org_data.get('cover_image_url') if org_data.get('cover_image_url') != "/placeholders/organization-cover.png" else None,
+        }
+        
+        response = supabase.table('organizations').insert(transformed_data).execute()
         
         if not response.data:
             raise HTTPException(status_code=500, detail="Failed to create organization")
@@ -2147,16 +2160,29 @@ async def create_organization(org: OrganizationCreate):
 async def create_organizations_bulk(orgs: List[OrganizationCreate]):
     """
     Create multiple organization postings in bulk
-    
-    Parameters:
-    - orgs: List of organization data objects
-    
-    Returns:
-    - The created organizations data
     """
     try:
-        # Convert all organizations to JSON-serializable dictionaries
-        orgs_data = [jsonable_encoder(org) for org in orgs]
+        # Convert all organizations to JSON-serializable dictionaries and transform them
+        orgs_data = []
+        for org in orgs:
+            org_data = jsonable_encoder(org)
+            transformed_data = {
+                **org_data,
+                # Convert company_type to localized format
+                'company_type': {
+                    'en': org_data['company_type'],
+                    'fr': org_data['company_type']
+                },
+                # Convert size_range to localized format
+                'size_range': {
+                    'en': org_data['size_range'],
+                    'fr': org_data['size_range']
+                },
+                # Set NULL for empty logo/cover
+                'logo_url': org_data.get('logo_url') if org_data.get('logo_url') != "/placeholders/organization-logo.png" else None,
+                'cover_image_url': org_data.get('cover_image_url') if org_data.get('cover_image_url') != "/placeholders/organization-cover.png" else None,
+            }
+            orgs_data.append(transformed_data)
         
         response = supabase.table('organizations').insert(orgs_data).execute()
         
