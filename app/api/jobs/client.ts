@@ -43,9 +43,6 @@ export interface JobsApiResponse {
   total: number
 }
 
-// API URL from environment variable
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8080'
-
 // Helper function to map backend job response to frontend Job type
 export function mapBackendJobToFrontend(backendJob: BackendJob): Job {
   // Format salary string
@@ -76,35 +73,74 @@ export function mapBackendJobToFrontend(backendJob: BackendJob): Job {
 
 // API Client functions
 export async function getJobs(page = 0, pageSize = 10) {
-  const response = await fetch(`/api/jobs?page=${page}&page_size=${pageSize}`)
-  if (!response.ok) {
-    throw new Error('Failed to fetch jobs')
-  }
-  const data: JobsApiResponse = await response.json()
-  return {
-    ...data,
-    data: data.data.map(mapBackendJobToFrontend)
+  try {
+    const response = await fetch(`/api/jobs?page=${page}&page_size=${pageSize}`, {
+      method: 'GET',
+      headers: {
+        'accept': 'application/json'
+      }
+    })
+    if (!response.ok) {
+      throw new Error('Failed to fetch jobs')
+    }
+    const data: JobsApiResponse = await response.json()
+    return {
+      ...data,
+      data: data.data.map(mapBackendJobToFrontend)
+    }
+  } catch (error) {
+    console.error('Error fetching jobs:', error)
+    throw error
   }
 }
 
 export async function getJob(id: string) {
-  const response = await fetch(`/api/jobs?id=${id}`)
-  if (!response.ok) {
-    if (response.status === 404) {
-      return null
+  if (!id) throw new Error('Job ID is required')
+  
+  try {
+    // Get the window origin or fallback to localhost if running on server
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:3000'
+    const response = await fetch(`${origin}/api/jobs?id=${encodeURIComponent(id)}`, {
+      method: 'GET',
+      headers: {
+        'accept': 'application/json'
+      },
+      cache: 'no-store'
+    })
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null
+      }
+      throw new Error(`Failed to fetch job: ${response.statusText}`)
     }
-    throw new Error('Failed to fetch job')
+    
+    const data: BackendJob = await response.json()
+    return mapBackendJobToFrontend(data)
+  } catch (error) {
+    console.error(`Error fetching job ${id}:`, error)
+    throw error
   }
-  const data: BackendJob = await response.json()
-  return mapBackendJobToFrontend(data)
 }
 
 export async function getSimilarJobs(jobId: string, limit = 4) {
-  // TODO: Implement actual similar jobs endpoint when available
-  const response = await fetch(`/api/jobs?page=0&page_size=${limit}`)
-  if (!response.ok) {
-    throw new Error('Failed to fetch similar jobs')
+  try {
+    const response = await fetch(`http://127.0.0.1:${process.env.PORT || 3000}/api/jobs?page=0&page_size=${limit}`, {
+      method: 'GET',
+      headers: {
+        'accept': 'application/json'
+      },
+      cache: 'no-store'
+    })
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch similar jobs')
+    }
+    
+    const data: JobsApiResponse = await response.json()
+    return data.data.map(mapBackendJobToFrontend)
+  } catch (error) {
+    console.error('Error fetching similar jobs:', error)
+    throw error
   }
-  const data: JobsApiResponse = await response.json()
-  return data.data.map(mapBackendJobToFrontend)
 } 

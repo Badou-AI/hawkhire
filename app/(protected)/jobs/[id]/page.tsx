@@ -3,25 +3,27 @@ import { Button } from '@/components/ui/button'
 import Image from 'next/image'
 import { Share2, BookmarkIcon } from 'lucide-react'
 import { getJob, getSimilarJobs } from '@/app/api/jobs/client'
-import { jobIdSchema } from '@/app/api/jobs/validations'
 import { type Job } from '@/types/job'
 
 interface PageProps {
-  params: Promise<{
+  params: {
     id: string;
-  }>;
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+  };
 }
 
 export default async function JobPage({ params }: PageProps) {
-  const resolvedParams = jobIdSchema.parse(params)
+  // Ensure params.id exists before using it
+  if (!params?.id) {
+    notFound()
+  }
 
-  const job = await getJob(resolvedParams.id)
+  
+  const job = await getJob(params.id)
   if (!job) {
     notFound()
   }
 
-  const similarJobs = await getSimilarJobs(resolvedParams.id)
+  const similarJobs = await getSimilarJobs(params.id)
 
   return (
     <div className="container mx-auto px-4 py-8">
