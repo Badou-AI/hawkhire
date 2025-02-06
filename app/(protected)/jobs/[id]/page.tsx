@@ -1,8 +1,8 @@
-import { mockJobs } from '@/lib/data/mock-jobs'
 import { notFound } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import Image from 'next/image'
 import { Share2, BookmarkIcon } from 'lucide-react'
+import { mapBackendJobToFrontend } from '@/lib/data/mock-jobs'
 
 interface PageProps {
   params: Promise<{
@@ -15,11 +15,23 @@ export default async function JobPage({
   params,
 }: PageProps) {
   const resolvedParams = await params
-  const job = mockJobs.find(j => j.id === resolvedParams.id)
   
-  if (!job) {
-    notFound()
+  // Fetch job from backend API
+  const response = await fetch(`http://127.0.0.1:8080/v1/jobs/${resolvedParams.id}`)
+  if (!response.ok) {
+    if (response.status === 404) {
+      notFound()
+    }
+    throw new Error('Failed to fetch job')
   }
+  
+  const backendJob = await response.json()
+  const job = mapBackendJobToFrontend(backendJob)
+
+  // Fetch similar jobs
+  const similarResponse = await fetch('http://127.0.0.1:8080/v1/jobs?page=0&page_size=4')
+  const similarData = await similarResponse.json()
+  const similarJobs = similarData.data.map(mapBackendJobToFrontend)
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -114,7 +126,7 @@ export default async function JobPage({
           <div className="rounded-lg bg-white p-6 shadow-sm">
             <h3 className="text-lg font-medium">Similar jobs</h3>
             <div className="mt-4 space-y-4">
-              {mockJobs.slice(0, 4).map((similarJob) => (
+              {similarJobs.map((similarJob) => (
                 <div key={similarJob.id} className="flex gap-4">
                   <div className="h-12 w-12 flex-shrink-0">
                     <Image
