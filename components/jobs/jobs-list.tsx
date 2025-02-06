@@ -6,42 +6,32 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { type Job } from '@/types/job'
-import { mapBackendJobToFrontend } from '@/lib/data/mock-jobs'
+import { getJobs } from '@/app/api/jobs/client'
 
 export function JobsList() {
   const [jobs, setJobs] = useState<Job[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function fetchJobs() {
       try {
-        const response = await fetch('http://127.0.0.1:8080/v1/jobs?page=0&page_size=10')
-        if (!response.ok) {
-          throw new Error('Failed to fetch jobs')
-        }
-        const data = await response.json()
-        const mappedJobs = data.data.map(mapBackendJobToFrontend)
-        setJobs(mappedJobs)
+        const response = await getJobs(0, 10)
+        setJobs(response.data)
         setError(null)
       } catch (err) {
+        setError('Failed to fetch jobs. Please try again later.')
         console.error('Error fetching jobs:', err)
-        setError('Failed to load jobs. Please try again later.')
       } finally {
-        setIsLoading(false)
+        setLoading(false)
       }
     }
 
     fetchJobs()
   }, [])
 
-  if (isLoading) {
-    return <div>Loading jobs...</div>
-  }
-
-  if (error) {
-    return <div className="text-red-500">{error}</div>
-  }
+  if (loading) return <div className="text-center py-4">Loading jobs...</div>
+  if (error) return <div className="text-center text-red-500 py-4">{error}</div>
 
   return (
     <div className="space-y-6">
