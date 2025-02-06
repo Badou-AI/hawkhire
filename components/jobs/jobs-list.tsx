@@ -22,7 +22,7 @@ interface DisplayJob {
 }
 
 export function JobsList() {
-  const [currentPage, setCurrentPage] = useState(0)
+  const [currentPage, setCurrentPage] = useState(1)
   const [totalJobs, setTotalJobs] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -32,7 +32,7 @@ export function JobsList() {
   useEffect(() => {
     async function fetchJobs() {
       try {
-        const response: JobsResponse = await getJobs(currentPage, pageSize)
+        const response: JobsResponse = await getJobs(currentPage - 1, pageSize)
         setJobs(response.data.map((job: ApiJob) => ({
           id: job.id,
           title: job.title.en,
@@ -48,12 +48,12 @@ export function JobsList() {
           postedAt: job.created_at,
           skills: job.skills || [],
           remote: job.remote,
-          industry: job.organizations?.industry.toLowerCase().replace('_', ' ')
+          industry: job.organizations?.industry || 'Technology'
         })))
         setTotalJobs(response.total)
         setError(null)
       } catch (err) {
-        setError('Failed to fetch jobs. Please try again later.')
+        setError('Failed to fetch jobs')
         console.error('Error fetching jobs:', err)
       } finally {
         setLoading(false)
@@ -61,39 +61,38 @@ export function JobsList() {
     }
 
     fetchJobs()
-  }, [currentPage, pageSize])
+  }, [currentPage])
 
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page)
-    setLoading(true)
-  }
-
-  if (loading) {
-    return <div className="flex justify-center items-center h-96">
-      <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
-    </div>
-  }
+  const totalPages = Math.ceil(totalJobs / pageSize)
 
   if (error) {
-    return <div className="text-red-500 text-center p-4">{error}</div>
+    return <div className="text-red-500">{error}</div>
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {jobs.map((job) => (
-          <JobCard key={job.id} job={job} />
-        ))}
+        {loading ? (
+          <div className="col-span-full flex justify-center items-center h-96">
+            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
+          </div>
+        ) : jobs.length > 0 ? (
+          jobs.map((job) => (
+            <JobCard key={job.id} job={job} />
+          ))
+        ) : (
+          <div className="col-span-full text-center text-gray-500">
+            No jobs found
+          </div>
+        )}
       </div>
-      
-      {totalJobs > pageSize && (
-        <div className="flex justify-center mt-8">
-          <Pagination
-            currentPage={currentPage}
-            totalPages={Math.ceil(totalJobs / pageSize)}
-            onPageChange={handlePageChange}
-          />
-        </div>
+      {totalPages > 1 && (
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          className="justify-center"
+        />
       )}
     </div>
   )

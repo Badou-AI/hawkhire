@@ -1441,6 +1441,10 @@ async def get_jobs_with_related(
             else:
                 query = query.order(order)
                 
+        # Get total count before pagination
+        count_response = query.execute()
+        total_count = len(count_response.data)
+                
         # Handle pagination
         start = page * page_size
         end = start + page_size - 1
@@ -1452,7 +1456,7 @@ async def get_jobs_with_related(
             "data": response.data,
             "page": page,
             "page_size": page_size,
-            "total": len(response.data)  # Note: This is page total, not overall total
+            "total": total_count  # Now returns total count of all matching jobs
         }
         
     except Exception as e:

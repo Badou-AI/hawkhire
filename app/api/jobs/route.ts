@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-const API_URL = process.env.API_URL || 'http://127.0.0.1:8080'
+const API_URL = 'http://127.0.0.1:8080'
 
 export async function GET(request: Request) {
     console.log('request', request);
@@ -8,12 +8,12 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     console.log('searchParams', searchParams);
     // Check if we're fetching a single job
-    const jobId = await searchParams.get('id')
+    const jobId = searchParams.get('id')
     if (jobId) {
       const response = await fetch(`${API_URL}/v1/jobs/${jobId}`, {
         method: 'GET',
         headers: {
-          'accept': 'application/json'
+          'Content-Type': 'application/json'
         },
         cache: 'no-store'
       })
@@ -34,21 +34,20 @@ export async function GET(request: Request) {
 
     // Otherwise, fetch job list
     const page = searchParams.get('page') || '0'
-    const pageSize = searchParams.get('page_size') || '20'
+    const pageSize = searchParams.get('page_size') || '15'
 
     const response = await fetch(
-      `${API_URL}/v1/jobs?page=${page}&page_size=${pageSize}`,
+      `${API_URL}/v1/jobs/with/organizations?page=${page}&page_size=${pageSize}`,
       {
         method: 'GET',
         headers: {
-          'accept': 'application/json'
+          'Content-Type': 'application/json',
         },
-        cache: 'no-store'
       }
     )
 
     if (!response.ok) {
-      throw new Error(`Backend responded with ${response.status}`)
+      throw new Error('Failed to fetch jobs')
     }
 
     const data = await response.json()
@@ -56,7 +55,7 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error('Error in jobs API route:', error)
     return NextResponse.json(
-      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Failed to fetch jobs' },
       { status: 500 }
     )
   }

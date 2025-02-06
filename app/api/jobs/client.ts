@@ -137,7 +137,7 @@ export async function getJob(id: string): Promise<Job | null> {
     const response = await fetch(`http://127.0.0.1:8080/v1/jobs/${encodeURIComponent(id)}`, {
       method: 'GET',
       headers: {
-        'accept': 'application/json'
+        'Content-Type': 'application/json'
       },
       cache: 'no-store'
     })
@@ -162,7 +162,7 @@ export async function getSimilarJobs(jobId: string, limit = 4) {
     const response = await fetch(`http://127.0.0.1:8080/v1/jobs?page=0&page_size=${limit}`, {
       method: 'GET',
       headers: {
-        'accept': 'application/json'
+        'Content-Type': 'application/json'
       },
       cache: 'no-store'
     })
