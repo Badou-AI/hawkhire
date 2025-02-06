@@ -34,7 +34,7 @@ export async function GET(request: Request) {
 
     // Otherwise, fetch job list
     const page = searchParams.get('page') || '0'
-    const pageSize = searchParams.get('page_size') || '10'
+    const pageSize = searchParams.get('page_size') || '20'
 
     const response = await fetch(
       `${API_URL}/v1/jobs?page=${page}&page_size=${pageSize}`,

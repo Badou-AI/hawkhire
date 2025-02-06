@@ -16,7 +16,7 @@ export function JobsList() {
   useEffect(() => {
     async function fetchJobs() {
       try {
-        const response = await getJobs(0, 10)
+        const response = await getJobs(0)
         setJobs(response.data)
         setError(null)
       } catch (err) {

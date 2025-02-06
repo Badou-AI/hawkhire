@@ -1309,7 +1309,7 @@ class JobList(BaseModel):
 async def list_jobs(
     select: str = None,
     page: int = Query(0, ge=0, description="Page number (0-based)"),
-    page_size: int = Query(10, ge=1, le=100, description="Number of items per page"),
+    page_size: int = Query(20, ge=1, le=100, description="Number of items per page"),
     id: Optional[UUID4] = None,
     order: str = Query(None, description="Order by column (prefix with - for descending)")
 ):
