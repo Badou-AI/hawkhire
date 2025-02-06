@@ -148,14 +148,6 @@ export default function MatchesPage() {
   // Function to handle page changes
   const handlePageChange = (page: number) => {
     setCurrentPage(page)
-    // Find the scrollable content area that contains the candidate data
-    const scrollableContent = document.querySelector('.min-h-0.flex-1.flex.flex-col > .flex-1.overflow-y-auto')
-    if (scrollableContent) {
-      scrollableContent.scrollTo({
-        top: 0,
-        behavior: 'smooth'
-      })
-    }
   }
 
   const renderCandidateCard = (candidate: typeof candidateMatches[0]) => {
@@ -711,6 +703,7 @@ export default function MatchesPage() {
                 currentPage={currentPage}
                 totalPages={totalPages}
                 onPageChange={handlePageChange}
+                scrollToSelector=".min-h-0.flex-1.flex.flex-col > .flex-1.overflow-y-auto"
                 className="mt-0"
               />
             )}

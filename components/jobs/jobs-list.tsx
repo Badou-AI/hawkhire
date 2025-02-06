@@ -37,10 +37,6 @@ export function JobsList() {
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page - 1) // Convert 1-based to 0-based pagination
-    window.scrollTo({
-      top: 0,
-      behavior: 'smooth'
-    })
   }
 
   if (loading) return <div className="text-center py-4">Loading jobs...</div>

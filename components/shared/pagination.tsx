@@ -12,6 +12,18 @@ interface PaginationProps {
 }
 
 export function Pagination({ currentPage, totalPages, onPageChange, className }: PaginationProps) {
+  const handlePageChange = (page: number) => {
+    onPageChange(page)
+    // Find the scrollable content area
+    const scrollableContent = document.querySelector('.min-h-0.flex-1.flex.flex-col > .flex-1.overflow-y-auto')
+    if (scrollableContent) {
+      scrollableContent.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      })
+    }
+  }
+
   const getPageNumbers = () => {
     const pageNumbers = []
     const maxVisiblePages = 5
@@ -50,7 +62,7 @@ export function Pagination({ currentPage, totalPages, onPageChange, className }:
       <Button
         variant="outline"
         size="icon"
-        onClick={() => currentPage > 1 && onPageChange(currentPage - 1)}
+        onClick={() => currentPage > 1 && handlePageChange(currentPage - 1)}
         disabled={currentPage === 1}
       >
         <ChevronLeft className="h-4 w-4" />
@@ -62,7 +74,7 @@ export function Pagination({ currentPage, totalPages, onPageChange, className }:
           variant={currentPage === pageNumber ? "default" : "outline"}
           size="icon"
           className="w-10"
-          onClick={() => typeof pageNumber === 'number' && onPageChange(pageNumber)}
+          onClick={() => typeof pageNumber === 'number' && handlePageChange(pageNumber)}
           disabled={typeof pageNumber !== 'number'}
         >
           {pageNumber}
@@ -72,7 +84,7 @@ export function Pagination({ currentPage, totalPages, onPageChange, className }:
       <Button
         variant="outline"
         size="icon"
-        onClick={() => currentPage < totalPages && onPageChange(currentPage + 1)}
+        onClick={() => currentPage < totalPages && handlePageChange(currentPage + 1)}
         disabled={currentPage === totalPages}
       >
         <ChevronRight className="h-4 w-4" />
