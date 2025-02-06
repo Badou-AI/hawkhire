@@ -13,34 +13,57 @@ export interface LocalizedLocation {
   postal_code: LocalizedText
 }
 
-export interface BackendJob {
+export interface Organization {
   id: string
-  organization_id: string
-  title: LocalizedText
+  name: LocalizedText
+  logo_url: string
+  industry: string
+  tier: string
+  is_mock: boolean
+  languages: string[]
+  created_at: string
+  size_range: string
+  updated_at: string
   description: LocalizedText
+  website_url: string
+  company_type: string
+  founded_year: number
+  mock_batch_id: string | null
+  cover_image_url: string
+  primary_location: LocalizedLocation
+  verification_status: string
+  additional_locations: LocalizedLocation[]
+}
+
+export interface ApiJob {
+  id: string
+  title: LocalizedText
+  organizations: Organization
+  location: LocalizedLocation
+  job_type: string
+  rating: number | null
+  description: LocalizedText
+  salary_min: number | null
+  salary_max: number | null
+  salary_currency: string
+  created_at: string
+  updated_at: string
+  skills: string[]
+  remote: boolean
+  is_mock: boolean
+  mock_batch_id: string | null
+  status: string
   requirements: {
     en: string[]
     fr: string[]
   }
-  skills: string[]
-  status: string
-  location: LocalizedLocation
-  job_type: string
-  salary_min: number
-  salary_max: number
-  salary_currency: string
-  remote: boolean
-  rating: number | null
-  is_mock: boolean
-  created_at: string
-  updated_at: string
 }
 
-export interface JobsApiResponse {
-  data: BackendJob[]
+export interface JobsResponse {
+  data: ApiJob[]
+  total: number
   page: number
   page_size: number
-  total: number
 }
 
 // Helper function to map backend job response to frontend Job type
@@ -57,13 +80,13 @@ export function mapBackendJobToFrontend(backendJob: BackendJob): Job {
 
   return {
     id: backendJob.id,
-    title: backendJob.title.en,
-    company: 'Company Name', // TODO: Add organization name from organizations table
+    title: backendJob.title,
+    company: backendJob.organizations?.[0]?.name || 'Company Name',
     location: location,
     type: backendJob.job_type.replace('_', ' ').toLowerCase(),
     rating: backendJob.rating || 4.5,
-    logo: '/company-logos/placeholder.png', // TODO: Add organization logo from organizations table
-    description: backendJob.description.en,
+    logo: backendJob.organizations?.[0]?.logo_url || '/company-logos/placeholder.png',
+    description: backendJob.description,
     salary: salaryString,
     postedAt: backendJob.created_at,
     skills: backendJob.skills || [],
@@ -72,22 +95,23 @@ export function mapBackendJobToFrontend(backendJob: BackendJob): Job {
 }
 
 // API Client functions
-export async function getJobs(page = 0, pageSize = 15) {
+export async function getJobs(page: number = 0, pageSize: number = 15): Promise<JobsResponse> {
   try {
-    const response = await fetch(`http://127.0.0.1:8080/v1/jobs?page=${page}&page_size=${pageSize}`, {
-      method: 'GET',
-      headers: {
-        'accept': 'application/json'
+    const response = await fetch(
+      `http://127.0.0.1:8080/v1/jobs/with/organizations?page=${page}&page_size=${pageSize}`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
       }
-    })
+    )
+
     if (!response.ok) {
       throw new Error('Failed to fetch jobs')
     }
-    const data: JobsApiResponse = await response.json()
-    return {
-      ...data,
-      data: data.data.map(mapBackendJobToFrontend)
-    }
+
+    return await response.json()
   } catch (error) {
     console.error('Error fetching jobs:', error)
     throw error

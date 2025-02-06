@@ -5,23 +5,54 @@ import { Button } from '@/components/ui/button'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
-import { type Job } from '@/types/job'
-import { getJobs } from '@/app/api/jobs/client'
+import { getJobs, type ApiJob, type JobsResponse } from '@/app/api/jobs/client'
 import { Pagination } from '@/components/shared/pagination'
 
+interface DisplayJob {
+  id: string
+  title: string
+  company: string
+  location: string
+  type: string
+  rating: number
+  logo: string
+  description: string
+  salary: string
+  postedAt: string
+  skills: string[]
+  remote: boolean
+  industry: string
+}
+
 export function JobsList() {
-  const [jobs, setJobs] = useState<Job[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(0)
   const [totalJobs, setTotalJobs] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [jobs, setJobs] = useState<DisplayJob[]>([])
   const pageSize = 15
 
   useEffect(() => {
     async function fetchJobs() {
       try {
-        const response = await getJobs(currentPage)
-        setJobs(response.data)
+        const response: JobsResponse = await getJobs(currentPage)
+        setJobs(response.data.map((job: ApiJob) => ({
+          id: job.id,
+          title: job.title.en,
+          company: job.organizations.name.en,
+          location: `${job.location.city.en}, ${job.location.state.en}`,
+          type: job.job_type.replace('_', ' ').toLowerCase(),
+          rating: job.rating || 4.5,
+          logo: job.organizations.logo_url || '/company-logos/placeholder.png',
+          description: job.description.en,
+          salary: job.salary_min && job.salary_max 
+            ? `$${job.salary_min/1000}k - $${job.salary_max/1000}k ${job.salary_currency}`
+            : 'Competitive',
+          postedAt: job.created_at,
+          skills: job.skills || [],
+          remote: job.remote,
+          industry: job.organizations.industry.toLowerCase().replace('_', ' ')
+        })))
         setTotalJobs(response.total)
         setError(null)
       } catch (err) {
@@ -78,7 +109,7 @@ export function JobsList() {
                     <div>
                       <h3 className="text-sm font-medium">{job.company}</h3>
                       <p className="mt-1 text-sm text-gray-600">
-                        IT & Software, Service
+                        {job.industry}
                       </p>
                     </div>
                   </div>

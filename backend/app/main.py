@@ -1418,7 +1418,7 @@ async def get_jobs_with_related(
     """
     try:
         # Validate related table name to prevent injection
-        allowed_tables = ['companies', 'applications', 'categories']  # Add your actual related tables
+        allowed_tables = ['organizations', 'applications', 'categories']  # Add your actual related tables
         if related_table not in allowed_tables:
             raise HTTPException(status_code=400, detail=f"Invalid related table. Allowed tables: {', '.join(allowed_tables)}")
         
