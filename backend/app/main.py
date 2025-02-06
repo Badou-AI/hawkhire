@@ -1513,15 +1513,19 @@ async def search_jobs(
         # Handle pagination
         start = page * page_size
         end = start + page_size - 1
-        db_query = db_query.range(start, end)
         
+        # Get total count before pagination
+        total_count = len(db_query.execute().data)
+        
+        # Apply pagination
+        db_query = db_query.range(start, end)
         response = db_query.execute()
         
         return {
             "data": response.data,
             "page": page,
             "page_size": page_size,
-            "total": len(response.data),  # Note: This is page total, not overall total
+            "total": total_count,  # Now returns total count of all matching jobs
             "filters_applied": {
                 "query": query,
                 "category": category,
@@ -2095,9 +2099,9 @@ async def search_organizations(
         # Handle pagination
         start = page * page_size
         end = start + page_size - 1
-        db_query = db_query.range(start, end)
+        query = query.range(start, end)
         
-        response = db_query.execute()
+        response = query.execute()
         
         return {
             "data": response.data,

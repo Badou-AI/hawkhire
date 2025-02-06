@@ -1,5 +1,3 @@
-import { type Job } from '@/types/job'
-
 // Types
 export interface LocalizedText {
   en: string
@@ -39,7 +37,10 @@ export interface ApiJob {
   id: string
   title: LocalizedText
   organizations: Organization
-  location: LocalizedLocation
+  location: {
+    city: LocalizedText
+    state: LocalizedText
+  }
   job_type: string
   rating: number | null
   description: LocalizedText
@@ -61,32 +62,43 @@ export interface ApiJob {
 
 export interface JobsResponse {
   data: ApiJob[]
-  total: number
   page: number
   page_size: number
+  total: number
+}
+
+export interface Job {
+  id: string;
+  title: string;
+  company: string;
+  location: string;
+  type: string;
+  rating: number;
+  logo: string;
+  description: string;
+  salary: string;
+  postedAt: string;
+  skills: string[];
+  remote: boolean;
 }
 
 // Helper function to map backend job response to frontend Job type
-export function mapBackendJobToFrontend(backendJob: BackendJob): Job {
-  // Format salary string
-  const salaryString = backendJob.salary_min && backendJob.salary_max 
-    ? `$${backendJob.salary_min/1000}k - $${backendJob.salary_max/1000}k`
-    : 'Competitive'
+export function mapBackendJobToFrontend(backendJob: ApiJob): Job {
+  const locationString = `${backendJob.location.city.en}, ${backendJob.location.state.en}`
 
-  // Format location string
-  const location = backendJob.location?.city?.en && backendJob.location?.state?.en
-    ? `${backendJob.location.city.en}, ${backendJob.location.state.en}`
-    : 'Remote'
+  const salaryString = backendJob.salary_min && backendJob.salary_max
+    ? `$${backendJob.salary_min/1000}k - $${backendJob.salary_max/1000}k ${backendJob.salary_currency}`
+    : 'Competitive'
 
   return {
     id: backendJob.id,
-    title: backendJob.title,
-    company: backendJob.organizations?.[0]?.name || 'Company Name',
-    location: location,
+    title: backendJob.title.en,
+    company: backendJob.organizations?.name.en || 'Company Name',
+    location: locationString,
     type: backendJob.job_type.replace('_', ' ').toLowerCase(),
     rating: backendJob.rating || 4.5,
-    logo: backendJob.organizations?.[0]?.logo_url || '/company-logos/placeholder.png',
-    description: backendJob.description,
+    logo: backendJob.organizations?.logo_url || '/company-logos/placeholder.png',
+    description: backendJob.description.en,
     salary: salaryString,
     postedAt: backendJob.created_at,
     skills: backendJob.skills || [],
@@ -137,7 +149,7 @@ export async function getJob(id: string): Promise<Job | null> {
       throw new Error(`Failed to fetch job: ${response.statusText}`)
     }
     
-    const data: BackendJob = await response.json()
+    const data: ApiJob = await response.json()
     return mapBackendJobToFrontend(data)
   } catch (error) {
     console.error(`Error fetching job ${id}:`, error)
@@ -159,7 +171,7 @@ export async function getSimilarJobs(jobId: string, limit = 4) {
       throw new Error('Failed to fetch similar jobs')
     }
     
-    const data: JobsApiResponse = await response.json()
+    const data: JobsResponse = await response.json()
     return data.data.map(mapBackendJobToFrontend)
   } catch (error) {
     console.error('Error fetching similar jobs:', error)
