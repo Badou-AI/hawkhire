@@ -7,17 +7,22 @@ import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { type Job } from '@/types/job'
 import { getJobs } from '@/app/api/jobs/client'
+import { Pagination } from '@/components/shared/pagination'
 
 export function JobsList() {
   const [jobs, setJobs] = useState<Job[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(0)
+  const [totalJobs, setTotalJobs] = useState(0)
+  const pageSize = 15
 
   useEffect(() => {
     async function fetchJobs() {
       try {
-        const response = await getJobs(0)
+        const response = await getJobs(currentPage)
         setJobs(response.data)
+        setTotalJobs(response.total)
         setError(null)
       } catch (err) {
         setError('Failed to fetch jobs. Please try again later.')
@@ -28,16 +33,26 @@ export function JobsList() {
     }
 
     fetchJobs()
-  }, [])
+  }, [currentPage])
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page - 1) // Convert 1-based to 0-based pagination
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    })
+  }
 
   if (loading) return <div className="text-center py-4">Loading jobs...</div>
   if (error) return <div className="text-center text-red-500 py-4">{error}</div>
+
+  const totalPages = Math.ceil(totalJobs / pageSize)
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <p className="text-sm text-gray-600">
-          Showing: {jobs.length} filtered jobs
+          Showing: {jobs.length} of {totalJobs} jobs
         </p>
         <select className="rounded-md border p-2 text-sm">
           <option>Most popular</option>
@@ -103,6 +118,15 @@ export function JobsList() {
           </Link>
         ))}
       </div>
+
+      {totalPages > 1 && (
+        <Pagination
+          currentPage={currentPage + 1} // Convert 0-based to 1-based pagination
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+          className="mt-8"
+        />
+      )}
     </div>
   )
 } 

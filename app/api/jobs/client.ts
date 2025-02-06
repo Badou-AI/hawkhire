@@ -72,9 +72,9 @@ export function mapBackendJobToFrontend(backendJob: BackendJob): Job {
 }
 
 // API Client functions
-export async function getJobs(page = 0, pageSize = 20) {
+export async function getJobs(page = 0, pageSize = 15) {
   try {
-    const response = await fetch(`/api/jobs?page=${page}&page_size=${pageSize}`, {
+    const response = await fetch(`http://127.0.0.1:8080/v1/jobs?page=${page}&page_size=${pageSize}`, {
       method: 'GET',
       headers: {
         'accept': 'application/json'
@@ -90,6 +90,55 @@ export async function getJobs(page = 0, pageSize = 20) {
     }
   } catch (error) {
     console.error('Error fetching jobs:', error)
+    throw error
+  }
+}
+
+export async function getJob(id: string): Promise<Job | null> {
+  if (!id) throw new Error('Job ID is required')
+  
+  try {
+    const response = await fetch(`http://127.0.0.1:8080/v1/jobs/${encodeURIComponent(id)}`, {
+      method: 'GET',
+      headers: {
+        'accept': 'application/json'
+      },
+      cache: 'no-store'
+    })
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null
+      }
+      throw new Error(`Failed to fetch job: ${response.statusText}`)
+    }
+    
+    const data: BackendJob = await response.json()
+    return mapBackendJobToFrontend(data)
+  } catch (error) {
+    console.error(`Error fetching job ${id}:`, error)
+    throw error
+  }
+}
+
+export async function getSimilarJobs(jobId: string, limit = 4) {
+  try {
+    const response = await fetch(`http://127.0.0.1:8080/v1/jobs?page=0&page_size=${limit}`, {
+      method: 'GET',
+      headers: {
+        'accept': 'application/json'
+      },
+      cache: 'no-store'
+    })
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch similar jobs')
+    }
+    
+    const data: JobsApiResponse = await response.json()
+    return data.data.map(mapBackendJobToFrontend)
+  } catch (error) {
+    console.error('Error fetching similar jobs:', error)
     throw error
   }
 }

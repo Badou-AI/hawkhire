@@ -21,14 +21,12 @@ import {
   Users,
   Briefcase,
   Star,
-  CheckCircle2,
-  ChevronRight as ChevronRightIcon,
-  LayoutList,
+  CheckCircle2, LayoutList,
   Table as TableIcon,
   LayoutGrid,
   Send,
   Bot,
-  Plus,
+  Plus
 } from 'lucide-react'
 import {
   Table,
@@ -44,6 +42,7 @@ import { useState, useEffect } from "react"
 import { usePipelineStore } from '@/lib/store/pipeline-store'
 import { PipelineStatus } from '@/components/pipeline-status'
 import { useSearchParams } from "next/navigation"
+import { Pagination } from '@/components/shared/pagination'
 
 // Import data from shared data file
 import { jobs, transformApiResponseToUiFormat, getSkillColor } from "../data"
@@ -140,44 +139,23 @@ export default function MatchesPage() {
     return "outline"
   }
 
-  // Calculate pagination with empty state handling
-  const totalPages = Math.max(1, Math.ceil((candidateMatches?.length || 0) / ITEMS_PER_PAGE))
+  // Calculate pagination values
+  const totalPages = Math.ceil(candidateMatches.length / ITEMS_PER_PAGE)
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
   const endIndex = startIndex + ITEMS_PER_PAGE
   const currentCandidates = candidateMatches?.slice(startIndex, endIndex) || []
 
-  // Generate page numbers to display
-  const getPageNumbers = () => {
-    const pageNumbers = []
-    const maxVisiblePages = 5
-    
-    if (totalPages <= maxVisiblePages) {
-      // Show all pages if total is less than max visible
-      for (let i = 1; i <= totalPages; i++) {
-        pageNumbers.push(i)
-      }
-    } else {
-      // Always show first page
-      pageNumbers.push(1)
-      
-      if (currentPage > 3) {
-        pageNumbers.push('...')
-      }
-      
-      // Show pages around current page
-      for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
-        pageNumbers.push(i)
-      }
-      
-      if (currentPage < totalPages - 2) {
-        pageNumbers.push('...')
-      }
-      
-      // Always show last page
-      pageNumbers.push(totalPages)
+  // Function to handle page changes
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+    // Find the scrollable content area that contains the candidate data
+    const scrollableContent = document.querySelector('.min-h-0.flex-1.flex.flex-col > .flex-1.overflow-y-auto')
+    if (scrollableContent) {
+      scrollableContent.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      })
     }
-    
-    return pageNumbers
   }
 
   const renderCandidateCard = (candidate: typeof candidateMatches[0]) => {
@@ -264,19 +242,6 @@ export default function MatchesPage() {
     "Which candidates are available to start within 2 weeks?",
     "Show remote-only candidates with salary expectations under $130k"
   ]
-
-  // Function to handle page changes
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page)
-    // Find the scrollable content area that contains the candidate data
-    const scrollableContent = document.querySelector('.min-h-0.flex-1.flex.flex-col > .flex-1.overflow-y-auto')
-    if (scrollableContent) {
-      scrollableContent.scrollTo({
-        top: 0,
-        behavior: 'smooth'
-      })
-    }
-  }
 
   return (
     <div className="h-full flex flex-col">
@@ -732,7 +697,7 @@ export default function MatchesPage() {
           )}
         </div>
 
-        {/* Pagination - fixed at bottom */}
+        {/* Pagination */}
         <div className="shrink-0 border-t py-2 -mb-6 bg-background">
           <div className="flex items-center justify-between">
             <div className="text-sm text-muted-foreground">
@@ -741,45 +706,14 @@ export default function MatchesPage() {
               <span className="font-medium">{candidateMatches.length}</span> candidates
             </div>
             
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-                disabled={currentPage === 1}
-              >
-                <ChevronLeft className="h-4 w-4" />
-                <span className="sr-only">Previous page</span>
-              </Button>
-              
-              <div className="flex items-center gap-1">
-                {getPageNumbers().map((pageNum, index) => (
-                  pageNum === '...' ? (
-                    <span key={`ellipsis-${index}`} className="px-2 text-muted-foreground">...</span>
-                  ) : (
-                    <Button
-                      key={pageNum}
-                      variant={currentPage === pageNum ? "default" : "outline"}
-                      size="sm"
-                      className="w-9"
-                      onClick={() => handlePageChange(pageNum as number)}
-                    >
-                      {pageNum}
-                    </Button>
-                  )
-                ))}
-              </div>
-              
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
-                disabled={currentPage === totalPages}
-              >
-                <ChevronRightIcon className="h-4 w-4" />
-                <span className="sr-only">Next page</span>
-              </Button>
-            </div>
+            {totalPages > 1 && (
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+                className="mt-0"
+              />
+            )}
           </div>
         </div>
       </div>
