@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { Share2, BookmarkIcon } from 'lucide-react'
 import { getJob, getSimilarJobs } from '@/app/api/jobs/client'
 import { type Job } from '@/types/job'
+import Link from 'next/link'
 
 interface PageProps {
   params: {
@@ -14,16 +15,19 @@ interface PageProps {
 export default async function JobPage({ params }: PageProps) {
   try {
     // Ensure params.id exists before using it
-    if (!params?.id) {
+    const jobId = params?.id
+    if (!jobId) {
       return notFound()
     }
 
-    const job = await getJob(params.id)
+    const job = await getJob(jobId)
     if (!job) {
       return notFound()
     }
 
-    const similarJobs = await getSimilarJobs(params.id)
+    console.log('Fetching similar jobs for:', jobId)
+    const similarJobs = await getSimilarJobs(jobId)
+    console.log('Found similar jobs:', similarJobs.length)
 
     return (
       <div className="container mx-auto px-4 py-8">
@@ -155,30 +159,63 @@ export default async function JobPage({ params }: PageProps) {
             </div>
 
             {/* Similar Jobs Card */}
-            <div className="rounded-lg bg-white p-6 shadow-sm">
-              <h3 className="text-lg font-medium">Similar jobs</h3>
-              <div className="mt-4 space-y-4">
-                {similarJobs.map((similarJob: Job) => (
-                  <div key={similarJob.id} className="flex gap-4">
-                    <div className="h-12 w-12 flex-shrink-0">
-                      <Image
-                        src={similarJob.logo}
-                        alt={`${similarJob.company} logo`}
-                        width={48}
-                        height={48}
-                        className="rounded-lg object-contain"
-                        quality={95}
-                      />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-medium">{similarJob.title}</h4>
-                      <p className="text-sm text-gray-600">{similarJob.company}</p>
-                      <p className="text-sm text-gray-600">{similarJob.location}</p>
-                    </div>
-                  </div>
-                ))}
+            {similarJobs.length > 0 && (
+              <div className="rounded-lg bg-white p-6 shadow-sm">
+                <h3 className="text-lg font-medium">Similar jobs</h3>
+                <div className="mt-4 space-y-4">
+                  {similarJobs.map((similarJob: Job) => (
+                    <Link 
+                      key={similarJob.id} 
+                      href={`/jobs/${similarJob.id}`}
+                      className="group flex gap-4 hover:bg-gray-50 p-3 rounded-lg transition-colors"
+                    >
+                      <div className="h-12 w-12 flex-shrink-0">
+                        <Image
+                          src={similarJob.logo}
+                          alt={`${similarJob.company} logo`}
+                          width={48}
+                          height={48}
+                          className="rounded-lg object-contain"
+                          quality={95}
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-medium truncate group-hover:text-blue-600 transition-colors">
+                          {similarJob.title}
+                        </h4>
+                        <p className="text-sm text-gray-600 truncate">{similarJob.company}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs text-gray-500">{similarJob.location}</span>
+                          <span className="text-gray-300">•</span>
+                          <span className="text-xs text-gray-500">{similarJob.type}</span>
+                          {similarJob.remote && (
+                            <>
+                              <span className="text-gray-300">•</span>
+                              <span className="text-xs text-gray-500">Remote</span>
+                            </>
+                          )}
+                        </div>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {similarJob.skills.slice(0, 3).map((skill, index) => (
+                            <span
+                              key={index}
+                              className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700"
+                            >
+                              {skill}
+                            </span>
+                          ))}
+                          {similarJob.skills.length > 3 && (
+                            <span className="inline-flex items-center rounded-full bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-600">
+                              +{similarJob.skills.length - 3}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
 

@@ -187,24 +187,113 @@ export async function getJob(id: string): Promise<Job | null> {
   }
 }
 
-export async function getSimilarJobs(jobId: string, limit = 4) {
+export async function getSimilarJobs(jobId: string, limit = 4): Promise<Job[]> {
   try {
-    const response = await fetch(`http://127.0.0.1:8080/v1/jobs?page=0&page_size=${limit}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      cache: 'no-store'
+    // First get the current job to use its properties for comparison
+    const currentJob = await getJob(jobId)
+    if (!currentJob) throw new Error('Job not found')
+
+    console.log('Current job:', {
+      id: currentJob.id,
+      title: currentJob.title,
+      skills: currentJob.skills,
+      industry: currentJob.organization?.industry
     })
+
+    // Build search parameters focusing on skills and industry
+    const searchParams = new URLSearchParams({
+      page: '0',
+      page_size: String(limit + 5), // Request extra to account for filtering
+      exclude_id: jobId
+    })
+
+    // Add skills if available - require matching ANY of the skills
+    if (currentJob.skills.length) {
+      searchParams.append('skills', currentJob.skills.join(','))
+    }
+
+    // Add industry if available
+    if (currentJob.organization?.industry) {
+      searchParams.append('industry', currentJob.organization.industry)
+    }
+
+    // Add semantic search parameters if we have title/description
+    if (currentJob.title || currentJob.description) {
+      searchParams.append('use_semantic', 'true')
+      if (currentJob.title) {
+        searchParams.append('job_title', currentJob.title)
+      }
+      if (currentJob.description) {
+        // Only use first 500 chars of description to keep search focused
+        searchParams.append('job_description', currentJob.description.slice(0, 500))
+      }
+    }
+    
+    console.log('Searching for similar jobs with params:', searchParams.toString())
+    
+    const response = await fetch(
+      `http://127.0.0.1:8080/v1/jobs/with/organizations?${searchParams.toString()}`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        cache: 'no-store'
+      }
+    )
     
     if (!response.ok) {
-      throw new Error('Failed to fetch similar jobs')
+      console.warn('Failed to fetch similar jobs:', await response.text())
+      return []
     }
     
     const data: JobsResponse = await response.json()
-    return data.data.map(mapBackendJobToFrontend)
+    
+    // Filter and sort results by relevance:
+    // 1. Jobs with more matching skills get higher priority
+    // 2. Same industry jobs get higher priority
+    // 3. Remote/non-remote matching gets some priority
+    const scoredJobs = data.data
+      .filter(job => job.id !== jobId) // Ensure current job is filtered out
+      .map(job => {
+        let score = 0
+        
+        // Score based on matching skills
+        const matchingSkills = job.skills.filter(skill => 
+          currentJob.skills.includes(skill)
+        )
+        score += (matchingSkills.length / currentJob.skills.length) * 10
+
+        // Score based on industry match
+        if (job.organizations?.industry === currentJob.organization?.industry) {
+          score += 5
+        }
+
+        // Small boost for matching remote status
+        if (job.remote === currentJob.remote) {
+          score += 2
+        }
+
+        return { job, score }
+      })
+      .sort((a, b) => b.score - a.score) // Sort by score descending
+    
+    console.log('Found similar jobs:', {
+      total: scoredJobs.length,
+      scores: scoredJobs.map(({ job, score }) => ({
+        id: job.id,
+        title: job.title.en,
+        score: Math.round(score * 100) / 100
+      }))
+    })
+
+    // Return the top matches after mapping to frontend format
+    return scoredJobs
+      .slice(0, limit)
+      .map(({ job }) => mapBackendJobToFrontend(job))
+    
   } catch (error) {
     console.error('Error fetching similar jobs:', error)
-    throw error
+    return []
   }
 }

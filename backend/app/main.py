@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, HTTPException, Form, Query
+from fastapi import FastAPI, UploadFile, HTTPException, Form, Query, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 import httpx
@@ -25,6 +25,7 @@ from slugify import slugify
 from supabase import create_client, Client
 from pydantic import BaseModel, Field, UUID4, HttpUrl, constr
 from fastapi.encoders import jsonable_encoder
+from sentence_transformers import SentenceTransformer
 
 # Load environment variables
 load_dotenv()
@@ -50,10 +51,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Remote API URLs
-REMOTE_API_URL = "http://147.79.115.55:8000"
-SEMANTIC_SEARCH_URL = REMOTE_API_URL
 
 # Storage configuration
 UPLOAD_DIR = Path("storage/uploads")
@@ -92,142 +89,119 @@ class EmbeddingInputType(str, Enum):
     CLASSIFICATION = 'classification'
     IMAGE = 'image'
 
+class JobEmbeddingService:
+    """Service for handling job embeddings using sentence-transformers"""
+    def __init__(self):
+        try:
+            from sentence_transformers import SentenceTransformer
+            self.model = SentenceTransformer('all-MiniLM-L6-v2')
+        except ImportError:
+            print("Please install sentence-transformers: pip install sentence-transformers")
+            raise
+
+    async def generate_embedding(self, text: str) -> List[float]:
+        """Generate embedding vector for text using local model"""
+        # Convert to tensor, then to list for JSON serialization
+        embedding = self.model.encode(text, convert_to_tensor=False)
+        return embedding.tolist()
+
+# Initialize the job embedding service
+job_embedding_service = JobEmbeddingService()
+
+# Restore original SemanticService
 class SemanticService:
-    """Service layer for interacting with the semantic search API"""
-    def __init__(self, base_url: str):
-        self.base_url = base_url
+    """Service layer for handling semantic operations"""
+    def __init__(self):
+        self.base_url = os.getenv("REMOTE_API_URL", "http://147.79.115.55:8000")
         self.client = httpx.AsyncClient(timeout=30.0)
 
+    async def generate_embedding(self, text: str) -> List[float]:
+        """Generate embedding vector for text using remote service"""
+        response = await self.client.post(
+            f"{self.base_url}/v1/tools/generate_embedding",
+            json={"text": text}
+        )
+        response.raise_for_status()
+        return response.json().get("embedding", [])
+
     async def convert_pdf_to_text(self, file_path: Path) -> Dict:
-        """Convert PDF file to text using the API"""
+        """Convert PDF to text using remote service"""
         async with aiofiles.open(file_path, 'rb') as f:
             content = await f.read()
             files = {'file': (file_path.name, content, 'application/pdf')}
-            response = await self.client.post(
-                f"{self.base_url}/v1/tools/convert_pdf2text",
-                files=files
-            )
+            response = await self.client.post(f"{self.base_url}/v1/tools/convert_pdf2text", files=files)
             response.raise_for_status()
             return response.json()
-        
+
     async def extract_knowledge(self, text: str, schema: Dict) -> Dict:
-        """Analyze document content and compare with job description"""
+        """Extract structured knowledge from text"""
         response = await self.client.post(
             f"{self.base_url}/v1/tools/convert_doc2json",
             json={
-                'text': f"cv: {text}",
-                'target_json_schema': {
-                    "title": {
-                        "type": "text",
-                        "description": "Resume title or headline"
-                    },
-                    "profile": {
-                        "type": "object with keys",
-                        "description": "Personal contact information",
-                        "properties": {
-                            "first_name": {"type": "text", "description": "First name"},
-                            "last_name": {"type": "text", "description": "Last name"},
-                            "tel_num": {"type": "keyword", "description": "Phone number"},
-                            "email": {"type": "keyword", "description": "Email address"}
-                        }
-                    },
-                    "years_of_experience": {
-                        "type": "integer", 
-                        "description": "Years of experience"
-                    },
-                    "summary": {
-                        "type": "text", 
-                        "description": "Professional summary"
-                    },
-                "skills": {
-                    "type": "array of object where each object is {'skill': 'text', 'score': 'integer'}",
-                    "description": "Liste des compétences professionnelles du candidat",
-                    "properties": {
-                        "skill": {"type": "text", "description": "Nom de la compétence"},
-                        "score": {"type": "integer", "description": "Niveau de la compétence (0-1)"}
-                    }
-                },
-                "topics": {
-                    "type": "keyword", 
-                    "description": "Mots clés professionnels du candidat"
-                }
-            },
-                'extraction_steps': 'tout les champs sont requis. le document est un cv',
-                'model': 'gpt-4'
+                'text': text,
+                'target_json_schema': schema,
+                'extraction_steps': 'extract structured information from the text',
+                'model': os.getenv('AI_MODEL', 'gpt-4')
             }
         )
         response.raise_for_status()
         return response.json()
-
 
     async def analyze_document(self, text: str, job_description: str, schema: Dict) -> Dict:
         """Analyze document content and compare with job description"""
         response = await self.client.post(
-            f"{self.base_url}/v1/tools/convert_doc2json",
+            f"{self.base_url}/v1/tools/analyze_document",
             json={
-                'text': f"cv: {text}\n### job: {job_description}",
+                'document': text,
+                'job_description': job_description,
                 'target_json_schema': schema,
-                'extraction_steps': 'anlysze the matching of the cv with the job description and provide a score and justification',
-                'model': 'gpt-4'
+                'model': os.getenv('AI_MODEL', 'gpt-4')
             }
         )
         response.raise_for_status()
         return response.json()
-
-    async def generate_embedding(self, text: str) -> List[float]:
-        """Generate embedding vector for text"""
-        response = await self.client.post(
-            f"{self.base_url}/v1/embedding/text",
-            json={
-                'texts': [text],
-                'model': EmbeddingModel.MULTILINGUAL_HEAVY,
-                'input_type': EmbeddingInputType.SEARCH_DOCUMENT
-            }
-        )
-        response.raise_for_status()
-        result = response.json()
-        return result['embeddings'][0]
 
     async def index_document(self, index_name: str, doc_id: str, document: Dict) -> Dict:
-        """Index a processed document"""
+        """Index a document in the semantic search index"""
         response = await self.client.post(
             f"{self.base_url}/v1/index/{index_name}/document/{doc_id}",
-            json={'structured_doc': document}
+            json=document
         )
         response.raise_for_status()
         return response.json()
-
-    async def create_index(self, index_name: str, config: Dict) -> Dict:
-        """Create a new search index"""
-        response = await self.client.post(
-            f"{self.base_url}/v1/index/{index_name}",
-            json=config
-        )
-        response.raise_for_status()
-        return response.json()
-
-    async def close(self):
-        """Close the HTTP client"""
-        await self.client.aclose()
 
 # Initialize the semantic service
-semantic_service = SemanticService(REMOTE_API_URL)
+semantic_service = SemanticService()
+
+class LocalEmbeddingService:
+    """Local service for generating embeddings using sentence-transformers"""
+    def __init__(self):
+        try:
+            from sentence_transformers import SentenceTransformer
+            self.model = SentenceTransformer('all-MiniLM-L6-v2')
+        except ImportError:
+            print("Please install sentence-transformers: pip install sentence-transformers")
+            raise
+
+    async def generate_embedding(self, text: str) -> List[float]:
+        """Generate embedding vector for text using local model"""
+        # Convert to tensor, then to list
+        embedding = self.model.encode(text)
+        return embedding.tolist()
 
 async def create_semantic_index(index_name: str) -> Dict:
     """Create a new semantic search index with the specified configuration"""
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.post(
-                f"{REMOTE_API_URL}/v1/index/{index_name}",
-                json=RESUME_INDEX_CONFIG,
-                timeout=30.0
-            )
-            response.raise_for_status()
-            return response.json()
-        except httpx.HTTPError as e:
-            print(f"Error creating index: {str(e)}")  # Debug logging
-            print(f"Response content: {e.response.content if hasattr(e, 'response') else 'No response'}")
-            raise
+    try:
+        # Create vector index in Supabase
+        await supabase.execute(f"""
+            create index if not exists idx_{index_name}_embedding
+            on jobs using ivfflat (embedding vector_cosine_ops)
+            with (lists = 100);
+        """)
+        return {"message": f"Index '{index_name}' created successfully"}
+    except Exception as e:
+        print(f"Error creating index: {str(e)}")
+        raise
 
 @app.post("/v1/index/{index_name}")
 async def create_index(index_name: str):
@@ -1404,24 +1378,77 @@ async def get_jobs_with_related(
     select: str = None,
     page: int = 0,
     page_size: int = 10,
-    order: str = None
+    order: str = None,
+    industry: str = None,
+    skills: str = None,
+    exclude_id: str = None,
+    use_semantic: bool = False,
+    job_title: str = None,
+    job_description: str = None
 ):
     """
-    Fetch jobs with related table data
-    
-    Parameters:
-    - related_table: Name of the related table to include
-    - select: Comma-separated list of columns to return
-    - page: Page number (0-based)
-    - page_size: Number of items per page
-    - order: Order by column (prefix with - for descending)
+    Fetch jobs with related table data and optional similarity filters.
+    Supports both traditional and semantic search.
     """
     try:
         # Validate related table name to prevent injection
-        allowed_tables = ['organizations', 'applications', 'categories']  # Add your actual related tables
+        allowed_tables = ['organizations', 'applications', 'categories']
         if related_table not in allowed_tables:
             raise HTTPException(status_code=400, detail=f"Invalid related table. Allowed tables: {', '.join(allowed_tables)}")
         
+        # Start building the query
+        if use_semantic and (job_title or job_description):
+            # Generate embedding for the search query
+            search_text = f"{job_title or ''}\n{job_description or ''}"
+            embedding = await job_embedding_service.generate_embedding(search_text)
+            
+            # Use vector similarity search to get matching job IDs
+            matches = supabase.rpc('match_jobs', {
+                'query_embedding': embedding,
+                'match_threshold': 0.7,
+                'match_count': page_size * 2  # Get extra results for filtering
+            }).execute()
+            
+            if matches.data:
+                # Get the matched job IDs
+                job_ids = [match['id'] for match in matches.data]
+                
+                # Now fetch the full job data with related tables
+                query = supabase.table('jobs')
+                
+                # Build the select statement
+                if select:
+                    base_columns = select.replace(" ", "").split(",")
+                else:
+                    base_columns = ["*"]
+                    
+                # Add the related table to the selection
+                select_statement = f"{','.join(base_columns)},{related_table}(*)"
+                query = query.select(select_statement)
+                
+                # Filter by matched IDs
+                query = query.in_('id', job_ids)
+                
+                # Get the jobs
+                response = query.execute()
+                
+                # Sort results to match the similarity order
+                similarity_map = {match['id']: match['similarity'] for match in matches.data}
+                sorted_data = sorted(
+                    response.data,
+                    key=lambda job: similarity_map.get(job['id'], 0),
+                    reverse=True
+                )
+                
+                return {
+                    "data": sorted_data,
+                    "page": page,
+                    "page_size": page_size,
+                    "total": len(sorted_data),
+                    "search_type": "semantic"
+                }
+        
+        # If semantic search failed or wasn't requested, use traditional search
         query = supabase.table('jobs')
         
         # Build the select statement
@@ -1433,17 +1460,39 @@ async def get_jobs_with_related(
         # Add the related table to the selection
         select_statement = f"{','.join(base_columns)},{related_table}(*)"
         query = query.select(select_statement)
+
+        # Apply additional filters
+        filters_applied = []
         
-        # Handle ordering
+        if industry and industry.strip():
+            query = query.eq('organizations.industry', industry)
+            filters_applied.append(f"industry={industry}")
+        
+        if skills and skills.strip():
+            skill_list = [s.strip() for s in skills.split(',') if s.strip()]
+            if skill_list:
+                # Match if job has ANY of the skills (more lenient)
+                query = query.contains('skills', skill_list)
+                filters_applied.append(f"skills={skill_list}")
+        
+        if exclude_id and exclude_id.strip():
+            query = query.neq('id', exclude_id)
+            filters_applied.append(f"exclude_id={exclude_id}")
+            
+        # Add default ordering by created_at if no order specified
         if order:
             if order.startswith('-'):
                 query = query.order(order[1:], desc=True)
             else:
                 query = query.order(order)
+        else:
+            query = query.order('created_at', desc=True)
                 
         # Get total count before pagination
         count_response = query.execute()
         total_count = len(count_response.data)
+        
+        print(f"Similar jobs query - Filters: {', '.join(filters_applied)}, Total found: {total_count}")
                 
         # Handle pagination
         start = page * page_size
@@ -1456,10 +1505,13 @@ async def get_jobs_with_related(
             "data": response.data,
             "page": page,
             "page_size": page_size,
-            "total": total_count  # Now returns total count of all matching jobs
+            "total": total_count,
+            "filters": filters_applied,
+            "search_type": "traditional"
         }
         
     except Exception as e:
+        print(f"Error in get_jobs_with_related: {str(e)}")
         if isinstance(e, HTTPException):
             raise e
         raise HTTPException(status_code=500, detail=str(e))
@@ -2344,3 +2396,302 @@ async def get_job_with_related(
         if isinstance(e, HTTPException):
             raise e
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.on_event("startup")
+async def create_vector_similarity_function():
+    """Create SQL function for vector similarity search on startup"""
+    try:
+        # Enable vector extension if not enabled
+        await supabase.from_('extensions').execute(
+            'create extension if not exists vector with schema extensions'
+        )
+        
+        # Add embedding column if it doesn't exist
+        await supabase.from_('jobs').execute(
+            'alter table jobs add column if not exists embedding vector(384)'
+        )
+        
+        # Create matching function
+        await supabase.from_('jobs').execute("""
+                create or replace function match_jobs (
+                    query_embedding vector(384),
+                    match_threshold float,
+                    match_count int
+                )
+                returns table (
+                    id uuid,
+                    similarity float
+                )
+                language sql
+                as $$
+                    select id, 1 - (jobs.embedding <=> query_embedding) as similarity
+                    from jobs
+                    where 1 - (jobs.embedding <=> query_embedding) > match_threshold
+                    order by jobs.embedding <=> query_embedding
+                    limit match_count;
+                $$;
+        """)
+    except Exception as e:
+        print(f"Error setting up vector similarity: {str(e)}")
+        # Don't raise - allow service to start without vector search
+
+@app.post("/v1/jobs/generate-embeddings", tags=["Jobs"])
+async def generate_job_embeddings(
+    batch_size: int = Query(50, ge=1, le=100, description="Number of jobs to process per batch"),
+    force_update: bool = Query(False, description="Whether to update jobs that already have embeddings")
+):
+    """
+    Generate embeddings for existing jobs that don't have them.
+    Can be run multiple times safely - will only process jobs without embeddings unless force_update=true.
+    """
+    try:
+        start_time = time.time()
+        total_processed = 0
+        total_updated = 0
+        total_failed = 0
+        failed_jobs = []
+        
+        # First verify the service is accessible
+        try:
+            test_embedding = await job_embedding_service.generate_embedding("test")
+            print("Job embedding service connection test successful")
+        except Exception as e:
+            print(f"Error connecting to job embedding service: {str(e)}")
+            return {
+                "message": "Failed to connect to job embedding service",
+                "error": str(e)
+            }
+        
+        # Get jobs without embeddings (or all jobs if force_update)
+        query = supabase.table('jobs').select('id,title,description')
+        if not force_update:
+            query = query.is_('embedding', 'null')
+            
+        response = query.execute()
+        jobs_to_process = response.data
+        total_jobs = len(jobs_to_process)
+        
+        if not total_jobs:
+            return {
+                "message": "No jobs found that need embedding generation",
+                "total_jobs": 0,
+                "jobs_processed": 0,
+                "jobs_updated": 0,
+                "jobs_failed": 0,
+                "time_taken": 0
+            }
+            
+        print(f"Found {total_jobs} jobs that need embedding generation")
+        
+        # Process in batches
+        for i in range(0, total_jobs, batch_size):
+            batch = jobs_to_process[i:i + batch_size]
+            batch_updates = []
+            
+            for job in batch:
+                try:
+                    # Extract text content
+                    title = job.get('title', {})
+                    description = job.get('description', {})
+                    
+                    # Handle both string and dict formats for title/description
+                    if isinstance(title, str):
+                        try:
+                            title = json.loads(title)
+                        except:
+                            title = {'en': title}
+                    if isinstance(description, str):
+                        try:
+                            description = json.loads(description)
+                        except:
+                            description = {'en': description}
+                            
+                    # Combine title and description for embedding
+                    job_text = f"{title.get('en', '')} {description.get('en', '')}"
+                    if not job_text.strip():
+                        print(f"Skipping job {job['id']} - no text content")
+                        total_failed += 1
+                        failed_jobs.append({
+                            'id': job['id'],
+                            'reason': 'No text content'
+                        })
+                        continue
+                        
+                    # Generate embedding
+                    print(f"Generating embedding for job {job['id']}")
+                    embedding = await job_embedding_service.generate_embedding(job_text)
+                    
+                    if not embedding:
+                        print(f"No embedding generated for job {job['id']}")
+                        total_failed += 1
+                        failed_jobs.append({
+                            'id': job['id'],
+                            'reason': 'No embedding generated'
+                        })
+                        continue
+                    
+                    # Add to batch updates
+                    batch_updates.append({
+                        'id': job['id'],
+                        'embedding': embedding
+                    })
+                    
+                    total_processed += 1
+                    print(f"Successfully processed job {job['id']}")
+                    
+                except Exception as e:
+                    error_msg = f"Error processing job {job['id']}: {str(e)}"
+                    print(error_msg)
+                    total_failed += 1
+                    failed_jobs.append({
+                        'id': job['id'],
+                        'reason': str(e)
+                    })
+                    continue
+            
+            # Update batch in database
+            if batch_updates:
+                try:
+                    update_response = supabase.table('jobs').upsert(batch_updates).execute()
+                    total_updated += len(update_response.data)
+                    print(f"Updated {len(update_response.data)} jobs with embeddings")
+                except Exception as e:
+                    error_msg = f"Error updating batch: {str(e)}"
+                    print(error_msg)
+                    total_failed += len(batch_updates)
+                    for job in batch_updates:
+                        failed_jobs.append({
+                            'id': job['id'],
+                            'reason': f'Batch update failed: {str(e)}'
+                        })
+            
+            # Progress update
+            progress = (i + len(batch)) / total_jobs * 100
+            print(f"Progress: {progress:.1f}% - Processed: {total_processed}, Updated: {total_updated}, Failed: {total_failed}")
+            
+        time_taken = time.time() - start_time
+        
+        return {
+            "message": "Embedding generation completed",
+            "total_jobs": total_jobs,
+            "jobs_processed": total_processed,
+            "jobs_updated": total_updated,
+            "jobs_failed": total_failed,
+            "time_taken": f"{time_taken:.2f} seconds",
+            "failed_jobs": failed_jobs
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail={
+                "message": "Error generating embeddings",
+                "error": str(e)
+            }
+        )
+
+# Add webhook handler for new/updated jobs
+@app.post("/v1/jobs/webhook", tags=["Jobs"])
+async def handle_job_webhook(
+    request: Request,
+    x_webhook_token: str = Header(None, alias="X-Webhook-Token")
+):
+    """
+    Webhook handler for job changes (create/update).
+    Automatically generates embeddings for new or updated jobs.
+    
+    The webhook should be configured in Supabase to trigger on job insert/update.
+    """
+    try:
+        # Verify webhook token if configured
+        expected_token = os.getenv("WEBHOOK_TOKEN")
+        if expected_token and x_webhook_token != expected_token:
+            raise HTTPException(status_code=401, detail="Invalid webhook token")
+            
+        # Parse webhook payload
+        payload = await request.json()
+        
+        # Extract job data
+        job = payload.get('record', {})
+        if not job:
+            raise HTTPException(status_code=400, detail="No job data in webhook payload")
+            
+        # Generate embedding for the job
+        job_text = f"{job.get('title', {}).get('en', '')} {job.get('description', {}).get('en', '')}"
+        if not job_text.strip():
+            raise HTTPException(status_code=400, detail="Job has no text content for embedding")
+            
+        embedding = await semantic_service.generate_embedding(job_text)
+        
+        # Update the job with the new embedding
+        response = supabase.table('jobs').update({
+            'embedding': embedding
+        }).eq('id', job['id']).execute()
+        
+        if not response.data:
+            raise HTTPException(status_code=500, detail="Failed to update job with embedding")
+            
+        return {
+            "message": "Job embedding updated successfully",
+            "job_id": job['id']
+        }
+        
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=f"Error handling webhook: {str(e)}")
+
+@app.post("/v1/jobs/reset-embeddings", tags=["Jobs"])
+async def reset_job_embeddings():
+    """Reset the embeddings column to prepare for regeneration"""
+    try:
+        # Drop the existing embedding column
+        await supabase.table('jobs').execute("""
+            alter table jobs drop column if exists embedding;
+            alter table jobs add column embedding vector(384);
+        """)
+        
+        return {
+            "message": "Embeddings column reset successfully",
+            "status": "success"
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": "Error resetting embeddings",
+                "error": str(e)
+            }
+        )
+
+class EmbeddingService:
+    """Service for generating embeddings using a local model"""
+    def __init__(self):
+        try:
+            from sentence_transformers import SentenceTransformer
+            self.model = SentenceTransformer('all-MiniLM-L6-v2')
+        except ImportError:
+            print("Please install sentence-transformers: pip install sentence-transformers")
+            raise
+
+    async def generate_embedding(self, text: str) -> List[float]:
+        """Generate embedding vector for text using local model"""
+        # Convert to tensor, then to list for JSON serialization
+        embedding = self.model.encode(text, convert_to_tensor=False)
+        return embedding.tolist()
+
+async def test_local_embedding_service():
+    """Test function to verify local embedding service"""
+    try:
+        embedding_service = EmbeddingService()
+        test_text = "This is a test sentence for embedding generation."
+        embedding = await embedding_service.generate_embedding(test_text)
+        print("Test embedding generated successfully:", embedding[:5])  # Print first 5 values for brevity
+    except Exception as e:
+        print("Error testing local embedding service:", str(e))
+
+# Call the test function during startup
+@app.on_event("startup")
+async def startup_event():
+    await test_local_embedding_service()
