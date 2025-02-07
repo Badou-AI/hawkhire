@@ -11,4 +11,10 @@ export interface Job {
   postedAt: string
   skills: string[]
   remote: boolean
+  organization?: {
+    industry: string
+    size_range: string
+    founded_year: number
+    company_type: string
+  }
 } 

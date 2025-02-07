@@ -80,6 +80,12 @@ export interface Job {
   postedAt: string;
   skills: string[];
   remote: boolean;
+  organization?: {
+    industry: string;
+    size_range: string;
+    founded_year: number;
+    company_type: string;
+  };
 }
 
 // Helper function to map backend job response to frontend Job type
@@ -102,7 +108,13 @@ export function mapBackendJobToFrontend(backendJob: ApiJob): Job {
     salary: salaryString,
     postedAt: backendJob.created_at,
     skills: backendJob.skills || [],
-    remote: backendJob.remote
+    remote: backendJob.remote,
+    organization: backendJob.organizations ? {
+      industry: backendJob.organizations.industry,
+      size_range: backendJob.organizations.size_range,
+      founded_year: backendJob.organizations.founded_year,
+      company_type: backendJob.organizations.company_type
+    } : undefined
   }
 }
 

@@ -115,6 +115,46 @@ export default async function JobPage({ params }: PageProps) {
 
           {/* Sidebar */}
           <div className="lg:col-span-1">
+            {/* Company Card */}
+            <div className="rounded-lg bg-white p-6 shadow-sm mb-6">
+              <h3 className="text-lg font-medium">About the Company</h3>
+              <div className="mt-4">
+                <div className="flex items-center gap-3 mb-4">
+                  <Image
+                    src={job.logo}
+                    alt={`${job.company} logo`}
+                    width={48}
+                    height={48}
+                    className="rounded-lg object-contain"
+                    quality={95}
+                  />
+                  <div>
+                    <h4 className="font-medium">{job.company}</h4>
+                    <p className="text-sm text-gray-600">{job.location}</p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <h5 className="text-sm font-medium text-gray-500">Industry</h5>
+                    <p className="text-sm">{job.organization?.industry || 'Technology'}</p>
+                  </div>
+                  <div>
+                    <h5 className="text-sm font-medium text-gray-500">Company Size</h5>
+                    <p className="text-sm">{job.organization?.size_range || '51-200 employees'}</p>
+                  </div>
+                  <div>
+                    <h5 className="text-sm font-medium text-gray-500">Founded</h5>
+                    <p className="text-sm">{job.organization?.founded_year || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <h5 className="text-sm font-medium text-gray-500">Type</h5>
+                    <p className="text-sm">{job.organization?.company_type || 'Private'}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Similar Jobs Card */}
             <div className="rounded-lg bg-white p-6 shadow-sm">
               <h3 className="text-lg font-medium">Similar jobs</h3>
               <div className="mt-4 space-y-4">
