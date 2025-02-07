@@ -96,6 +96,24 @@ export function mapBackendJobToFrontend(backendJob: ApiJob): Job {
     ? `$${backendJob.salary_min/1000}k - $${backendJob.salary_max/1000}k ${backendJob.salary_currency}`
     : 'Competitive'
 
+  // Handle organization fields that might be localized JSON strings
+  const parseLocalizedField = (field: string | LocalizedText | Record<string, string> | undefined): string => {
+    if (!field) return ''
+    if (typeof field === 'string') {
+      try {
+        // Try to parse if it's a stringified JSON
+        const parsed = JSON.parse(field)
+        return parsed.en || parsed['en'] || field
+      } catch {
+        return field
+      }
+    }
+    if (typeof field === 'object' && (field.en || field['en'])) {
+      return field.en || field['en']
+    }
+    return String(field)
+  }
+
   return {
     id: backendJob.id,
     title: backendJob.title.en,
@@ -110,10 +128,10 @@ export function mapBackendJobToFrontend(backendJob: ApiJob): Job {
     skills: backendJob.skills || [],
     remote: backendJob.remote,
     organization: backendJob.organizations ? {
-      industry: backendJob.organizations.industry,
-      size_range: backendJob.organizations.size_range,
+      industry: parseLocalizedField(backendJob.organizations.industry),
+      size_range: parseLocalizedField(backendJob.organizations.size_range),
       founded_year: backendJob.organizations.founded_year,
-      company_type: backendJob.organizations.company_type
+      company_type: parseLocalizedField(backendJob.organizations.company_type)
     } : undefined
   }
 }
