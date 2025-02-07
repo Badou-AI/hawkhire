@@ -79,17 +79,19 @@ export function JobCreationForm() {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6">
           {/* Left Column */}
           <div className="space-y-6">
             {/* Basic Information Section */}
-            <Card className="p-6">
-              <h2 className="text-lg font-semibold">Basic Information</h2>
-              <p className="text-sm text-muted-foreground mb-4">
-                Core details about the position
-              </p>
+            <Card className="shadow-none border-none">
+              <div className="space-y-2">
+                <h2 className="text-lg font-semibold">Basic Information</h2>
+                <p className="text-sm text-muted-foreground">
+                  Core details about the position
+                </p>
+              </div>
 
-              <div className="space-y-4">
+              <div className="space-y-4 mt-4">
                 <FormField
                   control={form.control}
                   name="title.en"
@@ -236,13 +238,15 @@ export function JobCreationForm() {
             </Card>
 
             {/* Dates and Status Section */}
-            <Card className="p-6">
-              <h2 className="text-lg font-semibold">Dates and Status</h2>
-              <p className="text-sm text-muted-foreground mb-4">
-                Set the vacancy timeline and current status
-              </p>
+            <Card className="shadow-none border-none">
+              <div className="space-y-2">
+                <h2 className="text-lg font-semibold">Dates and Status</h2>
+                <p className="text-sm text-muted-foreground">
+                  Set the vacancy timeline and current status
+                </p>
+              </div>
 
-              <div className="space-y-4">
+              <div className="space-y-4 mt-4">
                 <FormField
                   control={form.control}
                   name="status"
@@ -360,13 +364,15 @@ export function JobCreationForm() {
           {/* Right Column */}
           <div className="space-y-6">
             {/* Applicant Requirements Section */}
-            <Card className="p-6">
-              <h2 className="text-lg font-semibold">Applicant Requirements</h2>
-              <p className="text-sm text-muted-foreground mb-4">
-                Qualifications and skills needed for the role
-              </p>
+            <Card className="shadow-none border-none">
+              <div className="space-y-2">
+                <h2 className="text-lg font-semibold">Applicant Requirements</h2>
+                <p className="text-sm text-muted-foreground">
+                  Qualifications and skills needed for the role
+                </p>
+              </div>
 
-              <div className="space-y-4">
+              <div className="space-y-4 mt-4">
                 <FormField
                   control={form.control}
                   name="requirements.en"
@@ -431,94 +437,100 @@ export function JobCreationForm() {
             </Card>
 
             {/* Compensation Section */}
-            <Card className="p-6">
-              <h2 className="text-lg font-semibold">Compensation</h2>
-              <p className="text-sm text-muted-foreground mb-4">
-                Salary and benefits information
-              </p>
+            <Card className="shadow-none border-none">
+              <div className="space-y-2">
+                <h2 className="text-lg font-semibold">Compensation</h2>
+                <p className="text-sm text-muted-foreground">
+                  Salary and benefits information
+                </p>
+              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField
-                  control={form.control}
-                  name="salary_min"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Minimum Salary</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          placeholder="e.g. 50000"
-                          {...field}
-                          value={field.value || ''}
-                          onChange={(e) => {
-                            const value = e.target.value === '' ? null : e.target.valueAsNumber
-                            field.onChange(value)
-                          }}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="salary_max"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Maximum Salary</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          placeholder="e.g. 80000"
-                          {...field}
-                          value={field.value || ''}
-                          onChange={(e) => {
-                            const value = e.target.value === '' ? null : e.target.valueAsNumber
-                            field.onChange(value)
-                          }}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="salary_currency"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Currency</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <div className="space-y-4 mt-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="salary_min"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Minimum Salary</FormLabel>
                         <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select currency" />
-                          </SelectTrigger>
+                          <Input
+                            type="number"
+                            placeholder="e.g. 50000"
+                            {...field}
+                            value={field.value || ''}
+                            onChange={(e) => {
+                              const value = e.target.value === '' ? null : e.target.valueAsNumber
+                              field.onChange(value)
+                            }}
+                          />
                         </FormControl>
-                        <SelectContent>
-                          {currencies.map((currency) => (
-                            <SelectItem key={currency} value={currency}>
-                              {currency}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="salary_max"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Maximum Salary</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            placeholder="e.g. 80000"
+                            {...field}
+                            value={field.value || ''}
+                            onChange={(e) => {
+                              const value = e.target.value === '' ? null : e.target.valueAsNumber
+                              field.onChange(value)
+                            }}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="salary_currency"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Currency</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select currency" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {currencies.map((currency) => (
+                              <SelectItem key={currency} value={currency}>
+                                {currency}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
               </div>
             </Card>
 
             {/* Contact Information Section */}
-            <Card className="p-6">
-              <h2 className="text-lg font-semibold">Contact Information</h2>
-              <p className="text-sm text-muted-foreground mb-4">
-                Details for applicant inquiries
-              </p>
+            <Card className="shadow-none border-none">
+              <div className="space-y-2">
+                <h2 className="text-lg font-semibold">Contact Information</h2>
+                <p className="text-sm text-muted-foreground">
+                  Details for applicant inquiries
+                </p>
+              </div>
 
-              <div className="space-y-4">
+              <div className="space-y-4 mt-4">
                 <FormField
                   control={form.control}
                   name="contact_person"
@@ -586,7 +598,7 @@ export function JobCreationForm() {
           </div>
         </div>
 
-        <div className="flex justify-end space-x-4">
+        <div className="sticky bottom-0 flex justify-end space-x-4 p-6 bg-background border-t">
           <Button variant="outline" type="button">
             Save as Draft
           </Button>

@@ -1,4 +1,3 @@
-import { Card } from "@/components/ui/card"
 import { JobCreationForm } from "./job-creation-form"
 
 export default function CreateJobPage() {
@@ -9,9 +8,14 @@ export default function CreateJobPage() {
         <p className="text-sm text-muted-foreground">Create a new job posting</p>
       </div>
 
-      <Card className="p-6">
-        <JobCreationForm />
-      </Card>
+      <div className="relative flex min-h-[calc(100vh-12rem)]">
+        {/* Main scrollable content */}
+        <div className="w-full overflow-y-auto scrollbar-hide">
+          <div className="rounded-lg bg-background">
+            <JobCreationForm />
+          </div>
+        </div>
+      </div>
     </div>
   )
 } 
