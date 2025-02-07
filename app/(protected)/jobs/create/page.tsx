@@ -1,11 +1,15 @@
 import { JobCreationForm } from "./job-creation-form"
+import { BulkCreateDialog } from "./bulk-create-dialog"
 
 export default function CreateJobPage() {
   return (
     <div className="container mx-auto py-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold">Create Vacancy</h1>
-        <p className="text-sm text-muted-foreground">Create a new job posting</p>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">Create Vacancy</h1>
+          <p className="text-sm text-muted-foreground">Create a new job posting</p>
+        </div>
+        <BulkCreateDialog />
       </div>
 
       <div className="relative flex min-h-[calc(100vh-12rem)]">
