@@ -134,7 +134,7 @@ export async function getJob(id: string): Promise<Job | null> {
   if (!id) throw new Error('Job ID is required')
   
   try {
-    const response = await fetch(`http://127.0.0.1:8080/v1/jobs/${encodeURIComponent(id)}`, {
+    const response = await fetch(`http://127.0.0.1:8080/v1/jobs/with/organizations/${encodeURIComponent(id)}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'

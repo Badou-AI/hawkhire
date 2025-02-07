@@ -2300,3 +2300,47 @@ async def delete_organization(org_id: UUID4):
         if isinstance(e, HTTPException):
             raise e
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/v1/jobs/with/{related_table}/{job_id}", tags=["Jobs"])
+async def get_job_with_related(
+    related_table: str,
+    job_id: UUID4,
+    select: str = None
+):
+    """
+    Fetch a specific job with related table data
+    
+    Parameters:
+    - related_table: Name of the related table to include
+    - job_id: The ID of the job to fetch (UUID)
+    - select: Comma-separated list of columns to return
+    """
+    try:
+        # Validate related table name to prevent injection
+        allowed_tables = ['organizations', 'applications', 'categories']
+        if related_table not in allowed_tables:
+            raise HTTPException(status_code=400, detail=f"Invalid related table. Allowed tables: {', '.join(allowed_tables)}")
+        
+        query = supabase.table('jobs')
+        
+        # Build the select statement
+        if select:
+            base_columns = select.replace(" ", "").split(",")
+        else:
+            base_columns = ["*"]
+            
+        # Add the related table to the selection
+        select_statement = f"{','.join(base_columns)},{related_table}(*)"
+        query = query.select(select_statement)
+            
+        response = query.eq('id', str(job_id)).execute()  # Convert UUID to string for Supabase query
+        
+        if not response.data:
+            raise HTTPException(status_code=404, detail=f"Job with ID {job_id} not found")
+            
+        return response.data[0]
+        
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))

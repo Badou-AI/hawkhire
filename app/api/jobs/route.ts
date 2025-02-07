@@ -10,7 +10,7 @@ export async function GET(request: Request) {
     // Check if we're fetching a single job
     const jobId = searchParams.get('id')
     if (jobId) {
-      const response = await fetch(`${API_URL}/v1/jobs/${jobId}`, {
+      const response = await fetch(`${API_URL}/v1/jobs/with/organizations/${jobId}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'
