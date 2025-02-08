@@ -2695,3 +2695,268 @@ async def test_local_embedding_service():
 @app.on_event("startup")
 async def startup_event():
     await test_local_embedding_service()
+
+class OrganizationMemberRole(str, Enum):
+    """Organization member role options"""
+    OWNER = "OWNER"
+    ADMIN = "ADMIN"
+    MEMBER = "MEMBER"
+    GUEST = "GUEST"
+
+class OrganizationMemberStatus(str, Enum):
+    """Organization member status options"""
+    ACTIVE = "ACTIVE"
+    PENDING = "PENDING"
+    INACTIVE = "INACTIVE"
+    REJECTED = "REJECTED"
+
+class OrganizationMemberBase(BaseModel):
+    """Base model for organization member data"""
+    organization_id: UUID4 = Field(..., description="ID of the organization")
+    user_id: UUID4 = Field(..., description="ID of the user")
+    role: OrganizationMemberRole = Field(
+        default=OrganizationMemberRole.MEMBER,
+        description="Role of the member in the organization"
+    )
+    title: str = Field(
+        default="",
+        description="Job title of the member"
+    )
+    permissions: Dict[str, Any] = Field(
+        default={},
+        description="JSON object containing member permissions"
+    )
+    invited_by: Optional[UUID4] = Field(
+        None,
+        description="ID of the user who invited this member"
+    )
+    status: OrganizationMemberStatus = Field(
+        default=OrganizationMemberStatus.PENDING,
+        description="Status of the membership"
+    )
+    is_mock: bool = Field(
+        default=False,
+        description="Whether this is mock data"
+    )
+    mock_batch_id: Optional[UUID4] = Field(
+        None,
+        description="ID of the mock data batch"
+    )
+
+class OrganizationMemberCreate(OrganizationMemberBase):
+    """Model for creating a new organization member"""
+    pass
+
+class OrganizationMemberUpdate(OrganizationMemberBase):
+    """Model for updating an organization member"""
+    pass
+
+class OrganizationMemberInDB(OrganizationMemberBase):
+    """Model for organization member data as stored in the database"""
+    id: UUID4
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+        json_encoders = {
+            UUID4: str,
+            datetime: lambda v: v.isoformat()
+        }
+
+class OrganizationMemberList(BaseModel):
+    """Response model for organization member listing"""
+    data: List[OrganizationMemberInDB]
+    page: int
+    page_size: int
+    total: int
+
+@app.get("/v1/organization-members", tags=["Organization Members"], response_model=OrganizationMemberList)
+async def list_organization_members(
+    select: str = None,
+    page: int = Query(0, ge=0, description="Page number (0-based)"),
+    page_size: int = Query(20, ge=1, le=100, description="Number of items per page"),
+    organization_id: Optional[UUID4] = None,
+    user_id: Optional[UUID4] = None,
+    role: Optional[OrganizationMemberRole] = None,
+    status: Optional[OrganizationMemberStatus] = None,
+    order: str = Query(None, description="Order by column (prefix with - for descending)")
+):
+    """
+    Fetch organization members with various query options
+    """
+    try:
+        query = supabase.table('organization_members')
+        
+        # Handle column selection
+        if select:
+            columns = select.replace(" ", "").split(",")
+            query = query.select(",".join(columns))
+        else:
+            query = query.select("*")
+            
+        # Handle filtering
+        if organization_id:
+            query = query.eq('organization_id', str(organization_id))
+        if user_id:
+            query = query.eq('user_id', str(user_id))
+        if role:
+            query = query.eq('role', role)
+        if status:
+            query = query.eq('status', status)
+            
+        # Handle ordering
+        if order:
+            if order.startswith('-'):
+                query = query.order(order[1:], desc=True)
+            else:
+                query = query.order(order)
+                
+        # Get total count before pagination
+        count_response = query.execute()
+        total_count = len(count_response.data)
+                
+        # Handle pagination
+        start = page * page_size
+        end = start + page_size - 1
+        query = query.range(start, end)
+        
+        response = query.execute()
+        
+        return OrganizationMemberList(
+            data=[OrganizationMemberInDB(**member) for member in response.data],
+            page=page,
+            page_size=page_size,
+            total=total_count
+        )
+        
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/v1/organization-members/{member_id}", tags=["Organization Members"])
+async def get_organization_member(member_id: UUID4, select: str = None):
+    """
+    Fetch a specific organization member by ID
+    """
+    try:
+        query = supabase.table('organization_members')
+        
+        # Handle column selection
+        if select:
+            columns = select.replace(" ", "").split(",")
+            query = query.select(",".join(columns))
+        else:
+            query = query.select("*")
+            
+        response = query.eq('id', str(member_id)).execute()
+        
+        if not response.data:
+            raise HTTPException(status_code=404, detail=f"Organization member with ID {member_id} not found")
+            
+        return response.data[0]
+        
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/v1/organization-members", tags=["Organization Members"], response_model=OrganizationMemberInDB)
+async def create_organization_member(member: OrganizationMemberCreate):
+    """
+    Create a new organization member
+    """
+    try:
+        # Convert the member data to a JSON-serializable format
+        member_data = jsonable_encoder(member)
+        response = supabase.table('organization_members').insert(member_data).execute()
+        
+        if not response.data:
+            raise HTTPException(status_code=500, detail="Failed to create organization member")
+            
+        return OrganizationMemberInDB(**response.data[0])
+        
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/v1/organization-members/bulk", tags=["Organization Members"])
+async def create_organization_members_bulk(members: List[OrganizationMemberCreate]):
+    """
+    Create multiple organization members in bulk
+    """
+    try:
+        # Convert all members to JSON-serializable dictionaries
+        members_data = [jsonable_encoder(member) for member in members]
+        
+        response = supabase.table('organization_members').insert(members_data).execute()
+        
+        if not response.data:
+            raise HTTPException(status_code=500, detail="Failed to create organization members")
+            
+        return {
+            "message": f"Successfully created {len(response.data)} organization members",
+            "data": [OrganizationMemberInDB(**member) for member in response.data]
+        }
+        
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.patch("/v1/organization-members/{member_id}", tags=["Organization Members"], response_model=OrganizationMemberInDB)
+async def update_organization_member(
+    member_id: UUID4,
+    member_update: OrganizationMemberUpdate
+):
+    """
+    Update an existing organization member
+    """
+    try:
+        # Check if member exists
+        check_response = supabase.table('organization_members').select("id").eq('id', str(member_id)).execute()
+        if not check_response.data:
+            raise HTTPException(status_code=404, detail=f"Organization member with ID {member_id} not found")
+        
+        # Convert the member data to a JSON-serializable format
+        update_data = jsonable_encoder(member_update)
+        response = supabase.table('organization_members').update(update_data).eq('id', str(member_id)).execute()
+        
+        if not response.data:
+            raise HTTPException(status_code=500, detail="Failed to update organization member")
+            
+        return OrganizationMemberInDB(**response.data[0])
+        
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/v1/organization-members/{member_id}", tags=["Organization Members"])
+async def delete_organization_member(member_id: UUID4):
+    """
+    Delete an organization member
+    """
+    try:
+        # Check if member exists
+        check_response = supabase.table('organization_members').select("id").eq('id', str(member_id)).execute()
+        if not check_response.data:
+            raise HTTPException(status_code=404, detail=f"Organization member with ID {member_id} not found")
+        
+        # Delete the member
+        response = supabase.table('organization_members').delete().eq('id', str(member_id)).execute()
+        
+        if not response.data:
+            raise HTTPException(status_code=500, detail="Failed to delete organization member")
+            
+        return {
+            "message": "Organization member deleted successfully",
+            "id": member_id
+        }
+        
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
