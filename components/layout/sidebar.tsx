@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useSidebarStore } from '@/lib/store/sidebar-store';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,8 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
 
 const navItems = [
     {
@@ -63,6 +65,8 @@ export function Sidebar() {
   const pathname = usePathname();
   const [isMounted, setIsMounted] = useState(false);
   const { isCollapsed, setIsCollapsed } = useSidebarStore();
+  const router = useRouter();
+  const supabase = createClient();
 
   useEffect(() => {
     setIsMounted(true);
@@ -78,6 +82,20 @@ export function Sidebar() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [setIsCollapsed]);
+
+  const handleSignOut = async () => {
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) {
+        throw error
+      }
+      toast.success('Successfully signed out')
+      router.push('/sign-in')
+    } catch (error) {
+      console.error('Error signing out:', error)
+      toast.error('Failed to sign out')
+    }
+  }
 
   if (!isMounted) {
     return (
@@ -178,7 +196,9 @@ export function Sidebar() {
                 <DropdownMenuItem asChild>
                   <Link href="/settings">Settings</Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem>Logout</DropdownMenuItem>
+                <DropdownMenuItem onClick={handleSignOut}>
+                  Sign Out
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
@@ -201,6 +221,7 @@ export function Sidebar() {
                 "flex items-center gap-3 rounded-lg px-3 py-2",
                 "justify-start hover:bg-primary-foreground/20"
               )}
+              onClick={handleSignOut}
             >
               <LogOut className="h-5 w-5 shrink-0" />
               {!isCollapsed && <span>Sign Out</span>}
