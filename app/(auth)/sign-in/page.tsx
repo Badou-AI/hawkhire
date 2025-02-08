@@ -2,24 +2,105 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Eye, EyeOff } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useRouter } from 'next/navigation'
+import { createClient } from "@/lib/supabase/client"
+import { toast } from "sonner"
+import { AuthError } from "@supabase/supabase-js"
 
 export default function SignInPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
+  const supabase = createClient()
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    // Check if user is already signed in
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        router.push('/dashboard')
+      }
+    }
+    checkSession()
+  }, [router, supabase.auth])
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // For now, just redirect to the dashboard without authentication
-    router.push('/dashboard')
+    setIsLoading(true)
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      if (error) {
+        throw error
+      }
+
+      if (data.session) {
+        toast.success('Successfully signed in!')
+        router.push('/dashboard')
+      }
+    } catch (error) {
+      if (error instanceof AuthError) {
+        toast.error(error.message)
+      } else {
+        toast.error('Failed to sign in')
+      }
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleGoogleSignIn = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      })
+
+      if (error) {
+        throw error
+      }
+    } catch (error) {
+      if (error instanceof AuthError) {
+        toast.error(error.message)
+      } else {
+        toast.error('Failed to sign in with Google')
+      }
+    }
+  }
+
+  const handleFacebookSignIn = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'facebook',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      })
+
+      if (error) {
+        throw error
+      }
+    } catch (error) {
+      if (error instanceof AuthError) {
+        toast.error(error.message)
+      } else {
+        toast.error('Failed to sign in with Facebook')
+      }
+    }
   }
 
   return (
@@ -103,8 +184,12 @@ export default function SignInPage() {
               </div>
 
               <div>
-                <Button type="submit" className="w-full bg-violet-600 hover:bg-violet-700">
-                  Sign in
+                <Button 
+                  type="submit" 
+                  className="w-full bg-violet-600 hover:bg-violet-700"
+                  disabled={isLoading}
+                >
+                  {isLoading ? 'Signing in...' : 'Sign in'}
                 </Button>
               </div>
             </form>
@@ -120,7 +205,11 @@ export default function SignInPage() {
               </div>
 
               <div className="mt-6 grid grid-cols-2 gap-3">
-                <Button variant="outline" className="w-full">
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={handleGoogleSignIn}
+                >
                   <Image
                     className="mr-2 h-5 w-5"
                     src="/google.svg"
@@ -131,7 +220,11 @@ export default function SignInPage() {
                   <span className="text-sm font-medium">Google</span>
                 </Button>
 
-                <Button variant="outline" className="w-full">
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={handleFacebookSignIn}
+                >
                   <Image
                     className="mr-2 h-5 w-5"
                     src="/facebook.svg"
