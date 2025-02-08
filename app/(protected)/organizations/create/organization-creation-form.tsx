@@ -13,6 +13,7 @@ import {
     FormItem,
     FormLabel,
     FormMessage,
+    FormDescription,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import {
@@ -24,6 +25,7 @@ import {
 } from "@/components/ui/select"
 import { LocalizedTextInput } from "@/components/localized-text-input"
 import { LocalizedLocationInput } from "@/components/localized-location-input"
+import { ImageUpload } from "@/components/image-upload"
 
 import {
     organizationCreationSchema,
@@ -190,6 +192,66 @@ export function OrganizationCreationForm() {
         {/* Additional Details */}
         <Card className="col-span-1 space-y-6 p-6">
           <h2 className="text-lg font-semibold">Additional Details</h2>
+
+          <FormField
+            control={form.control}
+            name="logo_url"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Organization Logo</FormLabel>
+                <FormControl>
+                  <ImageUpload
+                    currentImageUrl={field.value}
+                    onImageSelect={async (file) => {
+                      // TODO: Upload image to storage and get URL
+                      // For now, just create an object URL
+                      const objectUrl = URL.createObjectURL(file)
+                      field.onChange(objectUrl)
+                    }}
+                    aspectRatio="square"
+                    maxSize={2}
+                    description="Upload your organization logo"
+                    showRemoveButton
+                    onRemove={() => field.onChange("/placeholders/organization-logo.png")}
+                  />
+                </FormControl>
+                <FormDescription>
+                  Recommended size: 256x256 pixels
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="cover_image_url"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Cover Image</FormLabel>
+                <FormControl>
+                  <ImageUpload
+                    currentImageUrl={field.value}
+                    onImageSelect={async (file) => {
+                      // TODO: Upload image to storage and get URL
+                      // For now, just create an object URL
+                      const objectUrl = URL.createObjectURL(file)
+                      field.onChange(objectUrl)
+                    }}
+                    aspectRatio="wide"
+                    maxSize={5}
+                    description="Upload a cover image"
+                    showRemoveButton
+                    onRemove={() => field.onChange("/placeholders/organization-cover.png")}
+                  />
+                </FormControl>
+                <FormDescription>
+                  Recommended size: 1200x400 pixels
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
           <FormField
             control={form.control}
