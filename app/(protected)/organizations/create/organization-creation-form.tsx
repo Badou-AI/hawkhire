@@ -58,8 +58,8 @@ export function OrganizationCreationForm() {
       founded_year: undefined,
       size_range: undefined,
       website_url: "",
-      logo_url: "/placeholders/organization-logo.png",
-      cover_image_url: "/placeholders/organization-cover.png",
+      logo_url: undefined,
+      cover_image_url: undefined,
       primary_location: defaultLocalizedLocation,
       additional_locations: [],
       languages: ["en"],
@@ -217,8 +217,8 @@ export function OrganizationCreationForm() {
                     height="sm"
                     maxSize={2}
                     description="Upload your organization logo"
-                    showRemoveButton
-                    onRemove={() => field.onChange("/placeholders/organization-logo.png")}
+                    showRemoveButton={!!field.value}
+                    onRemove={() => field.onChange(undefined)}
                   />
                 </FormControl>
                 <FormDescription>
@@ -251,8 +251,8 @@ export function OrganizationCreationForm() {
                     height="sm"
                     maxSize={5}
                     description="Upload a cover image"
-                    showRemoveButton
-                    onRemove={() => field.onChange("/placeholders/organization-cover.png")}
+                    showRemoveButton={!!field.value}
+                    onRemove={() => field.onChange(undefined)}
                   />
                 </FormControl>
                 <FormDescription>
