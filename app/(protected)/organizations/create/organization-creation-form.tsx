@@ -26,6 +26,8 @@ import {
 import { LocalizedTextInput } from "@/components/localized-text-input"
 import { LocalizedLocationInput } from "@/components/localized-location-input"
 import { ImageUpload } from "@/components/image-upload"
+import { uploadImage } from "@/app/api/upload/client"
+import { toast } from "sonner"
 
 import {
     organizationCreationSchema,
@@ -203,12 +205,16 @@ export function OrganizationCreationForm() {
                   <ImageUpload
                     currentImageUrl={field.value}
                     onImageSelect={async (file) => {
-                      // TODO: Upload image to storage and get URL
-                      // For now, just create an object URL
-                      const objectUrl = URL.createObjectURL(file)
-                      field.onChange(objectUrl)
+                      try {
+                        const { url } = await uploadImage(file, 'logos')
+                        field.onChange(url)
+                      } catch (error) {
+                        console.error('Error uploading logo:', error)
+                        toast.error('Failed to upload logo. Please try again.')
+                      }
                     }}
                     aspectRatio="square"
+                    height="sm"
                     maxSize={2}
                     description="Upload your organization logo"
                     showRemoveButton
@@ -233,12 +239,16 @@ export function OrganizationCreationForm() {
                   <ImageUpload
                     currentImageUrl={field.value}
                     onImageSelect={async (file) => {
-                      // TODO: Upload image to storage and get URL
-                      // For now, just create an object URL
-                      const objectUrl = URL.createObjectURL(file)
-                      field.onChange(objectUrl)
+                      try {
+                        const { url } = await uploadImage(file, 'covers')
+                        field.onChange(url)
+                      } catch (error) {
+                        console.error('Error uploading cover image:', error)
+                        toast.error('Failed to upload cover image. Please try again.')
+                      }
                     }}
                     aspectRatio="wide"
+                    height="sm"
                     maxSize={5}
                     description="Upload a cover image"
                     showRemoveButton

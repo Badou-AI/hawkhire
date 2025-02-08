@@ -18,6 +18,7 @@ interface ImageUploadProps {
   aspectRatio?: "square" | "wide" // For different image layouts
   showRemoveButton?: boolean
   onRemove?: () => void
+  height?: "sm" | "md" | "lg" // Control height of the component
 }
 
 export function ImageUpload({
@@ -32,6 +33,7 @@ export function ImageUpload({
   aspectRatio = "square",
   showRemoveButton = false,
   onRemove,
+  height = "md",
 }: ImageUploadProps) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(currentImageUrl || null)
   const [isDragging, setIsDragging] = useState(false)
@@ -83,9 +85,16 @@ export function ImageUpload({
     onRemove?.()
   }
 
+  const heightClasses = {
+    sm: "h-24",
+    md: "h-40",
+    lg: "h-60",
+  }
+
   const containerClasses = cn(
     "relative rounded-lg overflow-hidden",
-    aspectRatio === "square" ? "aspect-square" : "aspect-video",
+    heightClasses[height],
+    aspectRatio === "square" ? "aspect-square" : "aspect-[3/1]",
     className
   )
 
@@ -135,21 +144,21 @@ export function ImageUpload({
       }}
     >
       <div className={dropzoneClasses}>
-        <div className="absolute inset-0 flex flex-col items-center justify-center space-y-4 p-4">
-          <Upload className="h-8 w-8 text-muted-foreground" />
-          <div className="space-y-1 text-center">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4">
+          <Upload className="h-6 w-6 text-muted-foreground" />
+          <div className="space-y-0.5 text-center">
             <p className="text-sm font-medium">{description}</p>
             <p className="text-xs text-muted-foreground">or click to browse</p>
           </div>
 
-          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <div className="flex items-center gap-1">
               <AlertCircle className="h-3 w-3" />
               <span>{fileTypeDescription}</span>
             </div>
             <div className="flex items-center gap-1">
               <AlertCircle className="h-3 w-3" />
-              <span>Max size: {maxSize}MB</span>
+              <span>Max {maxSize}MB</span>
             </div>
           </div>
         </div>
