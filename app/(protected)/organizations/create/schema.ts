@@ -61,7 +61,7 @@ export const organizationCreationSchema = z.object({
   logo_url: z.string().optional(),
   cover_image_url: z.string().optional(),
   primary_location: localizedLocationSchema,
-  additional_locations: z.array(localizedLocationSchema).default([]),
+  additional_locations: z.array(localizedLocationSchema).optional().default([]),
   languages: z.array(z.string()).min(1).default(["en"]),
   verification_status: z.enum(["PENDING", "VERIFIED", "REJECTED"]).default("PENDING"),
   is_mock: z.boolean().default(false),

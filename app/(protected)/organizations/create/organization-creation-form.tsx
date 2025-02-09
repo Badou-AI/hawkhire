@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import { useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -49,6 +50,10 @@ const defaultLocalizedLocation = {
 
 export function OrganizationCreationForm() {
   const router = useRouter()
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [coverFile, setCoverFile] = useState<File | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
   const form = useForm<FormValues>({
     resolver: zodResolver(organizationCreationSchema),
     defaultValues: {
@@ -73,8 +78,32 @@ export function OrganizationCreationForm() {
 
   async function onSubmit(data: FormValues) {
     try {
+      setIsSubmitting(true)
       form.clearErrors()
       
+      // Upload images if they exist
+      if (logoFile) {
+        try {
+          const { url } = await uploadImage(logoFile, 'organizations/logos')
+          data.logo_url = url
+        } catch (error) {
+          console.error('Error uploading logo:', error)
+          toast.error('Failed to upload logo. Please try again.')
+          return
+        }
+      }
+
+      if (coverFile) {
+        try {
+          const { url } = await uploadImage(coverFile, 'organizations/covers')
+          data.cover_image_url = url
+        } catch (error) {
+          console.error('Error uploading cover image:', error)
+          toast.error('Failed to upload cover image. Please try again.')
+          return
+        }
+      }
+
       const response = await fetch("/api/v1/organizations", {
         method: "POST",
         headers: {
@@ -98,6 +127,8 @@ export function OrganizationCreationForm() {
     } catch (error) {
       console.error("Error creating organization:", error)
       toast.error(error instanceof Error ? error.message : "Failed to create organization")
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -214,22 +245,20 @@ export function OrganizationCreationForm() {
                 <FormLabel>Organization Logo</FormLabel>
                 <FormControl>
                   <ImageUpload
-                    currentImageUrl={field.value}
-                    onImageSelect={async (file) => {
-                      try {
-                        const { url } = await uploadImage(file, 'logos')
-                        field.onChange(url)
-                      } catch (error) {
-                        console.error('Error uploading logo:', error)
-                        toast.error('Failed to upload logo. Please try again.')
-                      }
+                    currentImageUrl={logoFile ? URL.createObjectURL(logoFile) : field.value}
+                    onImageSelect={(file) => {
+                      setLogoFile(file)
+                      field.onChange(undefined) // Clear the URL since we'll set it after upload
                     }}
                     aspectRatio="square"
                     height="sm"
                     maxSize={2}
                     description="Upload your organization logo"
-                    showRemoveButton={!!field.value}
-                    onRemove={() => field.onChange(undefined)}
+                    showRemoveButton={!!logoFile || !!field.value}
+                    onRemove={() => {
+                      setLogoFile(null)
+                      field.onChange(undefined)
+                    }}
                   />
                 </FormControl>
                 <FormDescription>
@@ -248,22 +277,20 @@ export function OrganizationCreationForm() {
                 <FormLabel>Cover Image</FormLabel>
                 <FormControl>
                   <ImageUpload
-                    currentImageUrl={field.value}
-                    onImageSelect={async (file) => {
-                      try {
-                        const { url } = await uploadImage(file, 'covers')
-                        field.onChange(url)
-                      } catch (error) {
-                        console.error('Error uploading cover image:', error)
-                        toast.error('Failed to upload cover image. Please try again.')
-                      }
+                    currentImageUrl={coverFile ? URL.createObjectURL(coverFile) : field.value}
+                    onImageSelect={(file) => {
+                      setCoverFile(file)
+                      field.onChange(undefined) // Clear the URL since we'll set it after upload
                     }}
                     aspectRatio="wide"
                     height="sm"
                     maxSize={5}
                     description="Upload a cover image"
-                    showRemoveButton={!!field.value}
-                    onRemove={() => field.onChange(undefined)}
+                    showRemoveButton={!!coverFile || !!field.value}
+                    onRemove={() => {
+                      setCoverFile(null)
+                      field.onChange(undefined)
+                    }}
                   />
                 </FormControl>
                 <FormDescription>
@@ -358,10 +385,12 @@ export function OrganizationCreationForm() {
 
         {/* Form Actions */}
         <div className="col-span-2 flex justify-end space-x-4 border-t pt-6">
-          <Button type="button" variant="outline">
+          <Button type="button" variant="outline" onClick={() => router.back()}>
             Cancel
           </Button>
-          <Button type="submit">Create Organization</Button>
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? "Creating..." : "Create Organization"}
+          </Button>
         </div>
       </form>
     </Form>

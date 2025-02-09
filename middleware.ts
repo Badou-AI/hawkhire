@@ -2,7 +2,7 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-  const response = NextResponse.next({
+  let response = NextResponse.next({
     request: {
       headers: request.headers,
     },
@@ -28,27 +28,67 @@ export async function middleware(request: NextRequest) {
             name,
             value: '',
             ...options,
+            maxAge: 0,
           })
         },
       },
     }
   )
 
-  const { data: { session } } = await supabase.auth.getSession()
+  try {
+    // Refresh session if expired - required for Server Components
+    const { data: { session }, error } = await supabase.auth.getSession()
+    
+    if (error) {
+      throw error
+    }
 
-  // If no session and trying to access protected route
-  if (!session && request.nextUrl.pathname.startsWith('/(protected)')) {
-    return NextResponse.redirect(new URL('/auth/login', request.url))
+    // Protected routes check
+    if (!session && (
+      request.nextUrl.pathname.startsWith('/(protected)') ||
+      request.nextUrl.pathname.startsWith('/api/v1')
+    )) {
+      // API requests return 401
+      if (request.nextUrl.pathname.startsWith('/api/')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      
+      // Other routes redirect to sign-in
+      const redirectUrl = new URL('/sign-in', request.url)
+      redirectUrl.searchParams.set('redirect', request.nextUrl.pathname)
+      return NextResponse.redirect(redirectUrl)
+    }
+
+    // Redirect signed-in users away from auth pages
+    if (session && (
+      request.nextUrl.pathname.startsWith('/sign-in') ||
+      request.nextUrl.pathname.startsWith('/sign-up')
+    )) {
+      return NextResponse.redirect(new URL('/', request.url))
+    }
+
+    return response
+
+  } catch (error) {
+    // On auth error, clear session and redirect to sign-in
+    response.cookies.set({
+      name: 'supabase-auth-token',
+      value: '',
+      maxAge: 0,
+    })
+    
+    const redirectUrl = new URL('/sign-in', request.url)
+    redirectUrl.searchParams.set('error', 'auth')
+    return NextResponse.redirect(redirectUrl)
   }
-
-  // If session exists and trying to access auth routes
-  if (session && request.nextUrl.pathname.startsWith('/auth/')) {
-    return NextResponse.redirect(new URL('/', request.url))
-  }
-
-  return response
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+  matcher: [
+    '/(protected)/:path*',
+    '/api/v1/:path*',
+    '/sign-in',
+    '/sign-up',
+    '/auth/callback',
+  ],
 } 

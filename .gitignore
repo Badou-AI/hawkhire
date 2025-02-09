@@ -60,3 +60,7 @@ next-env.d.ts
 # all python pycache
 __pycache__
 __pycache__/*
+
+# docs
+docs/*
+docs/*/*

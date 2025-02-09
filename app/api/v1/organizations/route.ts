@@ -16,18 +16,27 @@ export async function POST(request: Request) {
 
     // Get organization data from request
     const organizationData = await request.json()
+    const { additional_locations, ...rest } = organizationData
+
+    // Ensure JSONB fields are properly serialized
+    const serializedData = {
+      ...rest,
+      name: JSON.stringify(organizationData.name),
+      description: JSON.stringify(organizationData.description),
+      primary_location: JSON.stringify(organizationData.primary_location),
+    }
 
     // Create organization
     const { data: organization, error: orgError } = await supabase
       .from("organizations")
-      .insert([organizationData])
+      .insert([serializedData])
       .select()
       .single()
 
     if (orgError) {
       console.error("Error creating organization:", orgError)
       return NextResponse.json(
-        { message: "Failed to create organization" },
+        { message: orgError.message || "Failed to create organization" },
         { status: 500 }
       )
     }

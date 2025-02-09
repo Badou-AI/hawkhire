@@ -1,7 +1,6 @@
-import { createServerClient } from '@supabase/ssr'
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { Database } from '@/types/supabase'
-import { CookieOptions } from '@supabase/ssr'
 
 export const createClient = () => {
   const cookieStore = cookies()
@@ -11,27 +10,40 @@ export const createClient = () => {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        async get(name: string) {
-          const cookieStore = cookies()
+        get(name: string) {
           return cookieStore.get(name)?.value
         },
-        async set(name: string, value: string, options: CookieOptions) {
-          const cookieStore = cookies()
+        set(name: string, value: string, options: CookieOptions) {
           try {
             cookieStore.set({ name, value, ...options })
-          } catch (error: unknown) {
+          } catch (error) {
+            // Handle cookie error
             console.error('Error setting cookie:', error)
           }
         },
-        async remove(name: string, options: CookieOptions) {
-          const cookieStore = cookies()
+        remove(name: string, options: CookieOptions) {
           try {
-            cookieStore.set({ name, value: '', ...options })
-          } catch (error: unknown) {
+            cookieStore.set({
+              name,
+              value: '',
+              ...options,
+              maxAge: 0,
+            })
+          } catch (error) {
+            // Handle cookie error
             console.error('Error removing cookie:', error)
           }
         },
       },
+      auth: {
+        detectSessionInUrl: true,
+        flowType: 'pkce',
+      },
+      global: {
+        headers: {
+          'X-Supabase-Host': '127.0.0.1'
+        }
+      }
     }
   )
 } 

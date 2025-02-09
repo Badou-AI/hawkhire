@@ -1,13 +1,19 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
 
 export async function POST(request: Request) {
   try {
+    const supabase = createClient()
+    
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError || !user) {
+      return NextResponse.json(
+        { message: "Unauthorized" },
+        { status: 401 }
+      )
+    }
+
     const formData = await request.formData()
     const file = formData.get('file') as File
     const folder = formData.get('folder') as string || 'misc'
@@ -28,6 +34,11 @@ export async function POST(request: Request) {
     const filename = `${timestamp}_${uniqueId}_${file.name}`
     const filePath = `${folder}/${filename}`
 
+    console.log('Attempting upload to bucket:', 'company-assets')
+    console.log('File path:', filePath)
+    console.log('Content type:', file.type)
+    console.log('Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL)
+
     // Upload to Supabase Storage
     const { error } = await supabase.storage
       .from('company-assets')
@@ -40,7 +51,7 @@ export async function POST(request: Request) {
     if (error) {
       console.error('Error uploading file:', error)
       return NextResponse.json(
-        { error: 'Failed to upload file' },
+        { error: error.message || 'Failed to upload file' },
         { status: 500 }
       )
     }
