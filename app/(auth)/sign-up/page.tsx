@@ -18,26 +18,23 @@ export default function SignUpPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [acceptTerms, setAcceptTerms] = useState(false)
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
 
   useEffect(() => {
-    const error = searchParams.get('error')
-    if (error) {
-      toast.error(error === 'auth' ? 'Authentication failed' : 'An error occurred')
+    // Check if user is already signed in
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        router.push('/dashboard')
+      }
     }
-  }, [searchParams])
+    checkSession()
+  }, [router, supabase.auth])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    if (!acceptTerms) {
-      toast.error('Please accept the terms and conditions')
-      return
-    }
-
     setIsLoading(true)
 
     try {
@@ -45,26 +42,16 @@ export default function SignUpPage() {
         email,
         password,
         options: {
-          emailRedirectTo: `http://127.0.0.1:${process.env.NEXT_PUBLIC_PORT || 3000}/auth/callback`,
-          data: {
-            accepted_terms: true,
-            signup_date: new Date().toISOString(),
-          }
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       })
 
       if (error) throw error
 
-      if (data.user && !data.session) {
+      if (data.user) {
         toast.success('Please check your email to verify your account')
-        router.push('/sign-in?message=check-email')
-      } else if (data.session) {
-        // If email verification is not required
-        const redirectTo = searchParams.get('redirect') || '/'
-        router.push(redirectTo)
-        router.refresh()
+        router.push('/sign-in')
       }
-
     } catch (error) {
       if (error instanceof AuthError) {
         toast.error(error.message)
@@ -81,11 +68,7 @@ export default function SignUpPage() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `http://127.0.0.1:${process.env.NEXT_PUBLIC_PORT || 3000}/auth/callback`,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
+          redirectTo: `${window.location.origin}/auth/callback`,
         },
       })
 
@@ -100,135 +83,144 @@ export default function SignUpPage() {
   }
 
   return (
-    <div className="container relative flex h-screen flex-col items-center justify-center md:grid lg:max-w-none lg:grid-cols-2 lg:px-0">
-      <div className="relative hidden h-full flex-col bg-muted p-10 text-white lg:flex dark:border-r">
-        <div className="absolute inset-0 bg-zinc-900" />
-        <div className="relative z-20 flex items-center text-lg font-medium">
-          <Image
-            src="/logo.svg"
-            alt="Logo"
-            width={40}
-            height={40}
-            className="mr-2"
-          />
-          JobFlow
-        </div>
-      </div>
-      <div className="lg:p-8">
-        <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
-          <div className="flex flex-col space-y-2 text-center">
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Create an account
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Enter your email below to create your account
-            </p>
-          </div>
-          <div className="grid gap-6">
-            <form onSubmit={handleSubmit}>
-              <div className="grid gap-2">
-                <div className="grid gap-1">
-                  <Label className="sr-only" htmlFor="email">
-                    Email
-                  </Label>
+    <div className="flex min-h-screen bg-white">
+      <div className="flex flex-1 flex-col justify-center px-4 py-12 sm:px-6 lg:flex-none lg:px-20 xl:px-24">
+        <div className="mx-auto w-full max-w-sm lg:w-96">
+          <div className="space-y-6">
+            <div>
+              <h2 className="mt-6 text-3xl font-extrabold text-gray-900">Create Account</h2>
+              <p className="mt-2 text-sm text-gray-600">
+                Join Hawkhire to start hiring or finding jobs
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div>
+                <Label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                  EMAIL
+                </Label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  className="mt-1"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="example@email.com"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                  PASSWORD
+                </Label>
+                <div className="mt-1 relative">
                   <Input
-                    id="email"
-                    placeholder="name@example.com"
-                    type="email"
-                    autoCapitalize="none"
-                    autoComplete="email"
-                    autoCorrect="off"
-                    disabled={isLoading}
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    id="password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    required
+                    className="pr-10"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Create a strong password"
                   />
-                </div>
-                <div className="grid gap-1">
-                  <Label className="sr-only" htmlFor="password">
-                    Password
-                  </Label>
-                  <div className="relative">
-                    <Input
-                      id="password"
-                      placeholder="Password"
-                      type={showPassword ? "text" : "password"}
-                      autoCapitalize="none"
-                      autoCorrect="off"
-                      disabled={isLoading}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-2 top-2.5 text-muted-foreground hover:text-foreground"
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox 
-                    id="terms" 
-                    checked={acceptTerms}
-                    onCheckedChange={(checked) => setAcceptTerms(checked as boolean)}
-                  />
-                  <label
-                    htmlFor="terms"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute inset-y-0 right-0 flex items-center pr-3"
+                    onClick={() => setShowPassword(!showPassword)}
                   >
-                    Accept terms and conditions
-                  </label>
+                    {showPassword ? (
+                      <EyeOff className="h-5 w-5 text-gray-400" />
+                    ) : (
+                      <Eye className="h-5 w-5 text-gray-400" />
+                    )}
+                  </Button>
                 </div>
-                <Button disabled={isLoading}>
-                  {isLoading && (
-                    <span className="mr-2 h-4 w-4 animate-spin">◌</span>
-                  )}
-                  Sign Up
+              </div>
+
+              <div className="flex items-center">
+                <Checkbox id="terms" required />
+                <Label
+                  htmlFor="terms"
+                  className="ml-2 block text-sm text-gray-900"
+                >
+                  I agree to the{" "}
+                  <Link href="/terms" className="font-medium text-violet-600 hover:text-violet-500">
+                    Terms of Service
+                  </Link>{" "}
+                  and{" "}
+                  <Link href="/privacy" className="font-medium text-violet-600 hover:text-violet-500">
+                    Privacy Policy
+                  </Link>
+                </Label>
+              </div>
+
+              <div>
+                <Button 
+                  type="submit" 
+                  className="w-full bg-violet-600 hover:bg-violet-700"
+                  disabled={isLoading}
+                >
+                  {isLoading ? 'Creating account...' : 'Create Account'}
                 </Button>
               </div>
             </form>
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t" />
+
+            <div className="mt-6">
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300" />
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-2 bg-white text-gray-500">Or continue with</span>
+                </div>
               </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">
-                  Or continue with
-                </span>
+
+              <div className="mt-6 grid grid-cols-1 gap-3">
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={handleGoogleSignUp}
+                >
+                  <Image
+                    className="mr-2 h-5 w-5"
+                    src="/google.svg"
+                    alt="Google logo"
+                    width={20}
+                    height={20}
+                  />
+                  <span className="text-sm font-medium">Google</span>
+                </Button>
               </div>
             </div>
-            <div className="grid gap-2">
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={handleGoogleSignUp}
-                disabled={isLoading}
-              >
-                <Image
-                  className="mr-2 h-5 w-5"
-                  src="/google.svg"
-                  alt="Google"
-                  width={20}
-                  height={20}
-                />
-                Google
-              </Button>
-            </div>
+
+            <p className="mt-2 text-center text-sm text-gray-600">
+              Already have an account?{" "}
+              <Link href="/sign-in" className="font-medium text-violet-600 hover:text-violet-500">
+                Sign in
+              </Link>
+            </p>
           </div>
-          <p className="px-8 text-center text-sm text-muted-foreground">
-            Already have an account?{" "}
-            <Link
-              href="/sign-in"
-              className="underline underline-offset-4 hover:text-primary"
-            >
-              Sign in
-            </Link>
-          </p>
+        </div>
+      </div>
+      <div className="hidden lg:block relative w-0 flex-1 bg-violet-600">
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-white p-12">
+          <Image
+            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Cleverwise-NNqNplHGCNwge6NJihMuobMRSYyxJC.png"
+            alt="Hawkhire"
+            width={150}
+            height={40}
+            className="mb-8"
+          />
+          <h2 className="text-4xl font-bold text-center max-w-xl">
+            Join Hawkhire to streamline your hiring process and find the perfect candidates!
+          </h2>
         </div>
       </div>
     </div>
