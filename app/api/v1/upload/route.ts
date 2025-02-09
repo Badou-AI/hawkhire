@@ -3,17 +3,31 @@ import { NextResponse } from 'next/server'
 
 export async function POST(request: Request) {
   try {
+    console.log('Upload request received')
     const supabase = createClient()
     
     // Get current user
+    console.log('Checking authentication...')
     const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError || !user) {
+    
+    if (userError) {
+      console.error('Auth error:', userError)
       return NextResponse.json(
-        { message: "Unauthorized" },
+        { message: "Authentication error: " + userError.message },
+        { status: 401 }
+      )
+    }
+    
+    if (!user) {
+      console.error('No user found in session')
+      return NextResponse.json(
+        { message: "No authenticated user found" },
         { status: 401 }
       )
     }
 
+    console.log('User authenticated:', user.id)
+    
     const formData = await request.formData()
     const file = formData.get('file') as File
     const folder = formData.get('folder') as string || 'misc'

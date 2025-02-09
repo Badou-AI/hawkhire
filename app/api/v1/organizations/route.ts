@@ -26,6 +26,20 @@ export async function POST(request: Request) {
       primary_location: JSON.stringify(organizationData.primary_location),
     }
 
+    // Set the user's email for the trigger function
+    const { error: configError } = await supabase.rpc('set_config', {
+      key: 'app.current_user_email',
+      value: user.email
+    })
+
+    if (configError) {
+      console.error("Error setting user email:", configError)
+      return NextResponse.json(
+        { message: "Failed to set user configuration" },
+        { status: 500 }
+      )
+    }
+
     // Create organization
     const { data: organization, error: orgError } = await supabase
       .from("organizations")

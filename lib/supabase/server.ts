@@ -3,41 +3,41 @@ import { cookies } from 'next/headers'
 import { Database } from '@/types/supabase'
 
 export const createClient = () => {
-  const cookieStore = cookies()
-
   return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
+        async get(name: string) {
+          const cookieStore = await cookies()
+          const cookie = cookieStore.get(name)
+          return cookie?.value ?? ''
         },
-        set(name: string, value: string, options: CookieOptions) {
-          try {
-            cookieStore.set({ name, value, ...options })
-          } catch (error) {
-            // Handle cookie error
-            console.error('Error setting cookie:', error)
-          }
+        async set(name: string, value: string, options: CookieOptions) {
+          const cookieStore = await cookies()
+          cookieStore.set({
+            name,
+            value,
+            ...options,
+            sameSite: 'lax',
+            path: '/',
+            secure: process.env.NODE_ENV === 'production'
+          })
         },
-        remove(name: string, options: CookieOptions) {
-          try {
-            cookieStore.set({
-              name,
-              value: '',
-              ...options,
-              maxAge: 0,
-            })
-          } catch (error) {
-            // Handle cookie error
-            console.error('Error removing cookie:', error)
-          }
+        async remove(name: string, options: CookieOptions) {
+          const cookieStore = await cookies()
+          cookieStore.delete({
+            name,
+            ...options,
+            path: '/'
+          })
         },
       },
       auth: {
-        detectSessionInUrl: true,
         flowType: 'pkce',
+        detectSessionInUrl: true,
+        persistSession: true,
+        autoRefreshToken: true
       },
       global: {
         headers: {
@@ -46,4 +46,7 @@ export const createClient = () => {
       }
     }
   )
-} 
+}
+
+// Add runtime directive for edge compatibility
+export const runtime = 'edge' 
