@@ -3,6 +3,8 @@
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
+import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -27,7 +29,6 @@ import { LocalizedTextInput } from "@/components/localized-text-input"
 import { LocalizedLocationInput } from "@/components/localized-location-input"
 import { ImageUpload } from "@/components/image-upload"
 import { uploadImage } from "@/app/api/upload/client"
-import { toast } from "sonner"
 
 import {
     organizationCreationSchema,
@@ -47,6 +48,7 @@ const defaultLocalizedLocation = {
 }
 
 export function OrganizationCreationForm() {
+  const router = useRouter()
   const form = useForm<FormValues>({
     resolver: zodResolver(organizationCreationSchema),
     defaultValues: {
@@ -71,6 +73,8 @@ export function OrganizationCreationForm() {
 
   async function onSubmit(data: FormValues) {
     try {
+      form.clearErrors()
+      
       const response = await fetch("/api/v1/organizations", {
         method: "POST",
         headers: {
@@ -80,13 +84,20 @@ export function OrganizationCreationForm() {
       })
 
       if (!response.ok) {
-        throw new Error("Failed to create organization")
+        const error = await response.json()
+        throw new Error(error.message || "Failed to create organization")
       }
 
-      // Handle success (redirect, show message, etc.)
+      const organization = await response.json()
+
+      // Show success message
+      toast.success("Organization created successfully!")
+
+      // Redirect to organization dashboard
+      router.push(`/organizations/${organization.id}`)
     } catch (error) {
-      // Handle error
       console.error("Error creating organization:", error)
+      toast.error(error instanceof Error ? error.message : "Failed to create organization")
     }
   }
 
