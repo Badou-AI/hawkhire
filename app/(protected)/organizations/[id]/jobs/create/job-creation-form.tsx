@@ -65,7 +65,7 @@ export function JobCreationForm({ organizationId }: JobCreationFormProps) {
 
       const job = await response.json()
       toast.success('Job created successfully')
-      router.push(`/organizations/${organizationId}/jobs/${job.id}`)
+      router.push(`/jobs/${job.id}`)
     } catch (error) {
       console.error('Error creating job:', error)
       toast.error(error instanceof Error ? error.message : 'Failed to create job')
