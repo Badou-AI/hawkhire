@@ -9,28 +9,42 @@ export const createClient = () => {
     {
       cookies: {
         async get(name: string) {
-          const cookieStore = await cookies()
-          const cookie = cookieStore.get(name)
-          return cookie?.value ?? ''
+          try {
+            const cookieStore = await cookies()
+            const cookie = cookieStore.get(name)
+            return cookie?.value ?? ''
+          } catch {
+            return ''
+          }
         },
         async set(name: string, value: string, options: CookieOptions) {
-          const cookieStore = await cookies()
-          cookieStore.set({
-            name,
-            value,
-            ...options,
-            sameSite: 'lax',
-            path: '/',
-            secure: process.env.NODE_ENV === 'production'
-          })
+          try {
+            const cookieStore = await cookies()
+            cookieStore.set({
+              name,
+              value,
+              ...options,
+              path: '/',
+              sameSite: 'lax',
+              secure: process.env.NODE_ENV === 'production'
+            })
+          } catch {
+            // Silently handle cookie errors in non-Route Handler contexts
+            return
+          }
         },
         async remove(name: string, options: CookieOptions) {
-          const cookieStore = await cookies()
-          cookieStore.delete({
-            name,
-            ...options,
-            path: '/'
-          })
+          try {
+            const cookieStore = await cookies()
+            cookieStore.delete({
+              name,
+              path: '/',
+              ...options
+            })
+          } catch {
+            // Silently handle cookie errors in non-Route Handler contexts
+            return
+          }
         },
       },
       auth: {

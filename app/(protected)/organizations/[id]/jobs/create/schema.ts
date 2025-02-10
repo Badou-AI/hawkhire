@@ -16,22 +16,23 @@ export const jobTypes = [
   "FULL_TIME",
   "PART_TIME",
   "CONTRACT",
-  "FREELANCE",
+  "TEMPORARY",
   "INTERNSHIP",
+  "VOLUNTEER",
 ] as const
 
 export const jobStatuses = [
   "DRAFT",
   "PUBLISHED",
-  "ARCHIVED",
   "CLOSED",
+  "ARCHIVED",
 ] as const
 
 export const currencies = [
   "USD",
+  "CAD",
   "EUR",
   "GBP",
-  "CAD",
 ] as const
 
 export const jobCreationSchema = z.object({
@@ -43,24 +44,22 @@ export const jobCreationSchema = z.object({
     fr: z.array(z.string()).optional(),
   }),
   skills: z.array(z.string()),
-  status: z.enum(jobStatuses).default("DRAFT"),
+  status: z.enum(jobStatuses),
   location: localizedLocationSchema,
   job_type: z.enum(jobTypes),
-  salary_min: z.number().min(0).nullable(),
-  salary_max: z.number().min(0).nullable(),
-  salary_currency: z.enum(currencies).default("USD"),
-  remote: z.boolean().default(false),
-  rating: z.number().min(0).max(5).nullable(),
-  is_mock: z.boolean().default(false),
-  mock_batch_id: z.string().uuid().nullable(),
-  // Contact Information
-  contact_person: z.string().optional(),
-  contact_phone: z.string().optional(),
-  contact_email: z.string().email().optional(),
-  show_contact_info: z.boolean().default(false),
-  // Dates
+  salary_min: z.number().nullable(),
+  salary_max: z.number().nullable(),
+  salary_currency: z.enum(currencies),
+  remote: z.boolean(),
   opening_date: z.date().optional(),
   closing_date: z.date().optional(),
+  contact_person: z.string().optional(),
+  contact_email: z.string().email().optional(),
+  contact_phone: z.string().optional(),
+  show_contact_info: z.boolean().optional(),
+  rating: z.number().min(0).max(5).nullable(),
+  is_mock: z.boolean(),
+  mock_batch_id: z.string().uuid().nullable(),
 })
 
 export type JobCreationInput = z.infer<typeof jobCreationSchema> 

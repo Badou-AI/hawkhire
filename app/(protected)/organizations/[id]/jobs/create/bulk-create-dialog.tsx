@@ -15,7 +15,11 @@ import { Upload } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
-export function BulkCreateDialog() {
+interface BulkCreateDialogProps {
+  organizationId: string
+}
+
+export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
   const [file, setFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
 
@@ -39,7 +43,10 @@ export function BulkCreateDialog() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(jobs),
+        body: JSON.stringify({
+          organization_id: organizationId,
+          jobs
+        }),
       })
 
       if (!response.ok) {

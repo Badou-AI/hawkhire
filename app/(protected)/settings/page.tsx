@@ -7,42 +7,83 @@ import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
+import { OrganizationCard } from "@/components/profile/organization-card"
 
 interface Organization {
   id: string
   name: { en: string; fr?: string }
+  description: { en: string; fr?: string }
   logo_url?: string
+  cover_image_url?: string
   industry?: string
+  verification_status: 'PENDING' | 'VERIFIED' | 'REJECTED'
+  _count?: {
+    members: number
+    jobs: number
+  }
+}
+
+interface OrganizationMember {
+  organization_id: string
+  role: string
 }
 
 export default function SettingsPage() {
   const [organizations, setOrganizations] = useState<Organization[]>([])
+  const [memberships, setMemberships] = useState<OrganizationMember[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function fetchOrganizations() {
       try {
         const supabase = createClient()
+        const userId = (await supabase.auth.getUser()).data.user?.id
+
+        if (!userId) {
+          setLoading(false)
+          return
+        }
         
-        // Get user's member records
+        // Get user's member records with roles
         const { data: memberData } = await supabase
           .from('organization_members')
-          .select('organization_id')
-          .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+          .select('organization_id, role')
+          .eq('user_id', userId)
 
         if (!memberData?.length) {
           setLoading(false)
           return
         }
 
-        // Get organization details
+        setMemberships(memberData)
+
+        // Get organization details with counts
         const organizationIds = memberData.map(m => m.organization_id)
         const { data: orgs } = await supabase
           .from('organizations')
-          .select('id, name, logo_url, industry')
+          .select(`
+            id, 
+            name, 
+            description,
+            logo_url,
+            cover_image_url,
+            industry,
+            verification_status,
+            organization_members(count),
+            jobs(count)
+          `)
           .in('id', organizationIds)
 
-        setOrganizations(orgs || [])
+        // Transform the data to match our interface
+        const transformedOrgs = orgs?.map(org => ({
+          ...org,
+          _count: {
+            members: org.organization_members?.[0]?.count || 0,
+            jobs: org.jobs?.[0]?.count || 0
+          }
+        }))
+
+        setOrganizations(transformedOrgs || [])
       } catch (error) {
         console.error('Error fetching organizations:', error)
       } finally {
@@ -87,39 +128,27 @@ export default function SettingsPage() {
             </Button>
           </div>
 
-          <Card className="p-6">
+          <div className="grid gap-6">
             {loading ? (
-              <p className="text-sm text-muted-foreground">Loading organizations...</p>
+              <Card className="p-6">
+                <p className="text-sm text-muted-foreground">Loading organizations...</p>
+              </Card>
             ) : organizations.length > 0 ? (
-              <div className="grid gap-4">
-                {organizations.map((org) => (
-                  <Link 
-                    key={org.id} 
-                    href={`/organizations/${org.id}`}
-                    className="flex items-center gap-4 p-4 hover:bg-muted rounded-lg transition-colors"
-                  >
-                    {org.logo_url && (
-                      <img 
-                        src={org.logo_url} 
-                        alt={org.name.en} 
-                        className="w-12 h-12 rounded-lg object-cover"
-                      />
-                    )}
-                    <div>
-                      <h3 className="font-medium">{org.name.en}</h3>
-                      {org.industry && (
-                        <p className="text-sm text-muted-foreground">{org.industry}</p>
-                      )}
-                    </div>
-                  </Link>
-                ))}
-              </div>
+              organizations.map((org) => (
+                <OrganizationCard
+                  key={org.id}
+                  organization={org}
+                  isOwner={memberships.find(m => m.organization_id === org.id)?.role === 'OWNER'}
+                />
+              ))
             ) : (
-              <p className="text-sm text-muted-foreground">
-                You haven&apos;t created or joined any organizations yet.
-              </p>
+              <Card className="p-6">
+                <p className="text-sm text-muted-foreground">
+                  You haven&apos;t created or joined any organizations yet.
+                </p>
+              </Card>
             )}
-          </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="preferences" className="space-y-4">
