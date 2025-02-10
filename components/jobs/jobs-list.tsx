@@ -36,7 +36,7 @@ export function JobsList() {
         setJobs(response.data.map((job: ApiJob) => ({
           id: job.id,
           title: job.title.en,
-          company: job.organizations?.name.en || 'Company Name',
+          company: job.organizations?.name.en || 'Company Name?',
           location: `${job.location.city.en}, ${job.location.state.en}`,
           type: job.job_type.replace('_', ' ').toLowerCase(),
           rating: job.rating || 4.5,

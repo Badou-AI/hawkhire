@@ -117,7 +117,7 @@ export function mapBackendJobToFrontend(backendJob: ApiJob): Job {
   return {
     id: backendJob.id,
     title: backendJob.title.en,
-    company: backendJob.organizations?.name.en || 'Company Name',
+    company: backendJob.organizations?.name.en || 'Company Name!',
     location: locationString,
     type: backendJob.job_type.replace('_', ' ').toLowerCase(),
     rating: backendJob.rating || 4.5,
