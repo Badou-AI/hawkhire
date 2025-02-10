@@ -18,14 +18,6 @@ export async function POST(request: Request) {
     const organizationData = await request.json()
     const { additional_locations, ...rest } = organizationData
 
-    // Ensure JSONB fields are properly serialized
-    const serializedData = {
-      ...rest,
-      name: JSON.stringify(organizationData.name),
-      description: JSON.stringify(organizationData.description),
-      primary_location: JSON.stringify(organizationData.primary_location),
-    }
-
     // Set the user's email for the trigger function
     const { error: configError } = await supabase.rpc('set_config', {
       key: 'app.current_user_email',
@@ -43,7 +35,7 @@ export async function POST(request: Request) {
     // Create organization
     const { data: organization, error: orgError } = await supabase
       .from("organizations")
-      .insert([serializedData])
+      .insert([rest])
       .select()
       .single()
 
