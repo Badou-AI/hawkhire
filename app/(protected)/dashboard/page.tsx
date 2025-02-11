@@ -361,8 +361,8 @@ export default function DashboardPage() {
                         nameKey="department"
                         cx="50%"
                         cy="50%"
-                        innerRadius={60}
-                        outerRadius={80}
+                        innerRadius={80}
+                        outerRadius={100}
                         paddingAngle={2}
                       >
                         {departmentData.map((entry, index) => (
@@ -415,9 +415,9 @@ export default function DashboardPage() {
                       data={resourcesChartData}
                       dataKey="value"
                       nameKey="name"
-                      innerRadius={60}
-                      outerRadius={80}
-                      strokeWidth={5}
+                      innerRadius={80}
+                      outerRadius={100}
+                      strokeWidth={1}
                       className="stroke-background"
                     >
                       {resourcesChartData.map((entry, index) => (
@@ -446,7 +446,7 @@ export default function DashboardPage() {
                                 <tspan
                                   x={viewBox.cx}
                                   y={(viewBox.cy || 0) + 10}
-                                  className="fill-muted-foreground text-sm"
+                                  className="fill-foreground text-sm"
                                 >
                                   Total Applicants
                                 </tspan>
@@ -459,7 +459,7 @@ export default function DashboardPage() {
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              <div className="grid grid-cols-2 gap-4 mt-6 w-full">
+              <div className="grid grid-cols-2 gap-4 mt-8 w-full">
                 <div className="space-y-4">
                   <div className="flex items-center gap-2">
                     <div className="h-3 w-3 rounded-full" style={{ backgroundColor: resourcesChartData[0].fill }} />
