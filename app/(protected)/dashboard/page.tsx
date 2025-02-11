@@ -501,103 +501,109 @@ export default function DashboardPage() {
       </div>
 
       {/* Rest of the dashboard content... */}
-      <div className="grid grid-cols-3 gap-6 mt-6">
-        {/* Current Vacancies */}
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold">Current Vacancies</h3>
-              <div className="flex items-center gap-2">
-                <select className="text-sm border rounded-md px-2 py-1">
-                  <option>Popular</option>
-                </select>
-                <Button variant="link" className="text-sm">See All</Button>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              {currentVacancies.map((vacancy, index) => (
-                <div key={index} className="border rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-medium">{vacancy.role}</h4>
-                    <Button variant="ghost" size="icon">
+      <div className="grid grid-cols-4 gap-6 mt-6">
+        <div className="col-span-3">
+          <div className="flex flex-col gap-6">
+            <div className="grid grid-cols-4 gap-6">
+              {/* Current Vacancies */}
+              <Card className="col-span-3">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold">Current Vacancies</h3>
+                    <div className="flex items-center gap-2">
+                      <select className="text-sm border rounded-md px-2 py-1">
+                        <option>Popular</option>
+                      </select>
+                      <Button variant="link" className="text-sm">See All</Button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    {currentVacancies.map((vacancy, index) => (
+                      <div key={index} className="border rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="font-medium">{vacancy.role}</h4>
+                          <Button variant="ghost" size="icon">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="flex gap-2 text-sm text-muted-foreground mb-2">
+                          <span>{vacancy.type}</span>
+                          <span>•</span>
+                          <span>{vacancy.mode}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span>{vacancy.salary}</span>
+                          <span>{vacancy.applicants} Applicants</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+           
+              {/* Tasks */}
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold">Tasks</h3>
+                    <Button size="icon" variant="ghost">
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </div>
-                  <div className="flex gap-2 text-sm text-muted-foreground mb-2">
-                    <span>{vacancy.type}</span>
-                    <span>•</span>
-                    <span>{vacancy.mode}</span>
+                  <div className="space-y-4">
+                    {tasks.map((task, index) => (
+                      <div key={index} className="flex items-center gap-4">
+                        <div className="relative w-12 h-12">
+                          <Progress 
+                            value={task.progress} 
+                            className="h-full w-full rounded-full [&>div]:h-full [&>div]:rounded-full"
+                          />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="text-xs font-medium">{task.progress}%</span>
+                          </div>
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="font-medium text-xs whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px]">{task.title}</h4>
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <div className="text-xs"><span>{task.type}</span> - <span>{task.date}</span>  </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span>{vacancy.salary}</span>
-                    <span>{vacancy.applicants} Applicants</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Tasks */}
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold">Tasks</h3>
-              <Button size="icon" variant="ghost">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="space-y-4">
-              {tasks.map((task, index) => (
-                <div key={index} className="flex items-center gap-4">
-                  <div className="relative w-12 h-12">
-                    <Progress 
-                      value={task.progress} 
-                      className="h-full w-full rounded-full [&>div]:h-full [&>div]:rounded-full"
-                    />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-xs font-medium">{task.progress}%</span>
+                </CardContent>
+              </Card> 
+            </div> 
+          </div>
+         
+        </div>
+       
+          {/* Schedule */}
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold">Schedule</h3>
+                <select className="text-sm border rounded-md px-2 py-1">
+                  <option>Today</option>
+                </select>
+              </div>
+              <div className="space-y-4">
+                {schedule.map((event, index) => (
+                  <div key={index} className="flex gap-4">
+                    <div className="text-sm text-muted-foreground w-16">
+                      {event.time}
+                    </div>
+                    <div className="flex-1 bg-secondary/20 rounded-lg p-2">
+                      <h4 className="font-medium">{event.title}</h4>
+                      <p className="text-sm text-muted-foreground">{event.department}</p>
                     </div>
                   </div>
-                  <div className="flex-1">
-                    <h4 className="font-medium">{task.title}</h4>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <span>{task.type}</span>
-                      <span>•</span>
-                      <span>{task.date}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Schedule */}
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold">Schedule</h3>
-              <select className="text-sm border rounded-md px-2 py-1">
-                <option>Today</option>
-              </select>
-            </div>
-            <div className="space-y-4">
-              {schedule.map((event, index) => (
-                <div key={index} className="flex gap-4">
-                  <div className="text-sm text-muted-foreground w-16">
-                    {event.time}
-                  </div>
-                  <div className="flex-1 bg-secondary/20 rounded-lg p-2">
-                    <h4 className="font-medium">{event.title}</h4>
-                    <p className="text-sm text-muted-foreground">{event.department}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+ 
         {/* Recent Activity */}
         <Card>
           <CardContent className="p-4">
@@ -624,66 +630,67 @@ export default function DashboardPage() {
             </div>
           </CardContent>
         </Card>
-      </div>
+    
 
-      {/* Applicants List - Full Width */}
-      <Card className="mt-4">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <h3 className="font-semibold">Applicants List</h3>
-              <Badge variant="secondary">1,242</Badge>
+   
+        <Card className="mt-4">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold">Applicants List</h3>
+                <Badge variant="secondary">1,242</Badge>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" size="sm">All Applicants</Button>
+                <Button variant="ghost" size="sm">Screening</Button>
+                <Button variant="ghost" size="sm">Shortlisted</Button>
+                <Button variant="ghost" size="sm">Interviewing</Button>
+                <Button variant="ghost" size="sm">Job Offer</Button>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Button variant="secondary" size="sm">All Applicants</Button>
-              <Button variant="ghost" size="sm">Screening</Button>
-              <Button variant="ghost" size="sm">Shortlisted</Button>
-              <Button variant="ghost" size="sm">Interviewing</Button>
-              <Button variant="ghost" size="sm">Job Offer</Button>
-            </div>
-          </div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Employment Type</TableHead>
-                <TableHead>Resume</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {applicants.map((applicant, index) => (
-                <TableRow key={index}>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">{applicant.name}</div>
-                      <div className="text-sm text-muted-foreground">{applicant.email}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>{applicant.role}</TableCell>
-                  <TableCell>{applicant.date}</TableCell>
-                  <TableCell>{applicant.type}</TableCell>
-                  <TableCell>
-                    <Button variant="outline" size="sm">View Resume</Button>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={
-                      applicant.status === "Job Offer" ? "default" :
-                      applicant.status === "Interviewing" ? "secondary" :
-                      "secondary"
-                    }>
-                      {applicant.status}
-                    </Badge>
-                  </TableCell>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Employment Type</TableHead>
+                  <TableHead>Resume</TableHead>
+                  <TableHead>Status</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </div>
+              </TableHeader>
+              <TableBody>
+                {applicants.map((applicant, index) => (
+                  <TableRow key={index}>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium">{applicant.name}</div>
+                        <div className="text-sm text-muted-foreground">{applicant.email}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell>{applicant.role}</TableCell>
+                    <TableCell>{applicant.date}</TableCell>
+                    <TableCell>{applicant.type}</TableCell>
+                    <TableCell>
+                      <Button variant="outline" size="sm">View Resume</Button>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={
+                        applicant.status === "Job Offer" ? "default" :
+                        applicant.status === "Interviewing" ? "secondary" :
+                        "secondary"
+                      }>
+                        {applicant.status}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
+  
   )
 }
 
