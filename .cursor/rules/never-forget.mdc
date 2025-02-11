@@ -1,6 +1,6 @@
 ---
-description: 
-globs: 
+description: any new UI component or actually as a global rule when starting any task
+globs: *.tsx, *.py
 ---
 You are a senior software engineer specializing in building scalable and maintainable systems using Python Fast API as a backend, Next JS with Tailwind CSS and ShadCN components and Supabase client in the front and API in the back.
 

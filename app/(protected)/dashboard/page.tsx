@@ -208,189 +208,351 @@ const recentActivity = [
   }
 ]
 
+const applicantResources = {
+  totalApplicants: 1000,
+  jobBoards: 350,
+  employeeReferrals: 200,
+  socialMediaCampaigns: 300,
+  recruitmentAgencies: 150
+}
+
 export default function DashboardPage() {
   return (
-    <div className="p-6 space-y-6">
-      {/* Top Stats */}
-      <div className="grid grid-cols-4 gap-4">
-        <StatCard 
-          title="Applications" 
-          count={statsData.applications.count} 
-          change={statsData.applications.change} 
-          trend={statsData.applications.trend}
-        />
-        <StatCard 
-          title="Shortlisted" 
-          count={statsData.shortlisted.count} 
-          change={statsData.shortlisted.change} 
-          trend={statsData.shortlisted.trend}
-        />
-        <StatCard 
-          title="Hired" 
-          count={statsData.hired.count} 
-          change={statsData.hired.change} 
-          trend={statsData.hired.trend}
-        />
-        <StatCard 
-          title="Rejected" 
-          count={statsData.rejected.count} 
-          change={statsData.rejected.change} 
-          trend={statsData.rejected.trend}
-        />
-      </div>
+    <div className="p-6">
+      <div className="grid grid-cols-3 gap-4">
+        {/* Stats and Charts (First Two Columns) */}
+        <div className="col-span-2 space-y-4">
+          {/* Top Stats */}
+          <div className="grid grid-cols-4 gap-4">
+            <StatCard 
+              title="Applications" 
+              count={statsData.applications.count} 
+              change={statsData.applications.change} 
+              trend={statsData.applications.trend}
+            />
+            <StatCard 
+              title="Shortlisted" 
+              count={statsData.shortlisted.count} 
+              change={statsData.shortlisted.change} 
+              trend={statsData.shortlisted.trend}
+            />
+            <StatCard 
+              title="Hired" 
+              count={statsData.hired.count} 
+              change={statsData.hired.change} 
+              trend={statsData.hired.trend}
+            />
+            <StatCard 
+              title="Rejected" 
+              count={statsData.rejected.count} 
+              change={statsData.rejected.change} 
+              trend={statsData.rejected.trend}
+            />
+          </div>
 
-      {/* Charts Section */}
-      <div className="grid grid-cols-2 gap-4">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold">Applications</h3>
-              <select className="text-sm border rounded-md px-2 py-1">
-                <option>13-18 May</option>
-              </select>
-            </div>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={applicationData}>
-                <XAxis dataKey="date" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="applied" fill="#E2E8F0" />
-                <Bar dataKey="shortlisted" fill="#94A3B8" />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+          {/* Applications Chart */}
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold">Applications</h3>
+                <select className="text-sm border rounded-md px-2 py-1">
+                  <option>13-18 May</option>
+                </select>
+              </div>
+              <div className="h-[300px] mt-4">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={applicationData}>
+                    <XAxis 
+                      dataKey="date"
+                      stroke="#888888"
+                      fontSize={12}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <YAxis
+                      stroke="#888888"
+                      fontSize={12}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={(value) => `${value}`}
+                    />
+                    <Tooltip 
+                      cursor={{ fill: 'transparent' }}
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          return (
+                            <div className="rounded-lg border bg-background p-2 shadow-sm">
+                              <div className="grid grid-cols-2 gap-2">
+                                <div className="flex flex-col">
+                                  <span className="text-[0.70rem] uppercase text-muted-foreground">
+                                    Applied
+                                  </span>
+                                  <span className="font-bold text-muted-foreground">
+                                    {payload[0].value}
+                                  </span>
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="text-[0.70rem] uppercase text-muted-foreground">
+                                    Shortlisted
+                                  </span>
+                                  <span className="font-bold text-muted-foreground">
+                                    {payload[1].value}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        }
+                        return null
+                      }}
+                    />
+                    <Bar
+                      dataKey="applied"
+                      fill="currentColor"
+                      radius={[4, 4, 0, 0]}
+                      className="fill-primary/30"
+                    />
+                    <Bar
+                      dataKey="shortlisted"
+                      fill="currentColor"
+                      radius={[4, 4, 0, 0]}
+                      className="fill-primary"
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold">Application by Department</h3>
-              <select className="text-sm border rounded-md px-2 py-1">
-                <option>Today</option>
-              </select>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <ResponsiveContainer width="100%" height={200}>
-                <PieChart>
-                  <Pie
-                    data={departmentData}
-                    dataKey="value"
-                    nameKey="department"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                  >
-                    {departmentData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={`hsl(${index * 45}, 70%, 80%)`} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="space-y-2">
-                {departmentData.map((dept) => (
-                  <div key={dept.department} className="flex items-center justify-between">
-                    <span className="text-sm">{dept.department}</span>
-                    <span className="text-sm font-medium">{dept.value}</span>
+          {/* Application by Department */}
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold">Application by Department</h3>
+                <select className="text-sm border rounded-md px-2 py-1">
+                  <option>Today</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-8">
+                <div className="flex items-center justify-center">
+                  <div className="h-[200px] w-[200px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={departmentData}
+                          dataKey="value"
+                          nameKey="department"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={80}
+                          paddingAngle={2}
+                        >
+                          {departmentData.map((entry, index) => (
+                            <Cell 
+                              key={`cell-${index}`} 
+                              fill={`hsl(${index * 45}, 70%, 80%)`}
+                              className="stroke-background hover:opacity-80"
+                            />
+                          ))}
+                        </Pie>
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+                <div className="flex flex-col justify-center space-y-2">
+                  {departmentData.map((dept, index) => (
+                    <div key={dept.department} className="flex items-center gap-2">
+                      <div 
+                        className="h-3 w-3 rounded-full"
+                        style={{ backgroundColor: `hsl(${index * 45}, 70%, 80%)` }}
+                      />
+                      <div className="flex flex-1 items-center justify-between">
+                        <span className="text-sm font-medium">{dept.department}</span>
+                        <span className="text-sm text-muted-foreground">{dept.value}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Current Vacancies */}
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold">Current Vacancies</h3>
+                <div className="flex items-center gap-2">
+                  <select className="text-sm border rounded-md px-2 py-1">
+                    <option>Popular</option>
+                  </select>
+                  <Button variant="link" className="text-sm">See All</Button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                {currentVacancies.map((vacancy, index) => (
+                  <div key={index} className="border rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-medium">{vacancy.role}</h4>
+                      <Button variant="ghost" size="icon">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="flex gap-2 text-sm text-muted-foreground mb-2">
+                      <span>{vacancy.type}</span>
+                      <span>•</span>
+                      <span>{vacancy.mode}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span>{vacancy.salary}</span>
+                      <span>{vacancy.applicants} Applicants</span>
+                    </div>
                   </div>
                 ))}
               </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            </CardContent>
+          </Card>
 
-      {/* Current Vacancies */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold">Current Vacancies</h3>
-            <div className="flex items-center gap-2">
-              <select className="text-sm border rounded-md px-2 py-1">
-                <option>Popular</option>
-              </select>
-              <Button variant="link" className="text-sm">See All</Button>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            {currentVacancies.map((vacancy, index) => (
-              <div key={index} className="border rounded-lg p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-medium">{vacancy.role}</h4>
-                  <Button variant="ghost" size="icon">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </div>
-                <div className="flex gap-2 text-sm text-muted-foreground mb-2">
-                  <span>{vacancy.type}</span>
-                  <span>•</span>
-                  <span>{vacancy.mode}</span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span>{vacancy.salary}</span>
-                  <span>{vacancy.applicants} Applicants</span>
-                </div>
+          {/* Tasks */}
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold">Tasks</h3>
+                <Button size="icon" variant="ghost">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Tasks and Schedule */}
-      <div className="grid grid-cols-2 gap-4">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold">Tasks</h3>
-              <Button size="icon" variant="ghost">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="space-y-4">
-              {tasks.map((task, index) => (
-                <div key={index} className="flex items-center gap-4">
-                  <Progress value={task.progress} className="w-12 h-12 rounded-full" />
-                  <div className="flex-1">
-                    <h4 className="font-medium">{task.title}</h4>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <span>{task.type}</span>
-                      <span>•</span>
-                      <span>{task.date}</span>
+              <div className="space-y-4">
+                {tasks.map((task, index) => (
+                  <div key={index} className="flex items-center gap-4">
+                    <div className="relative w-12 h-12">
+                      <Progress 
+                        value={task.progress} 
+                        className="h-full w-full rounded-full [&>div]:h-full [&>div]:rounded-full"
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-xs font-medium">{task.progress}%</span>
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-medium">{task.title}</h4>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <span>{task.type}</span>
+                        <span>•</span>
+                        <span>{task.date}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold">Schedule</h3>
-              <select className="text-sm border rounded-md px-2 py-1">
-                <option>Today</option>
-              </select>
-            </div>
-            <div className="space-y-4">
-              {schedule.map((event, index) => (
-                <div key={index} className="flex gap-4">
-                  <div className="text-sm text-muted-foreground w-16">
-                    {event.time}
+        {/* Right Column - Applicant Resources */}
+        <div className="space-y-4">
+          <Card className="bg-blue-50">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold">Applicant Resources</h3>
+                <Button size="icon" variant="ghost">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="flex flex-col items-center mb-6">
+                <div className="relative w-32 h-32 mb-2">
+                  <div className="absolute inset-0">
+                    <Progress 
+                      value={75} 
+                      className="h-full w-full rounded-full [&>div]:h-full [&>div]:rounded-full [&>div]:bg-green-500"
+                    />
                   </div>
-                  <div className="flex-1 bg-secondary/20 rounded-lg p-2">
-                    <h4 className="font-medium">{event.title}</h4>
-                    <p className="text-sm text-muted-foreground">{event.department}</p>
+                  <div className="absolute inset-0 flex items-center justify-center flex-col">
+                    <span className="text-2xl font-semibold">{applicantResources.totalApplicants}</span>
+                    <span className="text-sm text-muted-foreground">Total Applicants</span>
                   </div>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-4">
+                  <div>
+                    <div className="text-2xl font-semibold">{applicantResources.jobBoards}</div>
+                    <div className="text-sm text-muted-foreground">Job Boards</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-semibold">{applicantResources.socialMediaCampaigns}</div>
+                    <div className="text-sm text-muted-foreground">Social Media Campaigns</div>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <div className="text-2xl font-semibold">{applicantResources.employeeReferrals}</div>
+                    <div className="text-sm text-muted-foreground">Employee Referrals</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-semibold">{applicantResources.recruitmentAgencies}</div>
+                    <div className="text-sm text-muted-foreground">Recruitment Agencies</div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold">Schedule</h3>
+                <select className="text-sm border rounded-md px-2 py-1">
+                  <option>Today</option>
+                </select>
+              </div>
+              <div className="space-y-4">
+                {schedule.map((event, index) => (
+                  <div key={index} className="flex gap-4">
+                    <div className="text-sm text-muted-foreground w-16">
+                      {event.time}
+                    </div>
+                    <div className="flex-1 bg-secondary/20 rounded-lg p-2">
+                      <h4 className="font-medium">{event.title}</h4>
+                      <p className="text-sm text-muted-foreground">{event.department}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold">Recent Activity</h3>
+                <Button variant="ghost" size="icon">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="space-y-4">
+                {recentActivity.map((activity, index) => (
+                  <div key={index} className="flex items-start gap-4">
+                    <Avatar className="mt-1">
+                      <AvatarFallback>
+                        {activity.action.charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <p className="text-sm">{activity.action}</p>
+                      <p className="text-sm text-muted-foreground">{activity.time}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
-      {/* Applicants List */}
-      <Card>
+      {/* Applicants List - Full Width */}
+      <Card className="mt-4">
         <CardContent className="p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -444,33 +606,6 @@ export default function DashboardPage() {
               ))}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
-
-      {/* Recent Activity */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold">Recent Activity</h3>
-            <Button variant="ghost" size="icon">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="space-y-4">
-            {recentActivity.map((activity, index) => (
-              <div key={index} className="flex items-start gap-4">
-                <Avatar className="mt-1">
-                  <AvatarFallback>
-                    {activity.action.charAt(0)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1">
-                  <p className="text-sm">{activity.action}</p>
-                  <p className="text-sm text-muted-foreground">{activity.time}</p>
-                </div>
-              </div>
-            ))}
-          </div>
         </CardContent>
       </Card>
     </div>
