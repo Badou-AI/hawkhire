@@ -40,7 +40,7 @@ export async function middleware(request: NextRequest) {
         flowType: 'pkce',
         detectSessionInUrl: true,
         persistSession: true,
-        autoRefreshToken: false // Disable auto refresh to prevent excessive requests
+        autoRefreshToken: false // Prevent excessive refresh requests in middleware
       }
     }
   )

@@ -19,7 +19,12 @@ import {
   TrendingUp,
   TrendingDown
 } from 'lucide-react';
-import { Progress } from "@/components/ui/progress";
+import {
+  PolarGrid,
+  PolarRadiusAxis,
+  RadialBar,
+  RadialBarChart,
+} from "recharts";
 
 interface StatsDataItem {
   count: number
@@ -552,23 +557,13 @@ export default function DashboardPage() {
                   </div>
                   <div className="space-y-4">
                     {tasks.map((task, index) => (
-                      <div key={index} className="flex items-center gap-4">
-                        <div className="relative w-12 h-12">
-                          <Progress 
-                            value={task.progress} 
-                            className="h-full w-full rounded-full [&>div]:h-full [&>div]:rounded-full"
-                          />
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <span className="text-xs font-medium">{task.progress}%</span>
-                          </div>
-                        </div>
-                        <div className="flex-1">
-                          <h4 className="font-medium text-xs whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px]">{task.title}</h4>
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <div className="text-xs"><span>{task.type}</span> - <span>{task.date}</span>  </div>
-                          </div>
-                        </div>
-                      </div>
+                      <TaskProgress
+                        key={index}
+                        progress={task.progress}
+                        title={task.title}
+                        type={task.type}
+                        date={task.date}
+                      />
                     ))}
                   </div>
                 </CardContent>
@@ -718,5 +713,71 @@ function StatCard({ title, count, change, trend, className }: StatCardProps) {
       </CardContent>
     </Card>
   )
+}
+
+// Add TaskProgress component before the StatCard component
+interface TaskProgressProps {
+  progress: number;
+  title: string;
+  type: string;
+  date: string;
+}
+
+function TaskProgress({ progress, title, type, date }: TaskProgressProps) {
+  const chartData = [{ value: progress, fill: "hsl(var(--primary))" }];
+  // Calculate endAngle based on progress (360 degrees * progress percentage)
+  const endAngle = (progress / 100) * 360;
+
+  return (
+    <div className="flex items-center gap-4">
+      <div className="relative w-12 h-12">
+        <ResponsiveContainer width="100%" height="100%">
+          <RadialBarChart
+            data={chartData}
+            startAngle={0}
+            endAngle={endAngle}
+            innerRadius={22}
+            outerRadius={28}
+          >
+            <PolarGrid gridType="circle" radialLines={false} />
+            <RadialBar
+              dataKey="value"
+              background
+              className="stroke-background [&.recharts-radial-bar-background-sector]:fill-[#f3f4f6] [&.recharts-radial-bar-sector]:fill-[#8b5cf6]"
+              cornerRadius={30}
+            />
+            <PolarRadiusAxis tick={false} tickLine={false} axisLine={false}>
+              <Label
+                content={({ viewBox }) => {
+                  if (viewBox && "cx" in viewBox && "cy" in viewBox) {
+                    return (
+                      <text
+                        x={viewBox.cx}
+                        y={viewBox.cy}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        className="fill-foreground text-base font-semibold"
+                      >
+                        {progress}%
+                      </text>
+                    )
+                  }
+                }}
+              />
+            </PolarRadiusAxis>
+          </RadialBarChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="flex-1">
+        <h4 className="font-medium text-base whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px]">
+          {title}
+        </h4>
+        <div className="gap-2">
+          <div className="text-sm text-muted-foreground">{type}</div>
+          <div className="text-sm text-muted-foreground">{date}</div>
+        </div>
+      </div>
+    </div>
+  );
 }
 

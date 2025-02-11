@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { Libre_Franklin, Mulish } from 'next/font/google'
 import "./globals.css"
+import { AuthInitializer } from '@/components/auth/auth-initializer'
 
 const libreFranklin = Libre_Franklin({ 
   subsets: ["latin"],
@@ -25,7 +26,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${libreFranklin.variable} ${mulish.variable} font-sans`}>
-        {children}
+        <AuthInitializer>
+          {children}
+        </AuthInitializer>
       </body>
     </html>
   )
