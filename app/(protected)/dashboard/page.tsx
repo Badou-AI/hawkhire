@@ -2,474 +2,503 @@
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
 } from "@/components/ui/table"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { MoreHorizontal, MapPin } from 'lucide-react'
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+    MoreHorizontal,
+    TrendingUp,
+    TrendingDown
+} from 'lucide-react'
 import {
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
-  Cell,
-  ResponsiveContainer,
+    BarChart,
+    Bar,
+    PieChart,
+    Pie,
+    Cell,
+    ResponsiveContainer,
+    XAxis,
+    YAxis,
+    Tooltip
 } from "recharts"
+import { Progress } from "@/components/ui/progress"
 
-const candidateStatus = {
-  total: 2651,
-  applications: 69,
-  shortlisted: 14,
-  rejected: 7,
+interface StatsDataItem {
+  count: number
+  change: number
+  trend: 'up' | 'down'
 }
 
-const recentApplications = [
-  {
-    name: "Bella Hamill",
-    position: "Marketing Specialist",
-    status: "OFFER",
-    avatar: "/placeholder.svg",
-  },
-  {
-    name: "Dashonte Clarke",
-    position: "Project Manager",
-    status: "SHORTLIST",
-    avatar: "/placeholder.svg",
-  },
-  {
-    name: "Julian Gruber",
-    position: "Project Manager",
-    status: "OFFER",
-    avatar: "/placeholder.svg",
-  },
+interface StatsData {
+  applications: StatsDataItem
+  shortlisted: StatsDataItem
+  hired: StatsDataItem
+  rejected: StatsDataItem
+}
+
+// Hardcoded data
+const statsData: StatsData = {
+  applications: { count: 1534, change: 12.67, trend: 'up' },
+  shortlisted: { count: 869, change: 1.98, trend: 'down' },
+  hired: { count: 236, change: 8.35, trend: 'up' },
+  rejected: { count: 429, change: 2.85, trend: 'down' }
+}
+
+const applicationData = [
+  { date: "13 May", applied: 300, shortlisted: 100 },
+  { date: "14 May", applied: 350, shortlisted: 150 },
+  { date: "15 May", applied: 280, shortlisted: 90 },
+  { date: "16 May", applied: 320, shortlisted: 110 },
+  { date: "17 May", applied: 290, shortlisted: 80 },
+  { date: "18 May", applied: 350, shortlisted: 140 }
 ]
 
-const departments = [
-  {
-    name: "Development",
-    members: 5,
-    newMembers: 2,
-    bgColor: "bg-purple-50",
-  },
-  {
-    name: "Sales & Marketing",
-    members: 4,
-    bgColor: "bg-orange-50",
-  },
-  {
-    name: "Project Management",
-    members: 5,
-    newMembers: 2,
-    bgColor: "bg-green-50",
-  },
-  {
-    name: "Analytics & Data",
-    members: 4,
-    newMembers: 2,
-    bgColor: "bg-blue-50",
-  },
-  {
-    name: "Finance",
-    members: 3,
-    bgColor: "bg-gray-50",
-  },
+const departmentData = [
+  { department: "Engineering", value: 120 },
+  { department: "Marketing", value: 110 },
+  { department: "Sales", value: 95 },
+  { department: "Customer Support", value: 85 },
+  { department: "Finance", value: 65 },
+  { department: "Human Resources", value: 50 }
 ]
 
-const distributionData = [
-  { name: "Development", value: 54, color: "#22C55E" },
-  { name: "Sales & Marketing", value: 38, color: "#818CF8" },
-  { name: "Project Management", value: 8, color: "#FB923C" },
+const currentVacancies = [
+  {
+    role: "Software Developer",
+    type: "Full-time",
+    mode: "Remote",
+    salary: "$70K - $90K",
+    applicants: 120
+  },
+  {
+    role: "Graphic Designer",
+    type: "Part-time",
+    mode: "Hybrid",
+    salary: "$40K - $55K",
+    applicants: 75
+  },
+  {
+    role: "Sales Manager",
+    type: "Full-time",
+    mode: "On-site",
+    salary: "$65K - $80K",
+    applicants: 75
+  },
+  {
+    role: "HR Coordinator",
+    type: "Contract",
+    mode: "Remote",
+    salary: "$50K - $60K",
+    applicants: 60
+  }
 ]
 
-const resourceData = [
-  { name: "Week 1", insource: 48, outsource: 22 },
-  { name: "Week 2", insource: 52, outsource: 18 },
-  { name: "Week 3", insource: 58, outsource: 20 },
-  { name: "Week 4", insource: 54, outsource: 22 },
-  { name: "Week 5", insource: 48, outsource: 24 },
-  { name: "Week 6", insource: 52, outsource: 18 },
+const tasks = [
+  {
+    title: "Resume Screening",
+    type: "Evaluation",
+    date: "May 27, 2027",
+    progress: 25
+  },
+  {
+    title: "Interview Scheduling",
+    type: "Engagement",
+    date: "May 25, 2027",
+    progress: 50
+  },
+  {
+    title: "Candidate Communication",
+    type: "Relationship",
+    date: "May 25, 2027",
+    progress: 75
+  },
+  {
+    title: "Offer Management",
+    type: "Selection",
+    date: "May 25, 2027",
+    progress: 90
+  }
 ]
 
-const recentVacancies = [
+const schedule = [
   {
-    title: "UX Designer",
-    location: "Dayton",
-    applicants: 122,
-    newApplicants: 33,
-    trend: [40, 60, 45, 65, 50, 70],
+    time: "1:00 PM",
+    title: "Marketing Strategy Presentation",
+    department: "Marketing"
   },
   {
-    title: "iOS App Developer",
-    location: "Remote",
-    applicants: 34,
-    newApplicants: 5,
-    trend: [30, 40, 35, 45, 40, 50],
+    time: "2:30 PM",
+    title: "HR Policy Update Session",
+    department: "Human Resources"
   },
   {
-    title: "Network Administrator",
-    location: "Phoenix",
-    applicants: 45,
-    newApplicants: 13,
-    trend: [50, 70, 55, 75, 60, 80],
+    time: "4:00 PM",
+    title: "Customer Feedback Analysis",
+    department: "Customer Support"
   },
   {
-    title: "JavaScript Developer",
-    location: "Remote",
-    applicants: 57,
-    newApplicants: 5,
-    trend: [45, 65, 50, 70, 55, 75],
+    time: "5:30 PM",
+    title: "Financial Reporting Session",
+    department: "Finance"
+  }
+]
+
+const applicants = [
+  {
+    name: "Alex Boide",
+    email: "a.boide@hirezy.com",
+    role: "Software Engineer",
+    date: "Apr 15, 2027",
+    type: "Full-time",
+    status: "Interviewing"
   },
   {
-    title: "Graphic Designer",
-    location: "Gothenburg",
-    applicants: 74,
-    newApplicants: 22,
-    trend: [35, 55, 40, 60, 45, 65],
+    name: "Alice Johnson",
+    email: "a.johnson@hirezy.com",
+    role: "HR Specialist",
+    date: "Apr 10, 2027",
+    type: "Contract",
+    status: "Shortlisted"
   },
   {
-    title: "Python Django Developer",
-    location: "Remote",
-    applicants: 44,
-    newApplicants: 12,
-    trend: [40, 60, 45, 65, 50, 70],
+    name: "Bob Lee",
+    email: "b.lee@hirezy.com",
+    role: "Sales Associate",
+    date: "Apr 18, 2027",
+    type: "Temporary",
+    status: "Screening"
   },
+  {
+    name: "Mark Brown",
+    email: "m.brown@hirezy.com",
+    role: "Financial Analyst",
+    date: "Apr 22, 2027",
+    type: "Full-time",
+    status: "Job Offer"
+  },
+  {
+    name: "Sandra Maxine",
+    email: "s.maxine@hirezy.com",
+    role: "Marketing Manager",
+    date: "Apr 20, 2027",
+    type: "Part-time",
+    status: "Shortlisted"
+  }
+]
+
+const recentActivity = [
+  {
+    action: "Darren Wright viewed 15 candidate profiles for the Software Developer position",
+    time: "10:15 AM"
+  },
+  {
+    action: "Caren Smith scheduled interviews with 3 candidates for the Marketing Manager role",
+    time: "9:25 AM"
+  },
+  {
+    action: "Automated Reminder sent to Bob Lee to complete interview feedback",
+    time: "9:00 AM"
+  }
 ]
 
 export default function DashboardPage() {
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
+    <div className="p-6 space-y-6">
+      {/* Top Stats */}
+      <div className="grid grid-cols-4 gap-4">
+        <StatCard 
+          title="Applications" 
+          count={statsData.applications.count} 
+          change={statsData.applications.change} 
+          trend={statsData.applications.trend}
+        />
+        <StatCard 
+          title="Shortlisted" 
+          count={statsData.shortlisted.count} 
+          change={statsData.shortlisted.change} 
+          trend={statsData.shortlisted.trend}
+        />
+        <StatCard 
+          title="Hired" 
+          count={statsData.hired.count} 
+          change={statsData.hired.change} 
+          trend={statsData.hired.trend}
+        />
+        <StatCard 
+          title="Rejected" 
+          count={statsData.rejected.count} 
+          change={statsData.rejected.change} 
+          trend={statsData.rejected.trend}
+        />
       </div>
 
-      <div className="grid gap-6">
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {/* Candidate Status */}
-          <Card className="h-[300px] overflow-hidden">
-            <CardHeader>
-              <CardTitle className="text-lg font-medium">Candidate Status</CardTitle>
-            </CardHeader>
-            <CardContent className="h-[calc(100%-60px)] overflow-y-auto hide-scrollbar">
-              <div className="space-y-4">
-                <div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-4xl font-bold">{candidateStatus.total}</span>
-                    <span className="text-sm text-muted-foreground">EMPLOYERS</span>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex h-3 overflow-hidden rounded-full bg-secondary">
-                    <div className="bg-blue-500" style={{ width: `${candidateStatus.applications}%` }} />
-                    <div className="bg-green-500" style={{ width: `${candidateStatus.shortlisted}%` }} />
-                    <div className="bg-orange-500" style={{ width: `${candidateStatus.rejected}%` }} />
-                  </div>
-                  <div className="grid grid-cols-3 text-sm">
-                    <div>
-                      <div className="flex items-center gap-1">
-                        <div className="h-2 w-2 rounded-full bg-blue-500" />
-                        <span>{candidateStatus.applications}%</span>
-                      </div>
-                      <span className="text-xxs text-muted-foreground">TOTAL APPLICATIONS</span>
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1">
-                        <div className="h-2 w-2 rounded-full bg-green-500" />
-                        <span>{candidateStatus.shortlisted}%</span>
-                      </div>
-                      <span className="text-xxs text-muted-foreground">SHORTLISTED</span>
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1">
-                        <div className="h-2 w-2 rounded-full bg-orange-500" />
-                        <span>{candidateStatus.rejected}%</span>
-                      </div>
-                      <span className="text-xxs text-muted-foreground">REJECTED</span>
-                    </div>
-                  </div>
-                </div>
+      {/* Charts Section */}
+      <div className="grid grid-cols-2 gap-4">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold">Applications</h3>
+              <select className="text-sm border rounded-md px-2 py-1">
+                <option>13-18 May</option>
+              </select>
+            </div>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={applicationData}>
+                <XAxis dataKey="date" />
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="applied" fill="#E2E8F0" />
+                <Bar dataKey="shortlisted" fill="#94A3B8" />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
 
-                <div className="pt-4">
-                  <h3 className="text-sm font-medium mb-3">Recent Applications</h3>
-                  <div className="space-y-3">
-                    {recentApplications.map((application) => (
-                      <div key={application.name} className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <Avatar>
-                            <AvatarImage src={application.avatar} alt={application.name} />
-                            <AvatarFallback>{application.name.charAt(0)}</AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <div className="font-medium">{application.name}</div>
-                            <div className="text-sm text-muted-foreground">{application.position}</div>
-                          </div>
-                        </div>
-                        <Badge 
-                          variant="default"
-                          className={`uppercase ${application.status === "OFFER" ? "bg-green-500 hover:bg-green-600" : ""}`}
-                        >
-                          {application.status}
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Departments */}
-          <Card className="h-[300px] overflow-hidden">
-            <CardHeader>
-              <CardTitle className="text-lg font-medium">Departments</CardTitle>
-            </CardHeader>
-            <CardContent className="h-[calc(100%-60px)] overflow-y-auto hide-scrollbar">
-              <div className="space-y-4">
-                {departments.map((department) => (
-                  <div 
-                    key={department.name} 
-                    className={`rounded-lg p-4 ${department.bgColor}`}
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold">Application by Department</h3>
+              <select className="text-sm border rounded-md px-2 py-1">
+                <option>Today</option>
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie
+                    data={departmentData}
+                    dataKey="value"
+                    nameKey="department"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{department.name}</span>
-                          {department.newMembers && (
-                            <Badge variant="secondary" className="text-xs">
-                              +{department.newMembers} new
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="flex -space-x-2 overflow-hidden">
-                          {Array.from({ length: department.members }).map((_, i) => (
-                            <Avatar key={i} className="inline-block border-2 border-background">
-                              <AvatarFallback>
-                                {String.fromCharCode(65 + Math.floor(Math.random() * 26))}
-                              </AvatarFallback>
-                            </Avatar>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
+                    {departmentData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={`hsl(${index * 45}, 70%, 80%)`} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="space-y-2">
+                {departmentData.map((dept) => (
+                  <div key={dept.department} className="flex items-center justify-between">
+                    <span className="text-sm">{dept.department}</span>
+                    <span className="text-sm font-medium">{dept.value}</span>
                   </div>
                 ))}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
-          {/* Distribution by Departments */}
-          <Card className="h-[300px] overflow-hidden bg-blue-50/50">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-lg font-medium">Distribution by Departments</CardTitle>
-              <Badge variant="outline">Sep. 01 - 07</Badge>
-            </CardHeader>
-            <CardContent className="h-[calc(100%-60px)] overflow-y-auto hide-scrollbar">
-              <div className="flex items-center gap-8">
-                <div className="relative flex-1">
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-center">
-                      <div className="text-3xl font-bold">3552</div>
-                      <div className="text-xs text-muted-foreground">ALL EMPLOYEES</div>
-                    </div>
-                  </div>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <PieChart>
-                      <Pie
-                        data={distributionData}
-                        innerRadius={60}
-                        outerRadius={80}
-                        paddingAngle={2}
-                        dataKey="value"
-                      >
-                        {distributionData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                    </PieChart>
-                  </ResponsiveContainer>
+      {/* Current Vacancies */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold">Current Vacancies</h3>
+            <div className="flex items-center gap-2">
+              <select className="text-sm border rounded-md px-2 py-1">
+                <option>Popular</option>
+              </select>
+              <Button variant="link" className="text-sm">See All</Button>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            {currentVacancies.map((vacancy, index) => (
+              <div key={index} className="border rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-medium">{vacancy.role}</h4>
+                  <Button variant="ghost" size="icon">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
                 </div>
-                <div className="space-y-4">
-                  {distributionData.map((item) => (
-                    <div key={item.name} className="space-y-1">
-                      <div className="text-sm font-medium">{item.name}</div>
-                      <div className="flex items-center gap-2">
-                        <div 
-                          className="h-2 w-16 rounded-full" 
-                          style={{ backgroundColor: item.color }}
-                        />
-                        <span className="text-sm font-medium">{item.value}%</span>
-                      </div>
-                    </div>
-                  ))}
+                <div className="flex gap-2 text-sm text-muted-foreground mb-2">
+                  <span>{vacancy.type}</span>
+                  <span>•</span>
+                  <span>{vacancy.mode}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span>{vacancy.salary}</span>
+                  <span>{vacancy.applicants} Applicants</span>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
-        <div className="grid gap-6 md:grid-cols-3">
-          <Card className="md:col-span-2 bg-[#F4F5F7]">
-            {/* Recent Vacancies */}
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-lg font-medium">Recent Vacancies</CardTitle>
-              <Button variant="outline" size="sm">
-                All Vacancies
+      {/* Tasks and Schedule */}
+      <div className="grid grid-cols-2 gap-4">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold">Tasks</h3>
+              <Button size="icon" variant="ghost">
+                <MoreHorizontal className="h-4 w-4" />
               </Button>
-            </CardHeader>
-            <CardContent className="p-0">
-                <div className="px-4">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-white hover:bg-white rounded-lg overflow-hidden border-none">
-                    <TableHead className="text-xs text-muted-foreground font-normal first:rounded-l-lg last:rounded-r-lg">Job Title</TableHead>
-                    <TableHead className="text-xs text-muted-foreground font-normal">Location</TableHead>
-                    <TableHead className="text-xs text-muted-foreground font-normal">Applicants</TableHead>
-                    <TableHead className="text-xs text-muted-foreground font-normal">Applications</TableHead>
-                    <TableHead className="text-xs text-muted-foreground font-normal first:rounded-l-lg last:rounded-r-lg" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {recentVacancies.map((vacancy) => (
-                    <TableRow 
-                      key={vacancy.title}
-                      className="hover:bg-secondary/50"
-                    >
-                      <TableCell>
-                        <div className="flex items-center gap-2 text-left">
-                          <div className="h-8 w-8 rounded-md bg-primary/40" />
-                          <span className="font-medium">{vacancy.title}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1 text-muted-foreground">
-                          <MapPin className="h-4 w-4" />
-                          {vacancy.location}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          {vacancy.applicants}
-                          {vacancy.newApplicants > 0 && (
-                            <Badge variant="secondary" className="text-xs">
-                              +{vacancy.newApplicants} new
-                            </Badge>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="h-[24px]">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={vacancy.trend.map((value) => ({ value }))}>
-                              <Line
-                                type="monotone"
-                                dataKey="value"
-                                stroke="#8B5CF6"
-                                strokeWidth={2}
-                                dot={false}
-                              />
-                            </LineChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreHorizontal className="h-4 w-4" />
-                              <span className="sr-only">Open menu</span>
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem>View details</DropdownMenuItem>
-                            <DropdownMenuItem>View applicants</DropdownMenuItem>
-                            <DropdownMenuItem>Edit vacancy</DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table></div>
-            </CardContent>
-          </Card>
-
-          <div className="space-y-6">
-            {/* Resource Collection */}
-            <Card className="col-span-1">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-lg font-medium">Resource Collection</CardTitle>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-1">
-                    <div className="h-2 w-2 rounded-full bg-violet-500" />
-                    <span className="text-xs">Insource</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="h-2 w-2 rounded-full bg-orange-500" />
-                    <span className="text-xs">Outsource</span>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[240px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={resourceData}>
-                      <Line
-                        type="monotone"
-                        dataKey="insource"
-                        stroke="#8B5CF6"
-                        strokeWidth={2}
-                        dot={false}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="outsource"
-                        stroke="#FB923C"
-                        strokeWidth={2}
-                        dot={false}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Recently Activity */}
-            <Card className="col-span-1">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-lg font-medium">Recently Activity</CardTitle>
-                <Button variant="outline" size="sm">
-                  All Activity
-                </Button>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-start gap-4">
-                    <div className="h-2 w-2 mt-2 rounded-full bg-blue-500" />
-                    <div>
-                      <div className="text-sm">
-                        We welcomed Sophia Anderson to our team as a Network Administrator.
-                      </div>
-                      <div className="text-xs text-muted-foreground">11:20 AM, Mon 12 Sep 2023</div>
+            </div>
+            <div className="space-y-4">
+              {tasks.map((task, index) => (
+                <div key={index} className="flex items-center gap-4">
+                  <Progress value={task.progress} className="w-12 h-12 rounded-full" />
+                  <div className="flex-1">
+                    <h4 className="font-medium">{task.title}</h4>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <span>{task.type}</span>
+                      <span>•</span>
+                      <span>{task.date}</span>
                     </div>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold">Schedule</h3>
+              <select className="text-sm border rounded-md px-2 py-1">
+                <option>Today</option>
+              </select>
+            </div>
+            <div className="space-y-4">
+              {schedule.map((event, index) => (
+                <div key={index} className="flex gap-4">
+                  <div className="text-sm text-muted-foreground w-16">
+                    {event.time}
+                  </div>
+                  <div className="flex-1 bg-secondary/20 rounded-lg p-2">
+                    <h4 className="font-medium">{event.title}</h4>
+                    <p className="text-sm text-muted-foreground">{event.department}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Applicants List */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold">Applicants List</h3>
+              <Badge variant="secondary">1,242</Badge>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="secondary" size="sm">All Applicants</Button>
+              <Button variant="ghost" size="sm">Screening</Button>
+              <Button variant="ghost" size="sm">Shortlisted</Button>
+              <Button variant="ghost" size="sm">Interviewing</Button>
+              <Button variant="ghost" size="sm">Job Offer</Button>
+            </div>
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Employment Type</TableHead>
+                <TableHead>Resume</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {applicants.map((applicant, index) => (
+                <TableRow key={index}>
+                  <TableCell>
+                    <div>
+                      <div className="font-medium">{applicant.name}</div>
+                      <div className="text-sm text-muted-foreground">{applicant.email}</div>
+                    </div>
+                  </TableCell>
+                  <TableCell>{applicant.role}</TableCell>
+                  <TableCell>{applicant.date}</TableCell>
+                  <TableCell>{applicant.type}</TableCell>
+                  <TableCell>
+                    <Button variant="outline" size="sm">View Resume</Button>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={
+                      applicant.status === "Job Offer" ? "default" :
+                      applicant.status === "Interviewing" ? "secondary" :
+                      "secondary"
+                    }>
+                      {applicant.status}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Recent Activity */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold">Recent Activity</h3>
+            <Button variant="ghost" size="icon">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="space-y-4">
+            {recentActivity.map((activity, index) => (
+              <div key={index} className="flex items-start gap-4">
+                <Avatar className="mt-1">
+                  <AvatarFallback>
+                    {activity.action.charAt(0)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1">
+                  <p className="text-sm">{activity.action}</p>
+                  <p className="text-sm text-muted-foreground">{activity.time}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     </div>
+  )
+}
+
+// StatCard component
+interface StatCardProps {
+  title: string
+  count: number
+  change: number
+  trend: 'up' | 'down'
+}
+
+function StatCard({ title, count, change, trend }: StatCardProps) {
+  return (
+    <Card>
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-lg font-semibold">{count}</h3>
+          <Badge variant={trend === "up" ? "default" : "destructive"} className="flex items-center gap-1">
+            {trend === "up" ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+            {change}%
+          </Badge>
+        </div>
+        <p className="text-sm text-muted-foreground">{title}</p>
+      </CardContent>
+    </Card>
   )
 }
 
