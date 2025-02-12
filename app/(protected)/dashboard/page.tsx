@@ -6,20 +6,9 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip } from "recharts";
 import { PieChart, Pie, Cell, Label } from "recharts";
 import { ResponsiveContainer } from "recharts";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import {
-  MoreHorizontal,
-  TrendingUp,
-  TrendingDown,
-  Table
-} from 'lucide-react';
-import {
-  PolarGrid,
-  PolarRadiusAxis,
-  RadialBar,
-  RadialBarChart,
-} from "recharts";
-import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-
+import { MoreHorizontal, TrendingUp, TrendingDown } from 'lucide-react';
+import { PolarGrid, RadialBar, RadialBarChart } from "recharts";
+import { Table, TableBody, TableHead, TableHeader, TableRow, TableCell } from "@/components/ui/table";
 interface StatsDataItem {
   count: number
   change: number
@@ -195,6 +184,14 @@ const recentActivity = [
   {
     action: "Automated Reminder sent to Bob Lee to complete interview feedback",
     time: "9:00 AM"
+  },
+  {
+    action: "Sarah Chen updated the job description for Senior UX Designer role",
+    time: "8:45 AM"
+  },
+  {
+    action: "James Wilson approved 5 candidates for first round interviews",
+    time: "8:30 AM"
   }
 ]
 
@@ -611,6 +608,7 @@ export default function DashboardPage() {
                   <Button variant="ghost" size="sm">Job Offer</Button>
                 </div>
               </div>
+              
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -623,7 +621,7 @@ export default function DashboardPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {applicants.map((applicant, index) => (
+                {applicants.map((applicant, index) => (
                     <TableRow key={index}>
                       <TableCell>
                         <div>
@@ -723,7 +721,6 @@ interface TaskProgressProps {
 
 function TaskProgress({ progress, title, type, date }: TaskProgressProps) {
   const chartData = [{ value: progress, fill: "hsl(var(--primary))" }];
-  // Calculate endAngle based on progress (360 degrees * progress percentage)
   const endAngle = (progress / 100) * 360;
 
   return (
@@ -744,27 +741,11 @@ function TaskProgress({ progress, title, type, date }: TaskProgressProps) {
               className="stroke-background [&.recharts-radial-bar-background-sector]:fill-[#f3f4f6] [&.recharts-radial-bar-sector]:fill-[#8b5cf6]"
               cornerRadius={30}
             />
-            <PolarRadiusAxis tick={false} tickLine={false} axisLine={false}>
-              <Label
-                content={({ viewBox }) => {
-                  if (viewBox && "cx" in viewBox && "cy" in viewBox) {
-                    return (
-                      <text
-                        x={viewBox.cx}
-                        y={viewBox.cy}
-                        textAnchor="middle"
-                        dominantBaseline="middle"
-                        className="fill-foreground text-base font-semibold"
-                      >
-                        {progress}%
-                      </text>
-                    )
-                  }
-                }}
-              />
-            </PolarRadiusAxis>
           </RadialBarChart>
         </ResponsiveContainer>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-base font-semibold">{progress}%</span>
+        </div>
       </div>
       <div className="flex-1">
         <h4 className="font-medium text-base whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px]">
