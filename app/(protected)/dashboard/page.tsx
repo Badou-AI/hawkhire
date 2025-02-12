@@ -9,6 +9,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { MoreHorizontal, TrendingUp, TrendingDown } from 'lucide-react';
 import { PolarGrid, RadialBar, RadialBarChart } from "recharts";
 import { Table, TableBody, TableHead, TableHeader, TableRow, TableCell } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
+
 interface StatsDataItem {
   count: number
   change: number
@@ -209,6 +211,31 @@ const resourcesChartData = [
   { name: "Social Media", value: 300, fill: "hsl(271, 91%, 65%)" },
   { name: "Agencies", value: 150, fill: "hsl(48, 96%, 53%)" }
 ]
+
+const departmentColors = {
+  Marketing: {
+    dot: "bg-lime-500",
+    bg: "bg-lime-500/10",
+    hover: "hover:bg-lime-500/20"
+  },
+  "Human Resources": {
+    dot: "bg-green-500",
+    bg: "bg-green-500/10",
+    hover: "hover:bg-green-500/20"
+  },
+  "Customer Support": {
+    dot: "bg-blue-500",
+    bg: "bg-blue-500/10",
+    hover: "hover:bg-blue-500/20"
+  },
+  Finance: {
+    dot: "bg-yellow-500",
+    bg: "bg-yellow-500/10",
+    hover: "hover:bg-yellow-500/20"
+  }
+} as const
+
+type Department = keyof typeof departmentColors
 
 export default function DashboardPage() {
   return (
@@ -573,18 +600,49 @@ export default function DashboardPage() {
                   <option>Today</option>
                 </select>
               </div>
-              <div className="space-y-4">
-                {schedule.map((event, index) => (
-                  <div key={index} className="flex gap-4">
-                    <div className="text-sm text-muted-foreground w-16">
-                      {event.time}
+              <div className="relative space-y-4">
+                {/* Timeline line */}
+                <div className="absolute left-[19px] top-5 bottom-5 border-l-2 border-dashed border-muted" />
+                
+                {schedule.map((event, index) => {
+                  const colors = departmentColors[event.department as Department]
+                  
+                  return (
+                    <div 
+                      key={index} 
+                      className={cn(
+                        "flex gap-2 rounded-lg transition-colors",
+                        colors.hover
+                      )}
+                    >
+                      <div className="w-12 text-xs text-muted-foreground pb-1 shrink-0 z-10">
+                        {event.time}
+                      </div>
+                      
+                      <div className="relative shrink-0 z-10">
+                        <div className={cn(
+                          "w-4 h-4 rounded-full border-2 border-background",
+                          colors.dot
+                        )} />
+                      </div>
+                      
+                      <div className={cn(
+                        "flex-1 rounded-lg p-3",
+                        colors.bg
+                      )}>
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h4 className="font-medium text-xs whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px]">{event.title}</h4>
+                            <p className="text-xs text-muted-foreground">{event.department}</p>
+                          </div>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex-1 bg-secondary/20 rounded-lg p-2">
-                      <h4 className="font-medium">{event.title}</h4>
-                      <p className="text-sm text-muted-foreground">{event.department}</p>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </CardContent>
           </Card>
