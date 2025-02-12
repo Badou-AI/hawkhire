@@ -10,6 +10,7 @@ import { MoreHorizontal, TrendingUp, TrendingDown } from 'lucide-react';
 import { PolarGrid, RadialBar, RadialBarChart } from "recharts";
 import { Table, TableBody, TableHead, TableHeader, TableRow, TableCell } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 
 interface StatsDataItem {
   count: number
@@ -290,9 +291,16 @@ export default function DashboardPage() {
                   </div>
                 </div>
               </div>
-              <select className="text-sm border rounded-md px-2 py-1">
-                <option>13-18 May</option>
-              </select>
+              <Select defaultValue="13-18 May">
+                <SelectTrigger className="w-[130px]">
+                  <SelectValue placeholder="Select date range" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="13-18 May">13-18 May</SelectItem>
+                  <SelectItem value="6-12 May">6-12 May</SelectItem>
+                  <SelectItem value="29-5 May">29-5 May</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="h-[300px] mt-4">
               <ResponsiveContainer width="100%" height="100%">
@@ -369,9 +377,16 @@ export default function DashboardPage() {
                   <span className="font-medium text-foreground">525</span> Total Applications
                 </div>
               </div>
-              <select className="text-sm border rounded-md px-2 py-1">
-                <option>Today</option>
-              </select>
+              <Select defaultValue="today">
+                <SelectTrigger className="w-[130px]">
+                  <SelectValue placeholder="Select period" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="week">This Week</SelectItem>
+                  <SelectItem value="month">This Month</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid grid-cols-2 gap-8">
               <div className="flex items-center justify-center">
@@ -534,9 +549,16 @@ export default function DashboardPage() {
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-semibold">Current Vacancies</h3>
                     <div className="flex items-center gap-2">
-                      <select className="text-sm border rounded-md px-2 py-1">
-                        <option>Popular</option>
-                      </select>
+                      <Select defaultValue="popular">
+                        <SelectTrigger className="w-[130px]">
+                          <SelectValue placeholder="Select filter" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="popular">Popular</SelectItem>
+                          <SelectItem value="recent">Recent</SelectItem>
+                          <SelectItem value="urgent">Urgent</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <Button variant="link" className="text-sm">See All</Button>
                     </div>
                   </div>
@@ -596,9 +618,16 @@ export default function DashboardPage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold">Schedule</h3>
-                <select className="text-sm border rounded-md px-2 py-1">
-                  <option>Today</option>
-                </select>
+                <Select defaultValue="today">
+                  <SelectTrigger className="w-[130px]">
+                    <SelectValue placeholder="Select period" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="today">Today</SelectItem>
+                    <SelectItem value="tomorrow">Tomorrow</SelectItem>
+                    <SelectItem value="week">This Week</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="relative space-y-4">
                 {/* Timeline line */}
