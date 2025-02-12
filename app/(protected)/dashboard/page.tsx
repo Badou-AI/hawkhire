@@ -5,8 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, Tooltip } from "recharts";
 import { PieChart, Pie, Cell, Label } from "recharts";
 import { ResponsiveContainer } from "recharts";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { MoreHorizontal, TrendingUp, TrendingDown } from 'lucide-react';
+import { MoreHorizontal, TrendingUp, TrendingDown, Files, Calendar, Bell, PlusCircle, CheckCircle } from 'lucide-react';
 import { PolarGrid, RadialBar, RadialBarChart } from "recharts";
 import { Table, TableBody, TableHead, TableHeader, TableRow, TableCell } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
@@ -135,7 +134,7 @@ const schedule = [
 const applicants = [
   {
     name: "Alex Boide",
-    email: "a.boide@hirezy.com",
+    email: "a.boide@hirezy.com", 
     role: "Software Engineer",
     date: "Apr 15, 2027",
     type: "Full-time",
@@ -144,7 +143,7 @@ const applicants = [
   {
     name: "Alice Johnson",
     email: "a.johnson@hirezy.com",
-    role: "HR Specialist",
+    role: "HR Specialist", 
     date: "Apr 10, 2027",
     type: "Contract",
     status: "Shortlisted"
@@ -153,7 +152,7 @@ const applicants = [
     name: "Bob Lee",
     email: "b.lee@hirezy.com",
     role: "Sales Associate",
-    date: "Apr 18, 2027",
+    date: "Apr 18, 2027", 
     type: "Temporary",
     status: "Screening"
   },
@@ -162,7 +161,7 @@ const applicants = [
     email: "m.brown@hirezy.com",
     role: "Financial Analyst",
     date: "Apr 22, 2027",
-    type: "Full-time",
+    type: "Full-time", 
     status: "Job Offer"
   },
   {
@@ -172,31 +171,76 @@ const applicants = [
     date: "Apr 20, 2027",
     type: "Part-time",
     status: "Shortlisted"
+  },
+  {
+    name: "John Smith",
+    email: "j.smith@hirezy.com",
+    role: "Product Designer",
+    date: "Apr 25, 2027",
+    type: "Full-time",
+    status: "Interviewing"
   }
 ]
 
-const recentActivity = [
-  {
-    action: "Darren Wright viewed 15 candidate profiles for the Software Developer position",
-    time: "10:15 AM"
+const activityColors = {
+  view: {
+    bg: "bg-lime-200",
+    hover: "hover:bg-lime-300/20"
   },
-  {
-    action: "Caren Smith scheduled interviews with 3 candidates for the Marketing Manager role",
-    time: "9:25 AM"
+  schedule: {
+    bg: "bg-blue-200",
+    hover: "hover:bg-blue-300/20"
   },
-  {
-    action: "Automated Reminder sent to Bob Lee to complete interview feedback",
-    time: "9:00 AM"
+  reminder: {
+    bg: "bg-yellow-200",
+    hover: "hover:bg-yellow-300/20"
   },
-  {
-    action: "Sarah Chen updated the job description for Senior UX Designer role",
-    time: "8:45 AM"
+  create: {
+    bg: "bg-violet-200",
+    hover: "hover:bg-violet-300/20"
   },
-  {
-    action: "James Wilson approved 5 candidates for first round interviews",
-    time: "8:30 AM"
+  offer: {
+    bg: "bg-green-200",
+    hover: "hover:bg-green-300/20"
   }
-]
+} as const
+
+const recentActivity = {
+  today: [
+    {
+      type: "view",
+      action: "Darren Wright viewed 15 candidate profiles for the Software Developer position",
+      time: "10:15 AM",
+      icon: Files
+    },
+    {
+      type: "schedule",
+      action: "Caren Smith scheduled interviews with 3 candidates for the Marketing Manager role",
+      time: "9:50 AM",
+      icon: Calendar
+    },
+    {
+      type: "reminder",
+      action: "Automated Reminder sent to Bob Lee to complete interview feedback",
+      time: "9:30 AM",
+      icon: Bell
+    }
+  ],
+  yesterday: [
+    {
+      type: "create",
+      action: "New job posting for a Project Manager created by Alice Johnson",
+      time: "4:45 PM",
+      icon: PlusCircle
+    },
+    {
+      type: "offer",
+      action: "Offer letter accepted by candidate Mark Brown for the Financial Analyst position",
+      time: "3:30 PM",
+      icon: CheckCircle
+    }
+  ]
+}
 
 const applicantResources = {
   totalApplicants: 1000,
@@ -291,14 +335,15 @@ export default function DashboardPage() {
                   </div>
                 </div>
               </div>
-              <Select defaultValue="13-18 May">
+              <Select defaultValue="week">
                 <SelectTrigger className="w-[130px]">
                   <SelectValue placeholder="Select date range" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="13-18 May">13-18 May</SelectItem>
-                  <SelectItem value="6-12 May">6-12 May</SelectItem>
-                  <SelectItem value="29-5 May">29-5 May</SelectItem>
+                  <SelectItem value="week">Week</SelectItem>
+                  <SelectItem value="3-month">3 Month</SelectItem>
+                  <SelectItem value="6-month">6 Month</SelectItem>
+                  <SelectItem value="year">Year</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -742,26 +787,56 @@ export default function DashboardPage() {
            {/* Recent Activity */}
           <Card>
             <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold">Recent Activity</h3>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-sm font-semibold">Recent Activity</h3>
                 <Button variant="ghost" size="icon">
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
               </div>
-              <div className="space-y-4">
-                {recentActivity.map((activity, index) => (
-                  <div key={index} className="flex items-start gap-4">
-                    <Avatar className="mt-1">
-                      <AvatarFallback>
-                        {activity.action.charAt(0)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <p className="text-sm">{activity.action}</p>
-                      <p className="text-sm text-muted-foreground">{activity.time}</p>
-                    </div>
+              <div className="space-y-8">
+                <div className="space-y-6">
+                  <h4 className="text-xs font-semibold">Today</h4>
+                  <div className="space-y-4">
+                    {recentActivity.today.map((activity, index) => {
+                      const colors = activityColors[activity.type as keyof typeof activityColors];
+                      const Icon = activity.icon;
+                      
+                      return (
+                        <div key={index} className="flex items-start gap-4">
+                          <div className={cn("p-2 rounded-lg", colors.bg)}>
+                            <Icon className="h-4 w-4" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm">{activity.action}</p>
+                            <p className="text-sm text-muted-foreground">{activity.time}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                ))}
+                </div>
+                
+                <div className="space-y-6">
+                  <h4 className="text-xs font-semibold">Yesterday</h4>
+                  <div className="space-y-4">
+                    {recentActivity.yesterday.map((activity, index) => {
+                      const colors = activityColors[activity.type as keyof typeof activityColors];
+                      const Icon = activity.icon;
+                      
+                      return (
+                        <div key={index} className="flex items-start gap-4">
+                          <div className={cn("p-2 rounded-lg", colors.bg)}>
+                            <Icon className="h-4 w-4" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm">{activity.action}</p>
+                            <p className="text-sm text-muted-foreground">{activity.time}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
