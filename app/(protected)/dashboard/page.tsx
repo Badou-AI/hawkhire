@@ -2,14 +2,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { BarChart, Bar, XAxis, YAxis, Tooltip } from "recharts";
 import { PieChart, Pie, Cell, Label } from "recharts";
 import { ResponsiveContainer } from "recharts";
@@ -17,7 +9,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   MoreHorizontal,
   TrendingUp,
-  TrendingDown
+  TrendingDown,
+  Table
 } from 'lucide-react';
 import {
   PolarGrid,
@@ -25,6 +18,7 @@ import {
   RadialBar,
   RadialBarChart,
 } from "recharts";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface StatsDataItem {
   count: number
@@ -505,7 +499,7 @@ export default function DashboardPage() {
        
       </div>
 
-      {/* Rest of the dashboard content... */}
+      {/* Middle Section */}
       <div className="grid grid-cols-4 gap-6 mt-6">
         <div className="col-span-3">
           <div className="flex flex-col gap-6">
@@ -597,95 +591,99 @@ export default function DashboardPage() {
               </div>
             </CardContent>
           </Card>
-        </div>
- 
-        {/* Recent Activity */}
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold">Recent Activity</h3>
-              <Button variant="ghost" size="icon">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="space-y-4">
-              {recentActivity.map((activity, index) => (
-                <div key={index} className="flex items-start gap-4">
-                  <Avatar className="mt-1">
-                    <AvatarFallback>
-                      {activity.action.charAt(0)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1">
-                    <p className="text-sm">{activity.action}</p>
-                    <p className="text-sm text-muted-foreground">{activity.time}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-    
-
-   
-        <Card className="mt-4">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <h3 className="font-semibold">Applicants List</h3>
-                <Badge variant="secondary">1,242</Badge>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="secondary" size="sm">All Applicants</Button>
-                <Button variant="ghost" size="sm">Screening</Button>
-                <Button variant="ghost" size="sm">Shortlisted</Button>
-                <Button variant="ghost" size="sm">Interviewing</Button>
-                <Button variant="ghost" size="sm">Job Offer</Button>
-              </div>
-            </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Employment Type</TableHead>
-                  <TableHead>Resume</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {applicants.map((applicant, index) => (
-                  <TableRow key={index}>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{applicant.name}</div>
-                        <div className="text-sm text-muted-foreground">{applicant.email}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>{applicant.role}</TableCell>
-                    <TableCell>{applicant.date}</TableCell>
-                    <TableCell>{applicant.type}</TableCell>
-                    <TableCell>
-                      <Button variant="outline" size="sm">View Resume</Button>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={
-                        applicant.status === "Job Offer" ? "default" :
-                        applicant.status === "Interviewing" ? "secondary" :
-                        "secondary"
-                      }>
-                        {applicant.status}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
       </div>
-  
+      
+      {/* Bottom Section */}
+      <div className="grid grid-cols-4 gap-6 mt-6">
+        <div className="col-span-3">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold">Applicants List</h3>
+                  <Badge variant="secondary">1,242</Badge>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="secondary" size="sm">All Applicants</Button>
+                  <Button variant="ghost" size="sm">Screening</Button>
+                  <Button variant="ghost" size="sm">Shortlisted</Button>
+                  <Button variant="ghost" size="sm">Interviewing</Button>
+                  <Button variant="ghost" size="sm">Job Offer</Button>
+                </div>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Employment Type</TableHead>
+                    <TableHead>Resume</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {applicants.map((applicant, index) => (
+                    <TableRow key={index}>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{applicant.name}</div>
+                          <div className="text-sm text-muted-foreground">{applicant.email}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>{applicant.role}</TableCell>
+                      <TableCell>{applicant.date}</TableCell>
+                      <TableCell>{applicant.type}</TableCell>
+                      <TableCell>
+                        <Button variant="outline" size="sm">View Resume</Button>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={
+                          applicant.status === "Job Offer" ? "default" :
+                          applicant.status === "Interviewing" ? "secondary" :
+                          "secondary"
+                        }>
+                          {applicant.status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
+        <div className="col-span-1">
+           {/* Recent Activity */}
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold">Recent Activity</h3>
+                <Button variant="ghost" size="icon">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="space-y-4">
+                {recentActivity.map((activity, index) => (
+                  <div key={index} className="flex items-start gap-4">
+                    <Avatar className="mt-1">
+                      <AvatarFallback>
+                        {activity.action.charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <p className="text-sm">{activity.action}</p>
+                      <p className="text-sm text-muted-foreground">{activity.time}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+      
+    </div>
   )
 }
 
