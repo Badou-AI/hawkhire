@@ -1,0 +1,216 @@
+---
+description: 
+globs: 
+---
+ # List & Table Layout Patterns
+
+## Pattern Recognition Guide
+
+When analyzing list and table designs, look for these common patterns:
+
+### 1. Basic List Layout
+```tsx
+<div className="rounded-lg border">
+  <div className="p-4 border-b bg-muted/40">
+    <div className="flex items-center justify-between">
+      <h2 className="font-semibold">List Title</h2>
+      <div className="flex items-center gap-4">
+        <Search />
+        <FilterDropdown />
+      </div>
+    </div>
+  </div>
+  
+  <div className="divide-y">
+    {items.map(item => (
+      <div key={item.id} className="p-4 hover:bg-muted/50">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Avatar />
+            <div>
+              <p className="font-medium">{item.title}</p>
+              <p className="text-sm text-muted-foreground">{item.description}</p>
+            </div>
+          </div>
+          <Button variant="ghost" size="icon">
+            <MoreVertical className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    ))}
+  </div>
+</div>
+```
+
+### 2. Advanced Table Layout
+```tsx
+<div className="rounded-lg border">
+  {/* Table Header */}
+  <div className="p-4 border-b bg-muted/40">
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-4">
+        <h2 className="font-semibold">Table Title</h2>
+        <Badge>{items.length} items</Badge>
+      </div>
+      <div className="flex items-center gap-4">
+        <Search />
+        <FilterDropdown />
+        <Button>
+          <Plus className="h-4 w-4 mr-2" />
+          Add New
+        </Button>
+      </div>
+    </div>
+  </div>
+  
+  {/* Table Content */}
+  <Table>
+    <TableHeader>
+      <TableRow>
+        <TableHead className="w-[40px]">
+          <Checkbox />
+        </TableHead>
+        <TableHead>Name</TableHead>
+        <TableHead>Status</TableHead>
+        <TableHead className="text-right">Actions</TableHead>
+      </TableRow>
+    </TableHeader>
+    <TableBody>
+      {items.map(item => (
+        <TableRow key={item.id}>
+          <TableCell>
+            <Checkbox />
+          </TableCell>
+          <TableCell>
+            <div className="flex items-center gap-4">
+              <Avatar />
+              <div>
+                <p className="font-medium">{item.name}</p>
+                <p className="text-sm text-muted-foreground">{item.email}</p>
+              </div>
+            </div>
+          </TableCell>
+          <TableCell>
+            <Badge>{item.status}</Badge>
+          </TableCell>
+          <TableCell className="text-right">
+            <Button variant="ghost" size="icon">
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </TableCell>
+        </TableRow>
+      ))}
+    </TableBody>
+  </Table>
+  
+  {/* Table Footer */}
+  <div className="p-4 border-t">
+    <div className="flex items-center justify-between">
+      <p className="text-sm text-muted-foreground">
+        Showing 1-10 of 100 items
+      </p>
+      <Pagination />
+    </div>
+  </div>
+</div>
+```
+
+### 3. Grid List Layout
+```tsx
+<div className="space-y-4">
+  {/* Header */}
+  <div className="flex items-center justify-between">
+    <h2 className="font-semibold">Grid List</h2>
+    <div className="flex items-center gap-4">
+      <ViewToggle />
+      <FilterDropdown />
+    </div>
+  </div>
+  
+  {/* Grid */}
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+    {items.map(item => (
+      <Card key={item.id}>
+        <CardHeader>
+          <div className="aspect-video relative rounded-lg overflow-hidden">
+            <Image
+              src={item.image}
+              alt={item.title}
+              fill
+              className="object-cover"
+            />
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <h3 className="font-medium">{item.title}</h3>
+          <p className="text-sm text-muted-foreground">{item.description}</p>
+        </CardContent>
+        <CardFooter>
+          <Button variant="ghost" className="w-full">
+            View Details
+          </Button>
+        </CardFooter>
+      </Card>
+    ))}
+  </div>
+  
+  {/* Footer */}
+  <div className="flex items-center justify-between">
+    <p className="text-sm text-muted-foreground">
+      Showing 1-12 of 100 items
+    </p>
+    <Pagination />
+  </div>
+</div>
+```
+
+### Pattern Recognition Steps
+
+1. **List Type Identification**
+   - Simple list vs table vs grid
+   - Data complexity and relationships
+   - Interactive requirements
+
+2. **Header Components**
+   - Search and filtering
+   - Bulk actions
+   - View toggles
+
+3. **Content Structure**
+   - Primary and secondary information
+   - Action placement
+   - Status indicators
+
+4. **Interactive Elements**
+   - Row/item actions
+   - Bulk selection
+   - Inline editing
+
+5. **Footer Components**
+   - Pagination
+   - Summary information
+   - Batch actions
+
+### Best Practices
+
+1. **Responsive Behavior**
+   - Stack on mobile
+   - Horizontal scroll for tables
+   - Adjust grid columns
+
+2. **Loading States**
+   - Skeleton loading
+   - Progressive loading
+   - Load more vs pagination
+
+3. **Empty States**
+   - Helpful messaging
+   - Clear actions
+   - Placeholder content
+
+4. **Selection States**
+   - Clear indicators
+   - Bulk actions
+   - Selection persistence
+
+Remember: Lists and tables should make data exploration and manipulation intuitive. Layout should support quick scanning and efficient interaction.

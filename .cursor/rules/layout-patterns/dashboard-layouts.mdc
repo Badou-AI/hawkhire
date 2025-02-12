@@ -1,0 +1,173 @@
+---
+description: 
+globs: 
+---
+ # Dashboard Layout Patterns
+
+## Pattern Recognition Guide
+
+When analyzing dashboard designs, look for these common layout structures:
+
+### 1. Analytics Grid (4-4-4)
+```tsx
+<div className="grid grid-cols-12 gap-6">
+  {/* Top row stats */}
+  <div className="col-span-4">
+    <StatCard />
+  </div>
+  <div className="col-span-4">
+    <StatCard />
+  </div>
+  <div className="col-span-4">
+    <StatCard />
+  </div>
+</div>
+```
+
+### 2. Main-Sidebar (9-3)
+```tsx
+<div className="grid grid-cols-12 gap-6">
+  {/* Main content area */}
+  <div className="col-span-9">
+    <div className="space-y-6">
+      {/* Content sections */}
+    </div>
+  </div>
+  {/* Sidebar */}
+  <div className="col-span-3">
+    <div className="space-y-6">
+      {/* Sidebar widgets */}
+    </div>
+  </div>
+</div>
+```
+
+### 3. Dashboard Card Patterns
+
+#### Full-Width Chart Card
+```tsx
+<div className="rounded-lg border bg-card p-6">
+  <div className="flex items-center justify-between mb-4">
+    <div className="space-y-1">
+      <h3 className="font-semibold">Chart Title</h3>
+      <p className="text-sm text-muted-foreground">Subtitle</p>
+    </div>
+    <div className="flex items-center gap-4">
+      <DateRangePicker />
+      <FilterDropdown />
+    </div>
+  </div>
+  <div className="h-[400px]">
+    <ChartComponent />
+  </div>
+</div>
+```
+
+#### Split Chart Card
+```tsx
+<div className="rounded-lg border bg-card p-6">
+  <div className="grid grid-cols-2 gap-8">
+    <div className="space-y-4">
+      <div className="aspect-square">
+        <ChartComponent />
+      </div>
+    </div>
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        {stats.map(stat => (
+          <StatItem key={stat.id} {...stat} />
+        ))}
+      </div>
+    </div>
+  </div>
+</div>
+```
+
+### 4. Common Dashboard Sections
+
+#### Header Section
+```tsx
+<div className="flex items-center justify-between mb-6">
+  <div className="space-y-1">
+    <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+    <p className="text-sm text-muted-foreground">
+      Your analytics overview
+    </p>
+  </div>
+  <div className="flex items-center gap-4">
+    <DateRangePicker />
+    <Button>Export</Button>
+  </div>
+</div>
+```
+
+#### Stats Overview
+```tsx
+<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+  {stats.map(stat => (
+    <div key={stat.id} className="rounded-lg border bg-card p-6">
+      <div className="flex items-center gap-4">
+        <stat.icon className="h-5 w-5 text-muted-foreground" />
+        <div className="space-y-1">
+          <p className="text-sm text-muted-foreground">{stat.label}</p>
+          <p className="text-2xl font-semibold">{stat.value}</p>
+        </div>
+      </div>
+      <div className="mt-4 flex items-center gap-2">
+        <TrendIndicator value={stat.trend} />
+        <span className="text-sm text-muted-foreground">
+          vs previous period
+        </span>
+      </div>
+    </div>
+  ))}
+</div>
+```
+
+### 5. Responsive Considerations
+
+#### Mobile-First Breakpoints
+```tsx
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+  {/* Cards that stack on mobile, 2-up on tablet, 3-up on desktop, 4-up on large screens */}
+</div>
+```
+
+#### Responsive Navigation
+```tsx
+<div className="hidden lg:flex flex-col gap-2">
+  {/* Desktop sidebar navigation */}
+</div>
+<div className="lg:hidden">
+  <MobileNav /> {/* Mobile navigation menu */}
+</div>
+```
+
+### Pattern Recognition Steps
+
+1. **Identify Major Sections**
+   - Look for clear visual divisions
+   - Note content hierarchy
+   - Identify repeated patterns
+
+2. **Analyze Grid Structure**
+   - Count columns in each section
+   - Note responsive behavior
+   - Identify nested grids
+
+3. **Component Patterns**
+   - Look for repeated card styles
+   - Note consistent spacing
+   - Identify common UI patterns
+
+4. **Spacing Patterns**
+   - Note gaps between sections
+   - Look for consistent padding
+   - Identify margin patterns
+
+5. **Interactive Elements**
+   - Note hover states
+   - Identify click targets
+   - Look for loading states
+
+Remember: When implementing these patterns, always consider the content hierarchy and user flow. The layout should enhance the user experience, not hinder it.

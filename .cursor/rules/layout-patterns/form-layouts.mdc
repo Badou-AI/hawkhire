@@ -1,0 +1,188 @@
+---
+description: 
+globs: 
+---
+ # Form Layout Patterns
+
+## Pattern Recognition Guide
+
+When analyzing form designs, look for these common patterns:
+
+### 1. Single Column Form
+```tsx
+<div className="max-w-2xl mx-auto space-y-8">
+  <div className="space-y-2">
+    <h2 className="text-2xl font-semibold tracking-tight">Form Title</h2>
+    <p className="text-muted-foreground">Form description and instructions</p>
+  </div>
+  
+  <div className="space-y-4">
+    <div className="space-y-2">
+      <Label htmlFor="name">Name</Label>
+      <Input id="name" />
+    </div>
+    <div className="space-y-2">
+      <Label htmlFor="email">Email</Label>
+      <Input id="email" type="email" />
+    </div>
+  </div>
+
+  <div className="flex justify-end gap-4">
+    <Button variant="outline">Cancel</Button>
+    <Button>Submit</Button>
+  </div>
+</div>
+```
+
+### 2. Two Column Form
+```tsx
+<div className="max-w-4xl mx-auto space-y-8">
+  <div className="grid grid-cols-2 gap-8">
+    {/* Left column */}
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="firstName">First Name</Label>
+        <Input id="firstName" />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="email">Email</Label>
+        <Input id="email" type="email" />
+      </div>
+    </div>
+    
+    {/* Right column */}
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="lastName">Last Name</Label>
+        <Input id="lastName" />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="phone">Phone</Label>
+        <Input id="phone" type="tel" />
+      </div>
+    </div>
+  </div>
+</div>
+```
+
+### 3. Form Card with Sections
+```tsx
+<Card className="max-w-4xl mx-auto">
+  <CardHeader>
+    <CardTitle>Profile Information</CardTitle>
+    <CardDescription>Update your profile information</CardDescription>
+  </CardHeader>
+  
+  <CardContent className="space-y-8">
+    {/* Personal Information */}
+    <div className="space-y-4">
+      <h3 className="font-medium">Personal Information</h3>
+      <div className="grid grid-cols-2 gap-4">
+        {/* Form fields */}
+      </div>
+    </div>
+    
+    {/* Contact Information */}
+    <div className="space-y-4">
+      <h3 className="font-medium">Contact Information</h3>
+      <div className="grid grid-cols-2 gap-4">
+        {/* Form fields */}
+      </div>
+    </div>
+  </CardContent>
+  
+  <CardFooter className="flex justify-end gap-4">
+    <Button variant="outline">Cancel</Button>
+    <Button>Save Changes</Button>
+  </CardFooter>
+</Card>
+```
+
+### 4. Form with Side Navigation
+```tsx
+<div className="grid grid-cols-12 gap-8">
+  {/* Side Navigation */}
+  <div className="col-span-3">
+    <nav className="space-y-2">
+      <button className="w-full text-left px-4 py-2 rounded-lg hover:bg-accent">
+        Personal Info
+      </button>
+      <button className="w-full text-left px-4 py-2 rounded-lg hover:bg-accent">
+        Security
+      </button>
+      {/* More nav items */}
+    </nav>
+  </div>
+  
+  {/* Form Content */}
+  <div className="col-span-9">
+    <Card>
+      {/* Form content */}
+    </Card>
+  </div>
+</div>
+```
+
+### 5. Form Field Patterns
+
+#### Inline Fields
+```tsx
+<div className="flex gap-4 items-end">
+  <div className="flex-1 space-y-2">
+    <Label>First Name</Label>
+    <Input />
+  </div>
+  <div className="flex-1 space-y-2">
+    <Label>Last Name</Label>
+    <Input />
+  </div>
+  <Button className="mb-[2px]">Add</Button>
+</div>
+```
+
+#### Field Groups
+```tsx
+<div className="space-y-2">
+  <Label>Address</Label>
+  <div className="space-y-4">
+    <Input placeholder="Street Address" />
+    <div className="grid grid-cols-2 gap-4">
+      <Input placeholder="City" />
+      <Input placeholder="State" />
+    </div>
+    <div className="grid grid-cols-2 gap-4">
+      <Input placeholder="Postal Code" />
+      <Input placeholder="Country" />
+    </div>
+  </div>
+</div>
+```
+
+### Pattern Recognition Steps
+
+1. **Form Structure**
+   - Single vs multi-column layout
+   - Section grouping
+   - Field alignment and spacing
+
+2. **Field Relationships**
+   - Related fields grouping
+   - Dependent fields
+   - Field order and flow
+
+3. **Validation Patterns**
+   - Required fields
+   - Error states
+   - Success states
+
+4. **Responsive Behavior**
+   - Stack on mobile
+   - Maintain readability
+   - Touch-friendly spacing
+
+5. **Action Placement**
+   - Primary/secondary actions
+   - Cancel/submit positioning
+   - Sticky actions for long forms
+
+Remember: Forms should guide users through the data entry process. Layout should enhance clarity and reduce cognitive load.

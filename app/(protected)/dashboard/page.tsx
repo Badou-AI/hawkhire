@@ -651,7 +651,7 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </div>
-        <div className="col-span-1">
+        
            {/* Recent Activity */}
           <Card>
             <CardContent className="p-4">
@@ -678,7 +678,7 @@ export default function DashboardPage() {
               </div>
             </CardContent>
           </Card>
-        </div>
+     
       </div>
       
     </div>
@@ -724,36 +724,35 @@ function TaskProgress({ progress, title, type, date }: TaskProgressProps) {
   const endAngle = (progress / 100) * 360;
 
   return (
-    <div className="flex items-center gap-4">
+    <div className="flex items-center gap-4 bg-gray-100 p-2 rounded-md">
       <div className="relative w-12 h-12">
         <ResponsiveContainer width="100%" height="100%">
           <RadialBarChart
             data={chartData}
-            startAngle={0}
+            startAngle={-50}
             endAngle={endAngle}
-            innerRadius={22}
+            innerRadius={20}
             outerRadius={28}
           >
-            <PolarGrid gridType="circle" radialLines={false} />
+            <PolarGrid gridType="circle" radialLines={false} stroke="rgba(139, 92, 246, 0.3)" strokeWidth={4}/>
             <RadialBar
               dataKey="value"
               background
-              className="stroke-background [&.recharts-radial-bar-background-sector]:fill-[#f3f4f6] [&.recharts-radial-bar-sector]:fill-[#8b5cf6]"
-              cornerRadius={30}
+              className="stroke-background [&.recharts-radial-bar-background-sector]:fill-[#8b5cf6]/30 [&.recharts-radial-bar-sector]:fill-[#8b5cf6]"
+              cornerRadius={10}
             />
           </RadialBarChart>
         </ResponsiveContainer>
         <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-base font-semibold">{progress}%</span>
+          <span className="text-xs font-semibold">{progress}%</span>
         </div>
       </div>
       <div className="flex-1">
-        <h4 className="font-medium text-base whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px]">
+        <h4 className="font-medium text-sm whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px]">
           {title}
         </h4>
         <div className="gap-2">
-          <div className="text-sm text-muted-foreground">{type}</div>
-          <div className="text-sm text-muted-foreground">{date}</div>
+          <span className="text-xs text-muted-foreground">{type} . {date}</span>
         </div>
       </div>
     </div>

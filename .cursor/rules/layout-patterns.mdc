@@ -1,0 +1,133 @@
+---
+description: 
+globs: 
+---
+ # Layout Patterns & Best Practices
+
+## Grid-Flex Combo Pattern
+
+This pattern combines CSS Grid for overall page structure with Flexbox for component-level layouts, providing both macro and micro-level control.
+
+### Page Structure
+```tsx
+<div className="p-4">
+  {/* Main grid container */}
+  <div className="grid grid-cols-4 gap-6">
+    {/* Content sections */}
+    <div className="col-span-3">
+      <div className="flex flex-col gap-6">
+        {/* Nested grid for cards */}
+        <div className="grid grid-cols-4 gap-6">
+          {/* Individual cards */}
+        </div>
+      </div>
+    </div>
+    {/* Sidebar section */}
+    <div className="col-span-1">
+      {/* Sidebar content */}
+    </div>
+  </div>
+</div>
+```
+
+### Key Principles
+
+1. **Grid for Page Layout**
+   - Use `grid-cols-4` as base layout
+   - Common spans: `col-span-3` for main content, `col-span-1` for sidebar
+   - Consistent gap spacing: `gap-6` for major sections
+
+2. **Flex for Component Layout**
+   - Use `flex flex-col` for vertical stacking
+   - Use `flex items-center` for vertical alignment
+   - Use `flex justify-between` for horizontal spacing
+   - Use `gap-{size}` for consistent spacing
+
+3. **Spacing Consistency**
+   - Page padding: `p-4`
+   - Major sections: `gap-6`
+   - Component internal: `p-4` or `p-6`
+   - Element spacing: `gap-2` or `gap-4`
+
+4. **Responsive Patterns**
+   ```tsx
+   // Responsive grid
+   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+   
+   // Responsive padding
+   <div className="p-2 sm:p-4 lg:p-6">
+   
+   // Responsive spans
+   <div className="col-span-4 md:col-span-2 lg:col-span-1">
+   ```
+
+### Common Components
+
+1. **Card Headers**
+   ```tsx
+   <div className="flex items-center justify-between mb-4">
+     <div className="space-y-1">
+       <h3 className="font-semibold">{title}</h3>
+       <p className="text-sm text-muted-foreground">{subtitle}</p>
+     </div>
+     <div className="flex items-center gap-2">
+       {/* Actions */}
+     </div>
+   </div>
+   ```
+
+2. **Data Lists**
+   ```tsx
+   <div className="space-y-4">
+     {items.map((item) => (
+       <div key={item.id} className="flex items-center gap-4">
+         <div className="flex-1">
+           <div className="font-medium">{item.title}</div>
+           <div className="text-sm text-muted-foreground">{item.subtitle}</div>
+         </div>
+         <div className="flex items-center gap-2">
+           {/* Actions */}
+         </div>
+       </div>
+     ))}
+   </div>
+   ```
+
+3. **Stats Grid**
+   ```tsx
+   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+     {stats.map((stat) => (
+       <div key={stat.id} className="p-4 rounded-lg bg-card">
+         <div className="text-2xl font-semibold">{stat.value}</div>
+         <div className="text-sm text-muted-foreground">{stat.label}</div>
+       </div>
+     ))}
+   </div>
+   ```
+
+### Best Practices
+
+1. **Container Hierarchy**
+   - Page Container → Grid Layout → Section Container → Component Container
+   - Each level should handle its own spacing concerns
+   - Use consistent class ordering: layout → spacing → typography → colors
+
+2. **Responsive Design**
+   - Start with mobile layout
+   - Add breakpoints progressively
+   - Use consistent breakpoint patterns across the app
+   - Consider content rather than devices for breakpoints
+
+3. **Component Composition**
+   - Keep components focused and reusable
+   - Use composition over configuration when possible
+   - Maintain consistent spacing patterns
+   - Use semantic HTML structure
+
+4. **Performance Considerations**
+   - Avoid deeply nested grids
+   - Use CSS Grid for 2D layouts
+   - Use Flexbox for 1D layouts
+   - Consider content reflow during loading
+
+Remember: This pattern provides a consistent and maintainable approach to layout that scales well with complexity while maintaining visual harmony across the application.
