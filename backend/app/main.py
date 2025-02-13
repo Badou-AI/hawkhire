@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, HTTPException, Form, Query, Request, Header
+from fastapi import FastAPI, UploadFile, HTTPException, Form, Query, Request, Header, File, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 import httpx
@@ -3066,6 +3066,166 @@ async def extract_job_data(
                 status_code=422,
                 detail=f"Extracted data does not match job schema: {str(e)}"
             )
+            
+        return extracted_data
+        
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error extracting job data: {str(e)}"
+        )
+
+@app.post("/v1/jobs/convert-pdf", tags=["Jobs"])
+async def convert_job_pdf(
+    file: UploadFile = File(...),
+):
+    """Convert a job description PDF to text"""
+    try:
+        content = await file.read()
+        temp_dir = tempfile.mkdtemp()
+        temp_path = Path(temp_dir) / "job.pdf"
+        
+        # Save uploaded file
+        async with aiofiles.open(temp_path, 'wb') as f:
+            await f.write(content)
+        
+        # Convert to text
+        text_result = await semantic_service.convert_pdf_to_text(temp_path)
+        text_content = "\n".join(text_result.get('pages', []))
+        
+        # Clean up
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        
+        return {
+            "text": text_content
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error converting PDF: {str(e)}"
+        )
+
+@app.post("/v1/jobs/extract-data", tags=["Jobs"])
+async def extract_job_data(body: Dict = Body(...)):
+    """Extract structured job data from text using LLM"""
+    text = body.get('text')
+    filename = body.get('filename')
+    
+    if not text:
+        raise HTTPException(status_code=422, detail="Text is required in request body")
+        
+    try:
+        # Detect language to handle non-English content
+        language = await detect_language(text)
+        
+        # Extract structured data using LLM
+        schema = {
+            "type": "object",
+            "required": ["title", "description", "job_type", "location", "remote", "requirements", "skills"],
+            "properties": {
+                "title": {
+                    "type": "object",
+                    "properties": {
+                        "en": { "type": "string", "description": "Job title in English" },
+                        "fr": { "type": "string", "description": "Job title in French" }
+                    }
+                },
+                "description": {
+                    "type": "object",
+                    "properties": {
+                        "en": { "type": "string", "description": "Job description in English" },
+                        "fr": { "type": "string", "description": "Job description in French" }
+                    }
+                },
+                "job_type": {
+                    "type": "string",
+                    "enum": ["FULL_TIME", "PART_TIME", "CONTRACT", "FREELANCE", "INTERNSHIP", "VOLUNTEER", "TO_BE_DETERMINED"],
+                    "description": "Type of employment"
+                },
+                "location": {
+                    "type": "object",
+                    "properties": {
+                        "city": { 
+                            "type": "object",
+                            "properties": {
+                                "en": { "type": "string" },
+                                "fr": { "type": "string" }
+                            }
+                        },
+                        "state": { 
+                            "type": "object",
+                            "properties": {
+                                "en": { "type": "string" },
+                                "fr": { "type": "string" }
+                            }
+                        },
+                        "country": { 
+                            "type": "object",
+                            "properties": {
+                                "en": { "type": "string" },
+                                "fr": { "type": "string" }
+                            }
+                        },
+                        "postal_code": { 
+                            "type": "object",
+                            "properties": {
+                                "en": { "type": "string" },
+                                "fr": { "type": "string" }
+                            }
+                        }
+                    }
+                },
+                "remote": {
+                    "type": "boolean",
+                    "description": "Whether this is a remote position"
+                },
+                "requirements": {
+                    "type": "object",
+                    "properties": {
+                        "en": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "fr": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        }
+                    }
+                },
+                "skills": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "Required skills (uppercase constants)"
+                },
+                "salary_min": {
+                    "type": "number",
+                    "nullable": true,
+                    "description": "Minimum salary"
+                },
+                "salary_max": {
+                    "type": "number",
+                    "nullable": true,
+                    "description": "Maximum salary"
+                },
+                "salary_currency": {
+                    "type": "string",
+                    "default": "USD",
+                    "description": "Salary currency code"
+                },
+                "rating": {
+                    "type": "number",
+                    "nullable": true,
+                    "description": "Job rating"
+                }
+            }
+        }
+        
+        extracted_data = await semantic_service.extract_knowledge(
+            text=text,
+            schema=schema
+        )
             
         return extracted_data
         

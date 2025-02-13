@@ -18,20 +18,26 @@ interface ProcessingEvent {
 }
 
 interface JobData {
-  title: { en: string };
-  description: { en: string };
+  title: { en: string; fr?: string };
+  description: { en: string; fr?: string };
   organization_id: string;
   is_mock: boolean;
   created_by: string;
   job_type: string;
   location: {
-    city: { en: string };
-    state: { en: string };
-    country: { en: string };
-    postal_code: { en: string };
+    city: { en: string; fr?: string };
+    state: { en: string; fr?: string };
+    country: { en: string; fr?: string };
+    postal_code: { en: string; fr?: string };
   };
   remote: boolean;
   status: string;
+  requirements: { en: string[]; fr?: string[] };
+  skills: string[];
+  salary_min: number | null;
+  salary_max: number | null;
+  salary_currency: string;
+  rating: number | null;
 }
 
 // Generate a unique ID using UUID v4
@@ -121,28 +127,33 @@ export async function POST(request: NextRequest) {
                 console.log(`Converting PDF to text: ${entry.name}`);
                 const pdfBuffer = entryData
                 
-                // Use the existing process-pdf endpoint
-                const formData = new FormData()
-                const pdfFile = new File([pdfBuffer], entry.name, { type: 'application/pdf' })
-                formData.append('file', pdfFile)
+                try {
+                  // Use dedicated job PDF conversion endpoint
+                  const formData = new FormData()
+                  const pdfFile = new File([pdfBuffer], entry.name, { type: 'application/pdf' })
+                  formData.append('file', pdfFile)
 
-                const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/v1/tools/convert_pdf2text`, {
-                  method: 'POST',
-                  headers: {
-                    'Authorization': `Bearer ${session.access_token}`
-                  },
-                  body: formData
-                })
+                  const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/v1/jobs/convert-pdf`, {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${session.access_token}`
+                    },
+                    body: formData
+                  })
 
-                if (!response.ok) {
-                  const errorData = await response.text()
-                  console.error('PDF processing error:', errorData)
-                  throw new Error(`Failed to process PDF: ${response.status} ${errorData}`)
+                  if (!response.ok) {
+                    const errorData = await response.text()
+                    console.error('PDF processing error:', errorData)
+                    throw new Error(`Failed to process PDF: ${response.status} ${errorData}`)
+                  }
+
+                  console.log('PDF converted to text successfully');
+                  const result = await response.json()
+                  text = result.text
+                } catch (error) {
+                  console.error(`Error processing PDF ${entry.name}:`, error)
+                  throw error
                 }
-
-                console.log('PDF converted to text successfully');
-                const result = await response.json()
-                text = result.text
               } else if (['txt', 'md'].includes(ext || '')) {
                 console.log('Processing text file...');
                 text = entryData.toString('utf8')
@@ -153,51 +164,16 @@ export async function POST(request: NextRequest) {
 
               // Extract job data using LLM
               console.log('Extracting job data using LLM...');
-              const jobDataResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/v1/tools/extract_job_data`, {
+              console.log('Text content:', text);
+              const jobDataResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/v1/jobs/extract-data`, {
                 method: 'POST',
                 headers: {
                   'Authorization': `Bearer ${session.access_token}`,
                   'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                  text,
-                  filename: entry.name,
-                  target_schema: {
-                    type: 'object',
-                    required: ['title', 'description', 'job_type', 'location', 'remote'],
-                    properties: {
-                      title: {
-                        type: 'object',
-                        properties: {
-                          en: { type: 'string', description: 'Job title in English' }
-                        }
-                      },
-                      description: {
-                        type: 'object',
-                        properties: {
-                          en: { type: 'string', description: 'Job description in English' }
-                        }
-                      },
-                      job_type: {
-                        type: 'string',
-                        enum: ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'FREELANCE', 'INTERNSHIP', 'VOLUNTEER', 'TO_BE_DETERMINED'],
-                        description: 'Type of employment'
-                      },
-                      location: {
-                        type: 'object',
-                        properties: {
-                          city: { type: 'object', properties: { en: { type: 'string' } } },
-                          state: { type: 'object', properties: { en: { type: 'string' } } },
-                          country: { type: 'object', properties: { en: { type: 'string' } } },
-                          postal_code: { type: 'object', properties: { en: { type: 'string' } } }
-                        }
-                      },
-                      remote: {
-                        type: 'boolean',
-                        description: 'Whether this is a remote position'
-                      }
-                    }
-                  }
+                  text: text,
+                  filename: entry.name
                 })
               })
 
@@ -225,7 +201,13 @@ export async function POST(request: NextRequest) {
                   country: { en: 'Unknown' },
                   postal_code: { en: 'Unknown' }
                 },
-                remote: extractedData.remote || false
+                remote: extractedData.remote || false,
+                requirements: extractedData.requirements || { en: [], fr: [] },
+                skills: extractedData.skills || [],
+                salary_min: extractedData.salary_min || null,
+                salary_max: extractedData.salary_max || null,
+                salary_currency: extractedData.salary_currency || 'USD',
+                rating: extractedData.rating || 0
               }
 
               jobs.push(job)
