@@ -2,7 +2,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { BarChart, Bar, XAxis, YAxis, Tooltip } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { PieChart, Pie, Cell, Label } from "recharts";
 import { ResponsiveContainer } from "recharts";
 import { MoreHorizontal, TrendingUp, TrendingDown, Files, Calendar, Bell, PlusCircle, CheckCircle } from 'lucide-react';
@@ -10,6 +10,7 @@ import { PolarGrid, RadialBar, RadialBarChart } from "recharts";
 import { Table, TableBody, TableHead, TableHeader, TableRow, TableCell } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 
 interface StatsDataItem {
   count: number
@@ -33,12 +34,12 @@ const statsData: StatsData = {
 }
 
 const applicationData = [
-  { date: "13 May", applied: 300, shortlisted: 100 },
-  { date: "14 May", applied: 350, shortlisted: 150 },
-  { date: "15 May", applied: 280, shortlisted: 90 },
-  { date: "16 May", applied: 320, shortlisted: 110 },
-  { date: "17 May", applied: 290, shortlisted: 80 },
-  { date: "18 May", applied: 350, shortlisted: 140 }
+  { date: "13 Ma", applied: 500, shortlisted: 200 },
+  { date: "14 Ma", applied: 610, shortlisted: 250 },
+  { date: "15 Ma", applied: 450, shortlisted: 180 },
+  { date: "16 Ma", applied: 520, shortlisted: 210 },
+  { date: "17 Ma", applied: 480, shortlisted: 190 },
+  { date: "18 Ma", applied: 610, shortlisted: 250 }
 ]
 
 const departmentData = [
@@ -282,6 +283,17 @@ const departmentColors = {
 
 type Department = keyof typeof departmentColors
 
+const chartConfig = {
+  applied: {
+    label: "Applied",
+    color: "hsl(var(--primary)/.3)",
+  },
+  shortlisted: {
+    label: "Shortlisted",
+    color: "hsl(var(--primary))",
+  },
+} satisfies ChartConfig
+
 export default function DashboardPage() {
   return (
     <div className="p-4">
@@ -348,66 +360,42 @@ export default function DashboardPage() {
               </Select>
             </div>
             <div className="h-[300px] mt-4">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={applicationData}>
-                  <XAxis 
-                    dataKey="date"
-                    stroke="#888888"
-                    fontSize={12}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis
-                    stroke="#888888"
-                    fontSize={12}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(value) => `${value}`}
-                  />
-                  <Tooltip 
-                    cursor={{ fill: 'transparent' }}
-                    content={({ active, payload }) => {
-                      if (active && payload && payload.length) {
-                        return (
-                          <div className="rounded-lg border bg-background p-2 shadow-sm">
-                            <div className="grid grid-cols-2 gap-2">
-                              <div className="flex flex-col">
-                                <span className="text-[0.70rem] uppercase text-muted-foreground">
-                                  Applied
-                                </span>
-                                <span className="font-bold text-muted-foreground">
-                                  {payload[0].value}
-                                </span>
-                              </div>
-                              <div className="flex flex-col">
-                                <span className="text-[0.70rem] uppercase text-muted-foreground">
-                                  Shortlisted
-                                </span>
-                                <span className="font-bold text-muted-foreground">
-                                  {payload[1].value}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      }
-                      return null
-                    }}
-                  />
-                  <Bar
-                    dataKey="applied"
-                    fill="currentColor"
-                    radius={[4, 4, 0, 0]}
-                    className="fill-primary/30"
-                  />
-                  <Bar
-                    dataKey="shortlisted"
-                    fill="currentColor"
-                    radius={[4, 4, 0, 0]}
-                    className="fill-primary"
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+              <ChartContainer config={chartConfig}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={applicationData}>
+                    <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="date"
+                      stroke="#888888"
+                      fontSize={12}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={(value) => value.slice(0, 5)}
+                    />
+                    <YAxis
+                      stroke="#888888"
+                      fontSize={12}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={(value) => `${value}`}
+                    />
+                    <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+                    <ChartLegend content={<ChartLegendContent />} />
+                    <Bar
+                      dataKey="shortlisted"
+                      stackId="a"
+                      fill="hsl(var(--primary))"
+                      radius={[0, 0, 4, 4]}
+                    />
+                    <Bar
+                      dataKey="applied"
+                      stackId="a"
+                      fill="hsl(var(--primary)/.3)"
+                      radius={[4, 4, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartContainer>
             </div>
           </CardContent>
         </Card>

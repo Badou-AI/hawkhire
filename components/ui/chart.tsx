@@ -254,20 +254,26 @@ const ChartTooltipContent = React.forwardRef<
     )
   }
 )
-ChartTooltipContent.displayName = "ChartTooltip"
+ChartTooltipContent.displayName = "ChartTooltipContent"
 
 const ChartLegend = RechartsPrimitive.Legend
 
 const ChartLegendContent = React.forwardRef<
   HTMLDivElement,
-  React.ComponentProps<"div"> &
-    Pick<RechartsPrimitive.LegendProps, "payload" | "verticalAlign"> & {
-      hideIcon?: boolean
-      nameKey?: string
+  React.ComponentProps<typeof RechartsPrimitive.Legend> &
+    React.ComponentProps<"div"> & {
+      indicator?: "line" | "dot" | "dashed"
+      hideIndicator?: boolean
     }
 >(
   (
-    { className, hideIcon = false, payload, verticalAlign = "bottom", nameKey },
+    {
+      className,
+      payload,
+      indicator = "dot",
+      hideIndicator = false,
+      ...props
+    },
     ref
   ) => {
     const { config } = useChart()
@@ -279,34 +285,45 @@ const ChartLegendContent = React.forwardRef<
     return (
       <div
         ref={ref}
-        className={cn(
-          "flex items-center justify-center gap-4",
-          verticalAlign === "top" ? "pb-3" : "pt-3",
-          className
-        )}
+        className={cn("flex flex-wrap items-center gap-4 text-xs", className)}
+        {...props}
       >
-        {payload.map((item) => {
-          const key = `${nameKey || item.dataKey || "value"}`
-          const itemConfig = getPayloadConfigFromPayload(config, item, key)
+        {payload.map((entry, index) => {
+          const key = entry.value || entry.dataKey || ""
+          const itemConfig = getPayloadConfigFromPayload(config, entry, key)
+          const indicatorColor = entry.payload?.fill || entry.color
 
           return (
             <div
-              key={item.value}
-              className={cn(
-                "flex items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-muted-foreground"
-              )}
+              key={`item-${index}`}
+              className="flex items-center gap-1.5 whitespace-nowrap"
             >
-              {itemConfig?.icon && !hideIcon ? (
+              {itemConfig?.icon ? (
                 <itemConfig.icon />
               ) : (
-                <div
-                  className="h-2 w-2 shrink-0 rounded-[2px]"
-                  style={{
-                    backgroundColor: item.color,
-                  }}
-                />
+                !hideIndicator && (
+                  <div
+                    className={cn(
+                      "shrink-0 rounded-[2px] border-[--color-border] bg-[--color-bg]",
+                      {
+                        "h-2.5 w-2.5": indicator === "dot",
+                        "h-2.5 w-1": indicator === "line",
+                        "h-2.5 w-0 border-[1.5px] border-dashed bg-transparent":
+                          indicator === "dashed",
+                      }
+                    )}
+                    style={
+                      {
+                        "--color-bg": indicatorColor,
+                        "--color-border": indicatorColor,
+                      } as React.CSSProperties
+                    }
+                  />
+                )
               )}
-              {itemConfig?.label}
+              <span className="text-muted-foreground">
+                {itemConfig?.label || entry.value}
+              </span>
             </div>
           )
         })}
@@ -314,52 +331,25 @@ const ChartLegendContent = React.forwardRef<
     )
   }
 )
-ChartLegendContent.displayName = "ChartLegend"
+ChartLegendContent.displayName = "ChartLegendContent"
 
-// Helper to extract item config from a payload.
 function getPayloadConfigFromPayload(
   config: ChartConfig,
   payload: unknown,
   key: string
 ) {
-  if (typeof payload !== "object" || payload === null) {
-    return undefined
+  if (typeof key !== "string") {
+    return null
   }
 
-  const payloadPayload =
-    "payload" in payload &&
-    typeof payload.payload === "object" &&
-    payload.payload !== null
-      ? payload.payload
-      : undefined
-
-  let configLabelKey: string = key
-
-  if (
-    key in payload &&
-    typeof payload[key as keyof typeof payload] === "string"
-  ) {
-    configLabelKey = payload[key as keyof typeof payload] as string
-  } else if (
-    payloadPayload &&
-    key in payloadPayload &&
-    typeof payloadPayload[key as keyof typeof payloadPayload] === "string"
-  ) {
-    configLabelKey = payloadPayload[
-      key as keyof typeof payloadPayload
-    ] as string
-  }
-
-  return configLabelKey in config
-    ? config[configLabelKey]
-    : config[key as keyof typeof config]
+  return config[key] || null
 }
 
 export {
   ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
   ChartLegend,
   ChartLegendContent,
-  ChartStyle,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
 }
