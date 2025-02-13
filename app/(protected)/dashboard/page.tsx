@@ -423,7 +423,7 @@ export default function DashboardPage() {
             </div>
             <div className="grid grid-cols-2 gap-8">
               <div className="flex items-center justify-center">
-                <div className="h-[200px] w-[200px]">
+                <div className="h-[300px] w-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
@@ -871,7 +871,8 @@ interface TaskProgressProps {
 
 function TaskProgress({ progress, title, type, date }: TaskProgressProps) {
   const chartData = [{ value: progress, fill: "hsl(var(--primary))" }];
-  const endAngle = (progress / 100) * 360;
+  const startAngle = 90;
+  const endAngle = 90 - ((progress / 100) * 360);
 
   return (
     <div className="flex items-center gap-4 bg-gray-100 p-2 rounded-md">
@@ -879,7 +880,7 @@ function TaskProgress({ progress, title, type, date }: TaskProgressProps) {
         <ResponsiveContainer width="100%" height="100%">
           <RadialBarChart
             data={chartData}
-            startAngle={-50}
+            startAngle= {startAngle}
             endAngle={endAngle}
             innerRadius={20}
             outerRadius={28}
@@ -898,7 +899,7 @@ function TaskProgress({ progress, title, type, date }: TaskProgressProps) {
         </div>
       </div>
       <div className="flex-1">
-        <h4 className="font-medium text-sm whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px]">
+        <h4 className="font-medium text-xs whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px]">
           {title}
         </h4>
         <div className="gap-2">

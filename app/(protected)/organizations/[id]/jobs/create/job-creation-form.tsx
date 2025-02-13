@@ -7,13 +7,13 @@ import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { jobFormSchema, type JobFormData, transformFormToRequest } from "./types"
 import {
-    Form,
-    FormControl,
-    FormDescription,
-    FormField,
-    FormItem,
-    FormLabel,
-    FormMessage,
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -132,7 +132,7 @@ export function JobCreationForm({ organizationId }: JobCreationFormProps) {
                         <RadioGroup
                           onValueChange={field.onChange}
                           defaultValue={field.value}
-                          className="flex flex-col space-y-1"
+                          className="flex flex-wrap space-x-1"
                         >
                           <FormItem className="flex items-center space-x-3 space-y-0">
                             <FormControl>
@@ -164,6 +164,22 @@ export function JobCreationForm({ organizationId }: JobCreationFormProps) {
                             </FormControl>
                             <FormLabel className="font-normal">
                               Internship
+                            </FormLabel>
+                          </FormItem>
+                          {/* <FormItem className="flex items-center space-x-3 space-y-0">
+                            <FormControl>
+                              <RadioGroupItem value="VOLUNTEER" />
+                            </FormControl>
+                            <FormLabel className="font-normal">
+                              Volunteer
+                            </FormLabel>
+                          </FormItem> */}
+                          <FormItem className="flex items-center space-x-3 space-y-0">
+                            <FormControl>
+                              <RadioGroupItem value="TO_BE_DETERMINED" />
+                            </FormControl>
+                            <FormLabel className="font-normal">
+                              To be determined
                             </FormLabel>
                           </FormItem>
                         </RadioGroup>

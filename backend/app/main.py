@@ -1134,6 +1134,8 @@ class JobType(str, Enum):
     CONTRACT = "CONTRACT"
     FREELANCE = "FREELANCE"
     INTERNSHIP = "INTERNSHIP"
+    VOLUNTEER = "VOLUNTEER"
+    TO_BE_DETERMINED = "TO_BE_DETERMINED"
 
 class LocalizedText(BaseModel):
     """Model for multilingual text"""
