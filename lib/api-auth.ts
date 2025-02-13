@@ -2,22 +2,27 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
+// TODO: Revisit cookie handling when upgrading Next.js/Supabase
+// Current implementation works but has type mismatches with Next.js 15 cookies API
+// For now, we're keeping this implementation as it's functionally working with auth
 export async function verifyAuth() {
-  const cookieStore = cookies()
-
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
+        async get(name: string) {
+          const cookieStore = await cookies()
+          const cookie = cookieStore.get(name)
+          return cookie?.value ?? ''
         },
-        set(name: string, value: string, options: CookieOptions) {
-          cookieStore.set(name, value, options)
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        set(_name: string, _value: string, _options: CookieOptions) {
+          // Cookie setting is handled by middleware
         },
-        remove(name: string, options: CookieOptions) {
-          cookieStore.set(name, '', { ...options, maxAge: 0 })
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        remove(_name: string, _options: CookieOptions) {
+          // Cookie removal is handled by middleware
         },
       },
     }
@@ -27,6 +32,7 @@ export async function verifyAuth() {
     const { data: { session }, error } = await supabase.auth.getSession()
 
     if (error || !session) {
+      console.error('Session error:', error)
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }

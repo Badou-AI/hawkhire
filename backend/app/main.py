@@ -26,6 +26,7 @@ from supabase import create_client, Client
 from pydantic import BaseModel, Field, UUID4, HttpUrl, constr
 from fastapi.encoders import jsonable_encoder
 from sentence_transformers import SentenceTransformer
+from pydantic import ValidationError
 
 # Load environment variables
 load_dotenv()
@@ -2962,3 +2963,116 @@ async def delete_organization_member(member_id: UUID4):
         if isinstance(e, HTTPException):
             raise e
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/v1/process-pdf", tags=["Document Processing"])
+async def process_pdf(file_path: str):
+    """
+    Process a PDF file and extract its text content.
+    
+    Parameters:
+    - file_path: Path to the PDF file in Supabase storage
+    
+    Returns:
+    - The extracted text content
+    """
+    try:
+        # Create temp directory
+        temp_dir = tempfile.mkdtemp()
+        temp_path = Path(temp_dir) / "temp.pdf"
+        
+        # Download file from Supabase storage using storage bucket
+        bucket_name = 'temp-uploads'
+        try:
+            data = supabase.storage.get_bucket(bucket_name).download(file_path)
+            async with aiofiles.open(temp_path, 'wb') as f:
+                await f.write(data)
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error downloading file from storage: {str(e)}"
+            )
+        
+        # Process PDF
+        text_result = await semantic_service.convert_pdf_to_text(temp_path)
+        text_content = "\n".join(text_result.get('pages', []))
+        
+        # Clean up
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        
+        # Delete file from storage
+        try:
+            supabase.storage.get_bucket(bucket_name).remove([file_path])
+        except Exception as e:
+            print(f"Warning: Failed to delete temporary file {file_path}: {str(e)}")
+        
+        return {
+            "text": text_content
+        }
+        
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error processing PDF: {str(e)}"
+        )
+
+@app.post("/v1/tools/extract_job_data", tags=["Document Processing"])
+async def extract_job_data(
+    request: Request,
+    text: str,
+    filename: str,
+    target_schema: Dict
+):
+    """
+    Extract structured job data from text using LLM.
+    
+    Parameters:
+    - text: The job description text to process
+    - filename: Original filename (used for context)
+    - target_schema: JSON schema defining the expected structure
+    
+    Returns:
+    - Structured job data matching the schema
+    """
+    try:
+        semantic_service = SemanticService()
+        
+        # Detect language to handle non-English content
+        language = await detect_language(text)
+        
+        # If not English, translate first
+        if language != 'en':
+            # TODO: Add translation service
+            pass
+            
+        # Extract structured data using LLM
+        extracted_data = await semantic_service.extract_knowledge(
+            text=text,
+            schema=target_schema,
+            extraction_steps=[
+                "Read and understand the job description text",
+                "Identify key job details like title, type, location, and remote status",
+                "Extract and structure the information according to the schema",
+                "Ensure all required fields are populated with reasonable defaults if not explicitly stated"
+            ]
+        )
+        
+        # Validate the extracted data matches our schema
+        try:
+            JobCreate(**extracted_data)
+        except ValidationError as e:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Extracted data does not match job schema: {str(e)}"
+            )
+            
+        return extracted_data
+        
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error extracting job data: {str(e)}"
+        )

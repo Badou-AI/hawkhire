@@ -68,6 +68,7 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
     }
 
     try {
+      console.log('Starting upload process...')
       setProcessingStatus('uploading')
       const formData = new FormData()
       formData.append('file', file)
@@ -144,6 +145,7 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
         }
         buffer = lines[lines.length - 1]
       }
+      console.log('Upload process completed.')
     } catch (error) {
       console.error("Error uploading jobs:", error)
       const message = error instanceof Error ? error.message : "Failed to process jobs"
