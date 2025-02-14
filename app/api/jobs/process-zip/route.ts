@@ -76,6 +76,7 @@ export async function POST(request: NextRequest) {
           const file = formData.get('file') as File
           const organizationId = formData.get('organizationId') as string
           const isMock = formData.get('isMock') === 'true'
+          const status = formData.get('status') as string || 'DRAFT'
 
           if (!file || !organizationId) {
             throw new Error('Missing required fields')
@@ -233,7 +234,7 @@ export async function POST(request: NextRequest) {
                   organization_id: organizationId,
                   is_mock: isMock,
                   created_by: session.user.id,
-                  status: 'DRAFT',
+                  status: status,
                   // Use extracted data or defaults
                   job_type: jobData.job_type || 'FULL_TIME',
                   location: jobData.location || {

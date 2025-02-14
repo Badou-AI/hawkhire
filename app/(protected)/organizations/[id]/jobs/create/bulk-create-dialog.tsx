@@ -38,6 +38,7 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
   const { session } = useAuth()
   const [file, setFile] = useState<File | null>(null)
   const [isMock, setIsMock] = useState(false)
+  const [isPublished, setIsPublished] = useState(false)
   const [processingStatus, setProcessingStatus] = useState<ProcessingStatus>('idle')
   const [stats, setStats] = useState<ProcessingStats>({
     totalFiles: 0,
@@ -74,6 +75,7 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
       formData.append('file', file)
       formData.append('organizationId', organizationId)
       formData.append('isMock', String(isMock))
+      formData.append('status', isPublished ? 'PUBLISHED' : 'DRAFT')
 
       const response = await fetch("/api/jobs/process-zip", {
         method: "POST",
@@ -217,14 +219,26 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
             maxSize={50}
           />
 
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="is-mock"
-              checked={isMock}
-              onCheckedChange={(checked) => setIsMock(checked as boolean)}
-              disabled={processingStatus === 'uploading' || processingStatus === 'processing'}
-            />
-            <Label htmlFor="is-mock">Mark jobs as mock data</Label>
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="is-mock"
+                checked={isMock}
+                onCheckedChange={(checked) => setIsMock(checked as boolean)}
+                disabled={processingStatus === 'uploading' || processingStatus === 'processing'}
+              />
+              <Label htmlFor="is-mock">Mark jobs as mock data</Label>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="is-published"
+                checked={isPublished}
+                onCheckedChange={(checked) => setIsPublished(checked as boolean)}
+                disabled={processingStatus === 'uploading' || processingStatus === 'processing'}
+              />
+              <Label htmlFor="is-published">Publish jobs immediately</Label>
+            </div>
           </div>
 
           {processingStatus !== 'idle' && (
