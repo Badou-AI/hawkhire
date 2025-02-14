@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field, UUID4, HttpUrl, constr
 from fastapi.encoders import jsonable_encoder
 from sentence_transformers import SentenceTransformer
 from pydantic import ValidationError
+from asyncio import Semaphore
 
 # Load environment variables
 load_dotenv()
@@ -478,187 +479,192 @@ Nous recherchons un(e) ingénieur(e) talentueux(se) spécialisé(e) en deep lear
             "error": str(e)
         }
 
+# Get number of CPU cores for optimal threading
+CPU_COUNT = os.cpu_count() or 4
+MAX_CONCURRENT_TASKS = CPU_COUNT * 2  # Double the CPU count for I/O bound tasks
+
+async def process_pdf_file(
+    file_path: Path,
+    semantic_service: SemanticService,
+    session_token: str,
+    progress_callback: callable
+) -> Dict:
+    try:
+        # Convert PDF to text
+        text_result = await semantic_service.convert_pdf_to_text(file_path)
+        text_content = "\n".join(text_result.get('pages', []))
+        
+        if not text_content or len(text_content.strip()) < 50:
+            raise ValueError("Extracted text is too short or empty")
+            
+        # Extract job data
+        job_data = await semantic_service.extract_job_data(text_content, file_path.name)
+        
+        await progress_callback({
+            'status': 'success',
+            'file_name': file_path.name,
+            'data': job_data
+        })
+        
+        return job_data
+    except Exception as e:
+        await progress_callback({
+            'status': 'error',
+            'file_name': file_path.name,
+            'error': str(e)
+        })
+        raise
+
 async def process_zip_file(zip_file: UploadFile, job_id: str, job_title: str = "") -> Dict:
-    """Process uploaded ZIP file containing resumes with parallel processing"""
-    # Ensure index exists
-    index_name = await ensure_job_index(job_id, job_title)
-    print(f"Using index: {index_name}")
-    
-    # Save the upload
-    upload_info = await save_upload(zip_file, job_id)
-    temp_dir = tempfile.mkdtemp()  # Create a temporary directory that won't auto-delete
+    temp_dir = tempfile.mkdtemp()
+    zip_path = Path(temp_dir) / "upload.zip"
     
     try:
-        temp_path = Path(temp_dir) / zip_file.filename
-        
-        # Read the saved file
-        async with aiofiles.open(upload_info["file_path"], 'rb') as file:
-            content = await file.read()
+        # Save uploaded file
+        content = await zip_file.read()
+        async with aiofiles.open(zip_path, 'wb') as f:
+            await f.write(content)
             
-        # Save to temp for processing
-        async with aiofiles.open(temp_path, 'wb') as out_file:
-            await out_file.write(content)
+        # Extract files
+        zip_ref = zipfile.ZipFile(zip_path, 'r')
+        zip_ref.extractall(temp_dir)
+        zip_ref.close()
         
-        # Extract zip
-        with zipfile.ZipFile(temp_path, 'r') as zip_ref:
-            extract_path = Path(temp_dir) / "extracted"
-            extract_path.mkdir(exist_ok=True)
-            zip_ref.extractall(extract_path)
-        
-        # Process files
-        processed_files = []
-        failed_files = []
-        total_size = 0
-        file_types = {}
-        
-        # Save extracted files to processed directory
-        processed_path = PROCESSED_DIR / upload_info["upload_id"]
-        processed_path.mkdir(parents=True, exist_ok=True)
-
-        # Collect all PDF files first
+        # Get list of PDF files
         pdf_files = []
-        other_files = []
-        total_files = 0
-        
-        for file_path in extract_path.rglob('*'):
-            # Skip directories and hidden files
-            if not file_path.is_file() or file_path.name.startswith('.'):
-                print(f"Skipping non-file or hidden file: {file_path}")
-                continue
-                
-            # Only process files with allowed extensions
-            if file_path.suffix.lower() not in ['.pdf', '.txt']:
-                print(f"Skipping file with unsupported extension: {file_path}")
-                continue
-
-            total_files += 1  # Only increment for supported files
-            print(f"Processing file: {file_path}")
-            stats = FileStats(file_path)
-            dest_path = processed_path / file_path.relative_to(extract_path)
-            dest_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(file_path, dest_path)
+        for root, _, files in os.walk(temp_dir):
+            for file in files:
+                if file.lower().endswith('.pdf'):
+                    pdf_files.append(Path(root) / file)
+                    
+        total_files = len(pdf_files)
+        if total_files == 0:
+            raise ValueError("No PDF files found in ZIP archive")
             
-            total_size += stats.size
-            file_type = stats.mime_type.split('/')[0] if stats.mime_type else 'unknown'
-            file_types[file_type] = file_types.get(file_type, 0) + 1
-            
-            if stats.mime_type == 'application/pdf':
-                pdf_files.append((dest_path, dest_path))  # Use destination path for both
-            else:
-                other_files.append({
-                    "name": stats.name,
-                    "size": stats.size,
-                    "human_size": stats.human_size,
-                    "mime_type": stats.mime_type,
-                    "processed_path": str(dest_path),
-                    "status": "unsupported"
-                })
-
-        # Send initial count
-        print(f"Found {len(pdf_files)} PDFs and {len(other_files)} other supported files")
-        yield json.dumps({
-            "event": "processing_started",
-            "total_files": total_files,  # Use the actual count of supported files
-            "processed_count": 0,
-            "failed_count": 0
-        })
-
-        # Process PDFs in parallel with semaphore for concurrency control
-        semaphore = asyncio.Semaphore(15)  # Increased from 10 to 20 concurrent tasks
+        # Initialize processing state
+        processed = 0
+        failed = 0
+        results = []
         
-        async def process_with_semaphore(file_path, dest_path):
-            async with semaphore:
-                return await process_single_pdf(
-                    file_path,
-                    dest_path,
-                    semantic_service,
-                    index_name,
-                    upload_info["upload_id"],
-                    job_id,
-                    progress_callback
-                )
-
-        # Create a queue for progress updates
-        progress_queue = asyncio.Queue()
-
-        async def progress_callback(file_info: Dict):
-            await progress_queue.put(file_info)
-
-        # Create processing tasks
-        tasks = [
-            process_with_semaphore(file_path, dest_path)
-            for file_path, dest_path in pdf_files
-        ]
-
-        # Process all PDFs with controlled concurrency
-        start_time = time.time()
-        processed_count = 0
-        failed_count = 0
+        # Create semaphores for different operations
+        text_sem = Semaphore(MAX_CONCURRENT_TASKS)  # For PDF to text conversion
+        extract_sem = Semaphore(max(2, MAX_CONCURRENT_TASKS // 2))  # For LLM operations (more resource intensive)
         
-        # Start processing files
-        processing = asyncio.gather(*tasks)
+        # Create shared semantic service instance
+        semantic_service = SemanticService()
         
-        # Process files while monitoring progress
-        while not processing.done() or not progress_queue.empty():
-            try:
-                file_info = await asyncio.wait_for(progress_queue.get(), timeout=0.1)
-                if file_info["status"] == "processed":
-                    processed_files.append(file_info)
-                    processed_count += 1
+        # Step 1: Convert PDFs to text concurrently
+        async def convert_to_text(file_path: Path) -> Dict:
+            async with text_sem:
+                try:
+                    text_result = await semantic_service.convert_pdf_to_text(file_path)
+                    text_content = "\n".join(text_result.get('pages', []))
+                    return {
+                        'status': 'success',
+                        'file_path': file_path,
+                        'text': text_content,
+                        'file_name': file_path.name
+                    }
+                except Exception as e:
+                    return {
+                        'status': 'error',
+                        'file_path': file_path,
+                        'error': str(e),
+                        'file_name': file_path.name
+                    }
+        
+        # Convert all PDFs to text concurrently
+        conversion_tasks = [convert_to_text(pdf_file) for pdf_file in pdf_files]
+        conversion_results = await asyncio.gather(*conversion_tasks)
+        
+        # Filter successful conversions
+        successful_conversions = [r for r in conversion_results if r['status'] == 'success']
+        failed_conversions = [r for r in conversion_results if r['status'] == 'error']
+        
+        failed += len(failed_conversions)
+        for fail in failed_conversions:
+            yield {
+                'event': 'file_failed',
+                'processed_count': processed,
+                'failed_count': failed,
+                'total_files': total_files,
+                'file_name': fail['file_name'],
+                'error': fail['error']
+            }
+        
+        # Step 2: Process text content in batches
+        BATCH_SIZE = 5  # Process 5 files at a time to avoid overwhelming the LLM
+        successful_batches = [successful_conversions[i:i + BATCH_SIZE] 
+                            for i in range(0, len(successful_conversions), BATCH_SIZE)]
+        
+        async def process_text_batch(batch: List[Dict]) -> List[Dict]:
+            async with extract_sem:
+                batch_results = []
+                for conv in batch:
+                    try:
+                        # Extract job data
+                        job_data = await semantic_service.extract_job_data(
+                            conv['text'],
+                            conv['file_name']
+                        )
+                        
+                        batch_results.append({
+                            'status': 'success',
+                            'file_name': conv['file_name'],
+                            'data': job_data
+                        })
+                    except Exception as e:
+                        batch_results.append({
+                            'status': 'error',
+                            'file_name': conv['file_name'],
+                            'error': str(e)
+                        })
+                return batch_results
+        
+        # Process batches concurrently
+        batch_tasks = [process_text_batch(batch) for batch in successful_batches]
+        batch_results = await asyncio.gather(*batch_tasks)
+        
+        # Flatten results and update counters
+        for batch_result in batch_results:
+            for result in batch_result:
+                if result['status'] == 'success':
+                    processed += 1
+                    results.append(result['data'])
+                    yield {
+                        'event': 'file_processed',
+                        'processed_count': processed,
+                        'failed_count': failed,
+                        'total_files': total_files,
+                        'file_name': result['file_name']
+                    }
                 else:
-                    failed_files.append(file_info)
-                    failed_count += 1
-                
-                yield json.dumps({
-                    "event": "file_processed" if file_info["status"] == "processed" else "file_failed",
-                    "file_name": file_info["name"],
-                    "total_files": total_files,
-                    "processed_count": processed_count,
-                    "failed_count": failed_count
-                })
-            except asyncio.TimeoutError:
-                if processing.done():
-                    break
-                continue
-            except Exception as e:
-                print(f"Error in progress reporter: {str(e)}")
-                continue
+                    failed += 1
+                    yield {
+                        'event': 'file_failed',
+                        'processed_count': processed,
+                        'failed_count': failed,
+                        'total_files': total_files,
+                        'file_name': result['file_name'],
+                        'error': result['error']
+                    }
         
-        # Wait for processing to complete and handle any exceptions
-        try:
-            results = await processing
-        except Exception as e:
-            print(f"Error in processing: {str(e)}")
+        # Return final results
+        yield {
+            'event': 'complete',
+            'processed_files': processed,
+            'failed_files': failed,
+            'total_files': total_files,
+            'results': results
+        }
         
-        processing_time = time.time() - start_time
-        print(f"Parallel processing completed in {processing_time:.2f} seconds")
-        print(f"Processed: {len(processed_files)}, Failed: {len(failed_files)}, Other: {len(other_files)}")
-        
-        # Add other files to the list
-        processed_files.extend(other_files)
-
-        # Final response
-        yield json.dumps({
-            "event": "completed",
-            "upload_id": upload_info["upload_id"],
-            "job_id": job_id,
-            "total_files": total_files,
-            "total_size": total_size,
-            "human_total_size": humanize.naturalsize(total_size),
-            "file_types": file_types,
-            "processed_count": len([f for f in processed_files if f["status"] == "processed"]),
-            "failed_count": len(failed_files),
-            "files": sorted(processed_files + failed_files, key=lambda x: x["size"], reverse=True),
-            "timestamp": upload_info["timestamp"],
-            "processing_time": processing_time
-        })
-        
-    except zipfile.BadZipFile:
-        raise HTTPException(status_code=400, detail="Invalid zip file")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        yield {
+            'event': 'error',
+            'error': str(e)
+        }
     finally:
-        # Clean up temporary directory
+        # Cleanup
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 @app.post("/process-zip")
@@ -667,37 +673,9 @@ async def process_zip(
     job_id: str = Form(...),
     job_title: str = Form(""),
 ):
-    if not file.filename.endswith('.zip'):
-        raise HTTPException(status_code=400, detail="File must be a ZIP archive")
-    
-    # Read file content and create a new SpooledTemporaryFile
-    content = await file.read()
-    temp_file = tempfile.SpooledTemporaryFile()
-    temp_file.write(content)
-    temp_file.seek(0)
-    
-    # Create new UploadFile with the temp file
-    new_file = UploadFile(
-        filename=file.filename,
-        file=temp_file
-    )
-    
-    async def event_generator():
-        try:
-            async for event in process_zip_file(new_file, job_id, job_title):
-                yield f"data: {event}\n\n"
-        finally:
-            await new_file.close()
-            temp_file.close()
-    
     return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"
-        }
+        process_zip_file(file, job_id, job_title),
+        media_type="text/event-stream"
     )
 
 # Health check endpoint
