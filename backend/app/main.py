@@ -518,11 +518,21 @@ async def process_zip_file(zip_file: UploadFile, job_id: str, job_title: str = "
         # Collect all PDF files first
         pdf_files = []
         other_files = []
+        total_files = 0
         
         for file_path in extract_path.rglob('*'):
-            if not file_path.is_file():
+            # Skip directories and hidden files
+            if not file_path.is_file() or file_path.name.startswith('.'):
+                print(f"Skipping non-file or hidden file: {file_path}")
                 continue
                 
+            # Only process files with allowed extensions
+            if file_path.suffix.lower() not in ['.pdf', '.txt']:
+                print(f"Skipping file with unsupported extension: {file_path}")
+                continue
+
+            total_files += 1  # Only increment for supported files
+            print(f"Processing file: {file_path}")
             stats = FileStats(file_path)
             dest_path = processed_path / file_path.relative_to(extract_path)
             dest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -545,11 +555,10 @@ async def process_zip_file(zip_file: UploadFile, job_id: str, job_title: str = "
                 })
 
         # Send initial count
-        total_files = len(pdf_files) + len(other_files)
-        print(f"Found {len(pdf_files)} PDFs and {len(other_files)} other files")
+        print(f"Found {len(pdf_files)} PDFs and {len(other_files)} other supported files")
         yield json.dumps({
             "event": "processing_started",
-            "total_files": total_files,
+            "total_files": total_files,  # Use the actual count of supported files
             "processed_count": 0,
             "failed_count": 0
         })
@@ -3201,12 +3210,12 @@ async def extract_job_data(body: Dict = Body(...)):
                 },
                 "salary_min": {
                     "type": "number",
-                    "nullable": true,
+                    "nullable": True,
                     "description": "Minimum salary"
                 },
                 "salary_max": {
                     "type": "number",
-                    "nullable": true,
+                    "nullable": True,
                     "description": "Maximum salary"
                 },
                 "salary_currency": {
@@ -3216,7 +3225,7 @@ async def extract_job_data(body: Dict = Body(...)):
                 },
                 "rating": {
                     "type": "number",
-                    "nullable": true,
+                    "nullable": True,
                     "description": "Job rating"
                 }
             }

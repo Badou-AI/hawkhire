@@ -15,6 +15,8 @@ interface ProcessingEvent {
   failed_count?: number;
   file_name?: string;
   error?: string;
+  supported?: number;
+  unsupported?: number;
 }
 
 interface JobData {
@@ -102,6 +104,8 @@ export async function POST(request: NextRequest) {
 
           let processedCount = 0
           let failedCount = 0
+          let supportedCount = 0
+          let unsupportedCount = 0
           const jobs: JobData[] = []
 
           // Process each file
@@ -111,115 +115,164 @@ export async function POST(request: NextRequest) {
             try {
               if (entry.isDirectory) {
                 console.log(`Skipping directory: ${entry.name}`);
+                unsupportedCount++
                 continue;
               }
 
-              // Get file data before processing
+              // Get file data and validate content
               console.log(`Getting data for: ${entry.name}`)
               const entryData = entry.getData()
               console.log(`Got data, size: ${entryData.length} bytes`)
 
               const ext = entry.name.split('.').pop()?.toLowerCase()
               console.log(`Processing file: ${entry.name} (${ext})`);
+
+              // Validate file type before processing
+              if (ext !== 'pdf') {
+                console.log(`Skipping unsupported file type: ${entry.name}`);
+                unsupportedCount++
+                await sendEvent({
+                  event: 'file_failed',
+                  processed_count: processedCount,
+                  failed_count: failedCount,
+                  file_name: entry.name,
+                  error: `Unsupported file type: ${ext}. Only PDF files are supported.`
+                })
+                continue
+              }
+
+              // Skip empty or very small files that are likely invalid
+              if (entryData.length < 100) {  // Less than 100 bytes is likely invalid
+                console.log(`Skipping empty or invalid file: ${entry.name}`);
+                failedCount++
+                await sendEvent({
+                  event: 'file_failed',
+                  processed_count: processedCount,
+                  failed_count: failedCount,
+                  file_name: entry.name,
+                  error: 'File appears to be empty or invalid'
+                })
+                continue
+              }
+
+              supportedCount++
               let text = ''
 
-              if (ext === 'pdf') {
+              try {
                 console.log(`Converting PDF to text: ${entry.name}`);
                 const pdfBuffer = entryData
                 
-                try {
-                  // Use dedicated job PDF conversion endpoint
-                  const formData = new FormData()
-                  const pdfFile = new File([pdfBuffer], entry.name, { type: 'application/pdf' })
-                  formData.append('file', pdfFile)
+                // Use dedicated job PDF conversion endpoint
+                const formData = new FormData()
+                const pdfFile = new File([pdfBuffer], entry.name, { type: 'application/pdf' })
+                formData.append('file', pdfFile)
 
-                  const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/v1/jobs/convert-pdf`, {
-                    method: 'POST',
-                    headers: {
-                      'Authorization': `Bearer ${session.access_token}`
-                    },
-                    body: formData
-                  })
-
-                  if (!response.ok) {
-                    const errorData = await response.text()
-                    console.error('PDF processing error:', errorData)
-                    throw new Error(`Failed to process PDF: ${response.status} ${errorData}`)
-                  }
-
-                  console.log('PDF converted to text successfully');
-                  const result = await response.json()
-                  text = result.text
-                } catch (error) {
-                  console.error(`Error processing PDF ${entry.name}:`, error)
-                  throw error
-                }
-              } else if (['txt', 'md'].includes(ext || '')) {
-                console.log('Processing text file...');
-                text = entryData.toString('utf8')
-              } else {
-                console.log(`Unsupported file type: ${ext}`);
-                throw new Error(`Unsupported file type: ${ext}`)
-              }
-
-              // Extract job data using LLM
-              console.log('Extracting job data using LLM...');
-              console.log('Text content:', text);
-              const jobDataResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/v1/jobs/extract-data`, {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${session.access_token}`,
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                  text: text,
-                  filename: entry.name
+                const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/v1/jobs/convert-pdf`, {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${session.access_token}`
+                  },
+                  body: formData
                 })
-              })
 
-              if (!jobDataResponse.ok) {
-                const errorData = await jobDataResponse.text()
-                console.error('Job data extraction error:', errorData)
-                throw new Error(`Failed to extract job data: ${jobDataResponse.status} ${errorData}`)
+                if (!response.ok) {
+                  const errorData = await response.text()
+                  console.error('PDF processing error:', errorData)
+                  throw new Error(`Failed to process PDF: ${response.status} ${errorData}`)
+                }
+
+                console.log('PDF converted to text successfully');
+                const result = await response.json()
+                text = result.text
+
+                // Validate extracted text before proceeding
+                if (!text || text.trim().length < 50) {  // Text should be at least 50 chars
+                  throw new Error('Extracted text is too short or empty')
+                }
+
+                // Extract job data using LLM
+                console.log('Extracting job data using LLM...');
+                const jobDataResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/v1/jobs/extract-data`, {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({
+                    text: text,
+                    filename: entry.name
+                  })
+                })
+
+                if (!jobDataResponse.ok) {
+                  const errorData = await jobDataResponse.text()
+                  console.error('Job data extraction error:', errorData)
+                  throw new Error(`Failed to extract job data: ${jobDataResponse.status} ${errorData}`)
+                }
+
+                const extractedData = await jobDataResponse.json()
+                console.log('Extracted job data:', JSON.stringify(extractedData, null, 2))
+                
+                // Extract the actual job data from the nested structure
+                const jobData = extractedData.data
+                if (!jobData) {
+                  throw new Error('Invalid response format from LLM')
+                }
+                
+                // Validate extracted data
+                if (!jobData.title?.en || !jobData.description?.en) {
+                  console.error('Missing required fields in extracted data:', jobData)
+                  throw new Error('Failed to extract required job fields (title or description)')
+                }
+
+                console.log('Creating job entry from extracted data...');
+                
+                // Create job entry with extracted data
+                const job: JobData = {
+                  ...jobData,
+                  organization_id: organizationId,
+                  is_mock: isMock,
+                  created_by: session.user.id,
+                  status: 'DRAFT',
+                  // Use extracted data or defaults
+                  job_type: jobData.job_type || 'FULL_TIME',
+                  location: jobData.location || {
+                    city: { en: 'Unknown' },
+                    state: { en: 'Unknown' },
+                    country: { en: 'Unknown' },
+                    postal_code: { en: 'Unknown' }
+                  },
+                  remote: jobData.remote || false,
+                  requirements: jobData.requirements || { en: [], fr: [] },
+                  skills: jobData.skills || [],
+                  salary_min: jobData.salary_min || null,
+                  salary_max: jobData.salary_max || null,
+                  salary_currency: jobData.salary_currency || 'USD',
+                  rating: jobData.rating || 0
+                }
+
+                jobs.push(job)
+                processedCount++
+
+                await sendEvent({
+                  event: 'file_processed',
+                  processed_count: processedCount,
+                  failed_count: failedCount,
+                  file_name: entry.name
+                })
+                console.log(`Completed processing: ${entry.name}`);
+              } catch (error) {
+                failedCount++
+                console.error(`Error processing ${entry.name}:`, error)
+                
+                await sendEvent({
+                  event: 'file_failed',
+                  processed_count: processedCount,
+                  failed_count: failedCount,
+                  file_name: entry.name,
+                  error: error instanceof Error ? error.message : String(error)
+                })
               }
-
-              const extractedData = await jobDataResponse.json()
-              console.log('Creating job entry from extracted data...');
-              
-              // Create job entry with extracted data
-              const job: JobData = {
-                ...extractedData,
-                organization_id: organizationId,
-                is_mock: isMock,
-                created_by: session.user.id,
-                status: 'DRAFT',
-                // Use extracted data or defaults
-                job_type: extractedData.job_type || 'FULL_TIME',
-                location: extractedData.location || {
-                  city: { en: 'Unknown' },
-                  state: { en: 'Unknown' },
-                  country: { en: 'Unknown' },
-                  postal_code: { en: 'Unknown' }
-                },
-                remote: extractedData.remote || false,
-                requirements: extractedData.requirements || { en: [], fr: [] },
-                skills: extractedData.skills || [],
-                salary_min: extractedData.salary_min || null,
-                salary_max: extractedData.salary_max || null,
-                salary_currency: extractedData.salary_currency || 'USD',
-                rating: extractedData.rating || 0
-              }
-
-              jobs.push(job)
-              processedCount++
-
-              await sendEvent({
-                event: 'file_processed',
-                processed_count: processedCount,
-                failed_count: failedCount,
-                file_name: entry.name
-              })
-              console.log(`Completed processing: ${entry.name}`);
             } catch (error) {
               failedCount++
               console.error(`Error processing ${entry.name}:`, error)
@@ -265,7 +318,9 @@ export async function POST(request: NextRequest) {
             event: 'completed',
             total_files: entries.length,
             processed_count: processedCount,
-            failed_count: failedCount
+            failed_count: failedCount,
+            supported: supportedCount,
+            unsupported: unsupportedCount
           })
 
         } catch (error) {
