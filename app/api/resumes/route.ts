@@ -6,10 +6,11 @@ export async function POST(request: NextRequest) {
     const file = formData.get('file') as File
     const jobId = formData.get('jobId') as string
     const jobTitle = formData.get('jobTitle') as string
+    const jobDescription = formData.get('jobDescription') as string
 
-    if (!file || !jobId) {
+    if (!file || !jobId || !jobDescription) {
       return NextResponse.json(
-        { error: 'File and jobId are required' },
+        { error: 'File, jobId, and jobDescription are required' },
         { status: 400 }
       )
     }
@@ -18,6 +19,7 @@ export async function POST(request: NextRequest) {
     const apiFormData = new FormData()
     apiFormData.append('file', file)
     apiFormData.append('job_id', jobId)
+    apiFormData.append('job_description', jobDescription)
     if (jobTitle) {
       apiFormData.append('job_title', jobTitle)
     }

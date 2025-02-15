@@ -5,36 +5,36 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-  SheetTrigger,
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetDescription,
+    SheetTrigger,
 } from "@/components/ui/sheet"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Input } from "@/components/ui/input"
 import {
-  ChevronLeft,
-  Calendar,
-  Clock,
-  Users,
-  Briefcase,
-  Star,
-  CheckCircle2, LayoutList,
-  Table as TableIcon,
-  LayoutGrid,
-  Send,
-  Bot,
-  Plus
+    ChevronLeft,
+    Calendar,
+    Clock,
+    Users,
+    Briefcase,
+    Star,
+    CheckCircle2, LayoutList,
+    Table as TableIcon,
+    LayoutGrid,
+    Send,
+    Bot,
+    Plus
 } from 'lucide-react'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
@@ -43,19 +43,19 @@ import { usePipelineStore } from '@/lib/store/pipeline-store'
 import { PipelineStatus } from '@/components/pipeline-status'
 import { useSearchParams } from "next/navigation"
 import { Pagination } from '@/components/shared/pagination'
+import { getJob, type ApiJob } from "@/app/api/jobs/client"
 
 // Import data from shared data file
-import { jobs, transformApiResponseToUiFormat, getSkillColor } from "../data"
+import { transformApiResponseToUiFormat, getSkillColor } from "../data"
 
-// Mock data for job stats
-const jobStats = {
-  createdAt: "2024-01-15T10:00:00Z",
-  processedAt: "2024-01-20T14:30:00Z",
-  totalApplications: 1432,
-  activelyReviewing: 89,
-  averageExperience: "4.5",
-  shortlisted: 32,
-  averageMatchScore: 84
+interface JobStats {
+  createdAt: string;
+  processedAt: string;
+  totalApplications: number;
+  activelyReviewing: number;
+  averageExperience: string;
+  shortlisted: number;
+  averageMatchScore: number;
 }
 
 const formatDate = (dateString: string) => {
@@ -87,7 +87,7 @@ interface Candidate {
 export default function MatchesPage() {
   const searchParams = useSearchParams()
   const { addCandidate, candidates } = usePipelineStore()
-  const currentJob = jobs.find(job => job.id === searchParams.get('jobId')) || jobs[0]
+  const [currentJob, setCurrentJob] = useState<ApiJob | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [viewMode, setViewMode] = useState<'simple' | 'detailed' | 'table'>('simple')
   const [chatOpen, setChatOpen] = useState(false)
@@ -95,14 +95,38 @@ export default function MatchesPage() {
   const [showDetails, setShowDetails] = useState(false)
   const [candidateMatches, setCandidateMatches] = useState<Candidate[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [jobStats, setJobStats] = useState<JobStats | null>(null)
 
+  // Fetch job data
   useEffect(() => {
-    const fetchCandidates = async () => {
+    const fetchJob = async () => {
+      const jobId = searchParams.get('jobId')
+      if (!jobId) return
+
+      try {
+        const jobData = await getJob(jobId)
+        if (jobData) {
+          setCurrentJob(jobData as unknown as ApiJob)
+        }
+      } catch (error) {
+        console.error('Error fetching job:', error)
+      }
+    }
+
+    fetchJob()
+  }, [searchParams])
+
+  // Fetch candidates and stats
+  useEffect(() => {
+    const fetchCandidatesAndStats = async () => {
+      if (!currentJob?.id) return
+
       try {
         setIsLoading(true)
-        const indexName = `job-${currentJob.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${currentJob.id}`
-        const response = await fetch(`/api/indices/${indexName}/matches?offset=0&size=5000&exclude_fields=embedding`)
+        const indexName = `job-${currentJob.title.en.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${currentJob.id}`
         
+        // Fetch candidates
+        const response = await fetch(`/api/indices/${indexName}/matches?offset=0&size=5000&exclude_fields=embedding`)
         if (!response.ok) {
           throw new Error('Failed to fetch candidates')
         }
@@ -112,6 +136,18 @@ export default function MatchesPage() {
         // Sort candidates by match score in descending order
         const sortedData = transformedData.sort((a, b) => b.matchScore - a.matchScore)
         setCandidateMatches(sortedData)
+
+        // Calculate stats
+        const stats: JobStats = {
+          createdAt: currentJob.created_at,
+          processedAt: new Date().toISOString(), // Last processing time
+          totalApplications: sortedData.length,
+          activelyReviewing: sortedData.filter(c => c.stage === 'reviewing').length,
+          averageExperience: calculateAverageExperience(sortedData),
+          shortlisted: sortedData.filter(c => c.stage === 'shortlisted').length,
+          averageMatchScore: calculateAverageMatchScore(sortedData)
+        }
+        setJobStats(stats)
       } catch (error) {
         console.error('Error fetching candidates:', error)
       } finally {
@@ -119,10 +155,25 @@ export default function MatchesPage() {
       }
     }
 
-    if (currentJob) {
-      fetchCandidates()
-    }
+    fetchCandidatesAndStats()
   }, [currentJob])
+
+  const calculateAverageExperience = (candidates: Candidate[]): string => {
+    const experienceValues = candidates
+      .map(c => parseFloat(c.experience.replace(' years', '')))
+      .filter(v => !isNaN(v))
+    
+    if (experienceValues.length === 0) return "0"
+    
+    const average = experienceValues.reduce((a, b) => a + b, 0) / experienceValues.length
+    return average.toFixed(1)
+  }
+
+  const calculateAverageMatchScore = (candidates: Candidate[]): number => {
+    if (candidates.length === 0) return 0
+    const sum = candidates.reduce((acc, curr) => acc + curr.matchScore, 0)
+    return Math.round(sum / candidates.length)
+  }
 
   // Helper function for match score color
   const getMatchScoreColor = (score: number) => {
@@ -247,7 +298,7 @@ export default function MatchesPage() {
               </Button>
             </Link>
             <div>
-              <h1 className="text-4xl font-bold">{currentJob.title}</h1>
+              <h1 className="text-4xl font-bold">{currentJob?.title.en || 'Loading...'}</h1>
               <p className="text-muted-foreground mt-1">Review matched candidates based on skills and experience</p>
             </div>
           </div>
@@ -372,79 +423,82 @@ export default function MatchesPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-6 gap-3">
-          <Card>
-            <CardContent className="p-4">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Calendar className="h-4 w-4" />
-                  <span>Posted Date</span>
+        {/* Stats Grid */}
+        {jobStats && (
+          <div className="grid grid-cols-6 gap-3">
+            <Card>
+              <CardContent className="p-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Calendar className="h-4 w-4" />
+                    <span>Posted Date</span>
+                  </div>
+                  <p className="text-lg font-semibold">{formatDate(jobStats.createdAt)}</p>
                 </div>
-                <p className="text-lg font-semibold">{formatDate(jobStats.createdAt)}</p>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardContent className="p-4">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Clock className="h-4 w-4" />
-                  <span>Last Processing</span>
+            <Card>
+              <CardContent className="p-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Clock className="h-4 w-4" />
+                    <span>Last Processing</span>
+                  </div>
+                  <p className="text-lg font-semibold">{formatDate(jobStats.processedAt)}</p>
                 </div>
-                <p className="text-lg font-semibold">{formatDate(jobStats.processedAt)}</p>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardContent className="p-4">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Users className="h-4 w-4" />
-                  <span>Applications</span>
+            <Card>
+              <CardContent className="p-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Users className="h-4 w-4" />
+                    <span>Applications</span>
+                  </div>
+                  <p className="text-lg font-semibold">{jobStats.totalApplications.toLocaleString()}</p>
                 </div>
-                <p className="text-lg font-semibold">{jobStats.totalApplications.toLocaleString()}</p>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardContent className="p-4">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Star className="h-4 w-4" />
-                  <span>Avg. Match</span>
+            <Card>
+              <CardContent className="p-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Star className="h-4 w-4" />
+                    <span>Avg. Match</span>
+                  </div>
+                  <p className="text-lg font-semibold">{jobStats.averageMatchScore}%</p>
                 </div>
-                <p className="text-lg font-semibold">{jobStats.averageMatchScore}%</p>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardContent className="p-4">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <CheckCircle2 className="h-4 w-4" />
-                  <span>Shortlisted</span>
+            <Card>
+              <CardContent className="p-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span>Shortlisted</span>
+                  </div>
+                  <p className="text-lg font-semibold">{jobStats.shortlisted}</p>
                 </div>
-                <p className="text-lg font-semibold">{jobStats.shortlisted}</p>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardContent className="p-4">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Briefcase className="h-4 w-4" />
-                  <span>Avg. Experience</span>
+            <Card>
+              <CardContent className="p-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Briefcase className="h-4 w-4" />
+                    <span>Avg. Experience</span>
+                  </div>
+                  <p className="text-lg font-semibold">{jobStats.averageExperience} years</p>
                 </div>
-                <p className="text-lg font-semibold">{jobStats.averageExperience} years</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
 
       {/* Scrollable content area */}
@@ -690,24 +744,13 @@ export default function MatchesPage() {
         </div>
 
         {/* Pagination */}
-        <div className="shrink-0 border-t py-2 -mb-6 bg-background">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">
-              Showing <span className="font-medium">{startIndex + 1}</span> to{" "}
-              <span className="font-medium">{Math.min(endIndex, candidateMatches.length)}</span> of{" "}
-              <span className="font-medium">{candidateMatches.length}</span> candidates
-            </div>
-            
-            {totalPages > 1 && (
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={handlePageChange}
-                scrollToSelector=".min-h-0.flex-1.flex.flex-col > .flex-1.overflow-y-auto"
-                className="mt-0"
-              />
-            )}
-          </div>
+        <div className="flex justify-center mt-6">
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
+            className="mb-6"
+          />
         </div>
       </div>
     </div>

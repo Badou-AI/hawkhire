@@ -336,6 +336,14 @@ class FileStats:
         self.mime_type = mimetypes.guess_type(str(path))[0] or 'application/octet-stream'
         self.human_size = humanize.naturalsize(self.size)
 
+    def to_dict(self):
+        return {
+            "name": self.name,
+            "size": self.size,
+            "mime_type": self.mime_type,
+            "human_size": self.human_size
+        }
+
 async def process_single_pdf(
     file_path: Path,
     dest_path: Path,
@@ -343,6 +351,7 @@ async def process_single_pdf(
     index_name: str,
     upload_id: str,
     job_id: str,
+    job_description: str,
     progress_callback: callable
 ) -> Dict:
     """Process a single PDF file with all necessary steps"""
@@ -364,120 +373,52 @@ async def process_single_pdf(
         embedding = await semantic_service.generate_embedding(text_content)
         timings['embedding'] = time.time() - embedding_start
         
-        job_description = """
-            # Ingénieur Deep Learning & Image Processing
-
-## À propos du poste
-Nous recherchons un(e) ingénieur(e) talentueux(se) spécialisé(e) en deep learning et traitement d'images pour rejoindre notre équipe R&D. Le candidat idéal associera une expertise technique pointue en deep learning à une solide expérience en optimisation GPU et conteneurisation.
-
-## Responsabilités principales
-- Concevoir et développer des solutions innovantes de traitement d'images basées sur le deep learning
-- Optimiser les performances des modèles sur GPU en utilisant CUDA
-- Implémenter des pipelines de traitement distribué avec ZeroMQ
-- Conteneuriser les applications avec Docker pour faciliter le déploiement
-- Collaborer avec les équipes produit pour l'intégration des solutions
-- Assurer une veille technologique active dans le domaine
-
-## Compétences techniques requises
-### Deep Learning & Computer Vision
-- Maîtrise des frameworks de deep learning (PyTorch, TensorFlow)
-- Expertise en traitement d'images et computer vision
-- Expérience pratique avec les architectures CNN, transformers et detection/segmentation
-- Connaissance approfondie des techniques d'optimisation de modèles
-
-### Développement & Optimisation
-- Expertise en programmation CUDA pour l'accélération GPU
-- Maîtrise de Python et C++
-- Expérience avec ZeroMQ pour la communication distribuée
-- Pratique de Docker et des outils de conteneurisation
-- Bonnes pratiques de versioning (Git) et CI/CD
-
-### Compétences additionnelles appréciées
-- Expérience avec Kubernetes
-- Connaissance des plateformes cloud (AWS, GCP, Azure)
-- Contributions à des projets open source
-- Publications scientifiques dans le domaine
-
-## Formation & Expérience
-- Master ou Doctorat en Computer Science, Machine Learning ou domaine connexe
-- Minimum 5 ans d'expérience professionnelle en deep learning
-- Portfolio de projets démontrant une expertise en traitement d'images
-
-## Qualités personnelles
-- Forte capacité d'analyse et de résolution de problèmes
-- Excellentes aptitudes en communication technique
-- Autonomie et prise d'initiative
-- Esprit d'équipe et collaboration
-- Passion pour l'innovation technologique
-
-## Environnement de travail
-- Équipe internationale et dynamique
-- Projets innovants à fort impact
-- Infrastructure de calcul GPU dernière génération
-- Possibilité de télétravail partiel
-- Formation continue et participation à des conférences
-        """
-        # text to json 
-
-        # Create structured document
-        extracted_knowledge = await semantic_service.extract_knowledge(text_content, RESUME_INDEX_CONFIG['mappings']['properties']['content']['properties'])
-        extracted_matching_score = await semantic_service.analyze_document(text_content, job_description, RESUME_INDEX_CONFIG['mappings']['properties']['matching_score']['properties'])
-        document = {
-            "upload_id": upload_id,
-            "job_id": job_id,
-            "timestamp": datetime.now().isoformat(),
-            "content": extracted_knowledge,
-            "file_info": {
-                "name": stats.name,
-                "size": stats.size,
-                "mime_type": stats.mime_type,
-                "processed_path": str(dest_path)
-            },
-            "matching_score": extracted_matching_score,
-            "embedding": embedding
-        }
-        
         # Index the document
-        indexing_start = time.time()
-        await semantic_service.index_document(index_name, doc_id, document)
-        timings['indexing'] = time.time() - indexing_start
-        
-        # Calculate total API time
-        total_api_time = sum(timings.values())
-        print(f"API calls timing for {stats.name}:")
-        print(f"  Text Extraction: {timings['text_extraction']:.2f}s")
-        print(f"  Embedding: {timings['embedding']:.2f}s")
-        print(f"  Indexing: {timings['indexing']:.2f}s")
-        print(f"  Total API Time: {total_api_time:.2f}s")
-        
-        file_info = {
-            "name": stats.name,
-            "size": stats.size,
-            "human_size": stats.human_size,
-            "mime_type": stats.mime_type,
-            "processed_path": str(dest_path),
-            "doc_id": doc_id,
-            "text_content": text_content[:500] + "...",
-            "status": "processed",
-            "indexed": True,
-            "timings": timings
+        index_start = time.time()
+        document = {
+            'id': doc_id,
+            'item_data': {
+                'upload_id': upload_id,
+                'job_id': job_id,
+                'timestamp': datetime.now().isoformat(),
+                'content': text_content,
+                'file_info': stats.to_dict(),
+                'embedding': embedding
+            }
         }
         
-        # Call progress callback
-        await progress_callback(file_info)
+        # Add the document to the index
+        index_result = await semantic_service.index_document(
+            index_name,
+            doc_id,
+            document
+        )
+        timings['indexing'] = time.time() - index_start
         
-        return file_info
-    except Exception as e:
-        print(f"Error processing PDF {dest_path}: {str(e)}")
+        # Update progress
+        if progress_callback:
+            await progress_callback({
+                'file': file_path.name,
+                'status': 'indexed',
+                'timings': timings
+            })
+        
         return {
-            "name": file_path.name,
-            "size": file_path.stat().st_size,
-            "human_size": humanize.naturalsize(file_path.stat().st_size),
-            "mime_type": 'application/pdf',
-            "processed_path": str(dest_path),
-            "status": "failed",
-            "error": str(e)
+            'success': True,
+            'doc_id': doc_id,
+            'timings': timings,
+            'file_info': stats.to_dict()
         }
+        
+    except Exception as e:
+        print(f"Error processing {file_path}: {str(e)}")
+        if progress_callback:
+            await progress_callback({
+                'file': file_path.name,
+                'status': 'error',
+                'error': str(e)
+            })
+        raise
 
 # Get number of CPU cores for optimal threading
 CPU_COUNT = os.cpu_count() or 4
@@ -672,11 +613,111 @@ async def process_zip(
     file: UploadFile,
     job_id: str = Form(...),
     job_title: str = Form(""),
+    job_description: str = Form(...)
 ):
-    return StreamingResponse(
-        process_zip_file(file, job_id, job_title),
-        media_type="text/event-stream"
-    )
+    """Process a ZIP file containing resumes"""
+    try:
+        # Create index if it doesn't exist
+        index_name = generate_index_name(job_id, job_title)
+        await ensure_job_index(job_id, job_title)
+        
+        # Create semantic service instance
+        semantic_service = SemanticService()
+        
+        # Create temporary directory for processing
+        temp_dir = Path(tempfile.mkdtemp())
+        
+        try:
+            # Save uploaded file
+            zip_path = temp_dir / "upload.zip"
+            with open(zip_path, "wb") as f:
+                f.write(await file.read())
+            
+            # Extract files
+            zip_file = zipfile.ZipFile(zip_path)
+            zip_file.extractall(temp_dir)
+            
+            # Get list of PDF files
+            pdf_files = list(temp_dir.glob("**/*.pdf"))
+            total_files = len(pdf_files)
+            
+            if total_files == 0:
+                raise HTTPException(status_code=400, detail="No PDF files found in ZIP")
+            
+            # Initialize counters
+            processed_count = 0
+            failed_count = 0
+            
+            # Create event generator
+            async def event_generator():
+                nonlocal processed_count, failed_count
+                
+                # Send initial event
+                yield "data: " + json.dumps({
+                    "event": "processing_started",
+                    "total_files": total_files
+                }) + "\n\n"
+                
+                # Process each file
+                for pdf_file in pdf_files:
+                    try:
+                        # Generate unique upload ID
+                        upload_id = generate_upload_id(await file.read(), job_id)
+                        
+                        # Process the PDF
+                        result = await process_single_pdf(
+                            pdf_file,
+                            pdf_file,
+                            semantic_service,
+                            index_name,
+                            upload_id,
+                            job_id,
+                            job_description,
+                            lambda x: print(f"Progress: {x}")  # Progress callback
+                        )
+                        
+                        processed_count += 1
+                        
+                        # Send progress event
+                        yield "data: " + json.dumps({
+                            "event": "file_processed",
+                            "file_name": pdf_file.name,
+                            "processed_count": processed_count,
+                            "failed_count": failed_count
+                        }) + "\n\n"
+                        
+                    except Exception as e:
+                        failed_count += 1
+                        print(f"Error processing {pdf_file}: {str(e)}")
+                        
+                        # Send failure event
+                        yield "data: " + json.dumps({
+                            "event": "file_failed",
+                            "file_name": pdf_file.name,
+                            "error": str(e),
+                            "processed_count": processed_count,
+                            "failed_count": failed_count
+                        }) + "\n\n"
+                
+                # Send completion event
+                yield "data: " + json.dumps({
+                    "event": "completed",
+                    "total_files": total_files,
+                    "processed_count": processed_count,
+                    "failed_count": failed_count
+                }) + "\n\n"
+            
+            return StreamingResponse(
+                event_generator(),
+                media_type="text/event-stream"
+            )
+            
+        finally:
+            # Cleanup temporary directory
+            shutil.rmtree(temp_dir)
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Health check endpoint
 @app.get("/health")

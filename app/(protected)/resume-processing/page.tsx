@@ -3,30 +3,34 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+    CardDescription,
 } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from "@/components/ui/select"
-import { AlertCircle, CheckCircle2, XCircle, Timer, Database, Settings2 } from 'lucide-react'
+import { AlertCircle, CheckCircle2, XCircle, Timer, Database, Settings2, Plus } from 'lucide-react'
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { useAuth } from "@/hooks/useAuth"
+import { getJobs, type ApiJob } from "@/app/api/jobs/client"
+import { createClient } from "@/lib/supabase/client"
 
 // Import data from shared data file
-import { jobs, mockResumeResponse, transformApiResponseToUiFormat, getSkillColor } from "./data"
+import { mockResumeResponse, transformApiResponseToUiFormat, getSkillColor } from "./data"
 import { FileDropzone } from "@/components/resume-evaluator/FileDropzone"
+
 // Add new types
 interface IndexStatus {
   name: string;
@@ -41,11 +45,6 @@ interface ProcessingStats {
   failedCount: number
   supported: number
   unsupported: number
-}
-
-interface Job {
-  id: string
-  title: string
 }
 
 // Add back the formatTime function
@@ -95,7 +94,8 @@ const generateIndexName = (jobId: string, jobTitle: string): string => {
 // Remove the exported data and keep only the component logic
 export default function ResumeProcessingPage() {
   const router = useRouter()
-  const [selectedJob, setSelectedJob] = useState<Job | null>(null)
+  const { session } = useAuth()
+  const [selectedJob, setSelectedJob] = useState<ApiJob | null>(null)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [processingStatus, setProcessingStatus] = useState<'idle' | 'uploading' | 'processing' | 'completed' | 'error'>('idle')
   const [processingTime, setProcessingTime] = useState<number>(0)
@@ -108,6 +108,47 @@ export default function ResumeProcessingPage() {
   })
   const [indexStatus, setIndexStatus] = useState<IndexStatus | null>(null)
   const [error, setError] = useState<string>("")
+  const [jobs, setJobs] = useState<ApiJob[]>([])
+  const [isLoadingJobs, setIsLoadingJobs] = useState(true)
+
+  // Fetch jobs on component mount
+  useEffect(() => {
+    const fetchJobs = async () => {
+      try {
+        setIsLoadingJobs(true)
+        
+        // First get the user's organization membership
+        const supabase = createClient()
+        const { data: memberData } = await supabase
+          .from('organization_members')
+          .select('organization_id')
+          .eq('user_id', session?.user?.id)
+          .single()
+
+        if (!memberData) {
+          setError('You are not a member of any organization')
+          setIsLoadingJobs(false)
+          return
+        }
+
+        // Then fetch jobs for that organization
+        const response = await getJobs(0, 100) // Get up to 100 jobs
+        setJobs(response.data.filter(job => 
+          job.status === 'PUBLISHED' && 
+          job.organizations?.id === memberData.organization_id
+        ))
+        setIsLoadingJobs(false)
+      } catch (error) {
+        console.error('Error fetching jobs:', error)
+        setError('Failed to load jobs')
+        setIsLoadingJobs(false)
+      }
+    }
+
+    if (session) {
+      fetchJobs()
+    }
+  }, [session])
 
   const handleFileUpload = async (file: File) => {
     if (!selectedJob) {
@@ -122,8 +163,9 @@ export default function ResumeProcessingPage() {
 
     const formData = new FormData()
     formData.append('file', file)
-    formData.append('jobId', selectedJob.id.toString())
-    formData.append('jobTitle', selectedJob.title)
+    formData.append('jobId', selectedJob.id)
+    formData.append('jobTitle', selectedJob.title.en)
+    formData.append('jobDescription', selectedJob.description.en)
 
     try {
       const startProcessingTime = Date.now()
@@ -216,10 +258,6 @@ export default function ResumeProcessingPage() {
     }
   }
 
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault()
-  }
-
   const getStatusColor = (status: typeof processingStatus) => {
     switch (status) {
       case 'uploading':
@@ -281,19 +319,9 @@ export default function ResumeProcessingPage() {
     };
 
     if (selectedJob) {
-      fetchIndexStatus(generateIndexName(selectedJob.id, selectedJob.title));
+      fetchIndexStatus(generateIndexName(selectedJob.id, selectedJob.title.en));
     }
   }, [selectedJob]);
-
-  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    const file = e.dataTransfer.files[0]
-    if (file && file.name.endsWith('.zip')) {
-      await handleFileUpload(file)
-    } else {
-      setError('Please upload a ZIP file')
-    }
-  }
 
   // Inside the ResumeProcessingPage component, replace candidateMatches with:
   const candidateMatches = transformApiResponseToUiFormat(mockResumeResponse);
@@ -331,21 +359,35 @@ export default function ResumeProcessingPage() {
               {/* Job Selection */}
               <div className="space-y-2">
                 <label className="text-sm font-medium">Job Position</label>
-                <Select 
-                  value={selectedJob?.title} 
-                  onValueChange={(value) => setSelectedJob(jobs.find(job => job.title === value) || null)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select job position" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {jobs.map(job => (
-                      <SelectItem key={job.id} value={job.title}>
-                        {job.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {isLoadingJobs ? (
+                  <div className="h-10 bg-muted animate-pulse rounded-md" />
+                ) : jobs.length > 0 ? (
+                  <Select 
+                    value={selectedJob?.id} 
+                    onValueChange={(value) => setSelectedJob(jobs.find(job => job.id === value) || null)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select job position" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {jobs.map(job => (
+                        <SelectItem key={job.id} value={job.id}>
+                          {job.title.en}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="text-center p-4 border rounded-lg bg-muted">
+                    <p className="text-sm text-muted-foreground mb-4">No jobs available for resume processing</p>
+                    <Link href="/organizations/jobs/create">
+                      <Button className="gap-2">
+                        <Plus className="h-4 w-4" />
+                        Create New Job
+                      </Button>
+                    </Link>
+                  </div>
+                )}
               </div>
 
               {/* Error Display */}
@@ -356,15 +398,17 @@ export default function ResumeProcessingPage() {
                 </div>
               )}
 
-              {/* File Upload */}
-              <FileDropzone
-                onFileSelect={handleFileUpload}
-                disabled={processingStatus !== 'idle'}
-                acceptedTypes={['.zip']}
-                description="Drag and drop your ZIP file here"
-                fileTypeDescription="ZIP files only"
-                maxSize={500}
-              />
+              {/* File Upload - Only show if jobs are available */}
+              {jobs.length > 0 && (
+                <FileDropzone
+                  onFileSelect={handleFileUpload}
+                  disabled={processingStatus !== 'idle'}
+                  acceptedTypes={['.zip']}
+                  description="Drag and drop your ZIP file here"
+                  fileTypeDescription="ZIP files only"
+                  maxSize={500}
+                />
+              )}
 
               {/* Processing Status */}
               {processingStatus !== 'idle' && (
