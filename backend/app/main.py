@@ -3450,7 +3450,24 @@ async def test_resume_processing(
     job_description: str = Form(...),
     job_id: str = Form(default="test_job_123")
 ):
-    """Test endpoint for resume processing with detailed logging"""
+    """
+    Test endpoint for resume processing with detailed logging
+    
+    This endpoint processes a resume file and generates a semantic index name based on the job ID.
+    It then ensures the job index exists and processes the resume file, providing progress updates.
+    
+    Parameters:
+    - file: The resume file to process
+    - job_description: The job description text
+    - job_id: The job ID (default: "test_job_123")
+
+    Returns:
+    - A JSON object containing the result of the resume processing
+
+    Raises:
+    - HTTPException: 500 if there is an error processing the resume
+    - HTTPException: 404 if the job is not found
+    """
     try:
         # Create temp directory for processing
         temp_dir = Path(tempfile.mkdtemp())
@@ -3507,6 +3524,8 @@ async def test_resume_processing(
             }
         )
 
+
+
 @app.get("/v1/jobs/{job_id}/matches", tags=["Jobs"])
 async def get_job_matches(
     job_id: UUID4,
@@ -3515,13 +3534,27 @@ async def get_job_matches(
     exclude_fields: str = Query(None)
 ):
     """
-    Fetch candidate matches for a specific job
+    Fetches candidate matches for a specific job from the semantic search index.
     
+    This endpoint retrieves candidate matches by:
+    1. Validating the job exists
+    2. Generating the correct semantic index name 
+    3. Querying the remote semantic service for matches
+
     Parameters:
-    - job_id: The ID of the job to fetch matches for
-    - offset: Starting offset for pagination
-    - limit: Maximum number of matches to return
-    - exclude_fields: Comma-separated list of fields to exclude
+        job_id (UUID4): UUID of the job to fetch matches for
+        offset (int): Starting offset for paginating through matches (min: 0)
+        limit (int): Maximum number of matches to return (max: 10000)
+        exclude_fields (str): Optional comma-separated list of fields to exclude from results
+
+    Returns:
+        dict: JSON object containing:
+            - matches: Array of candidate match objects
+            - total: Total number of matches found
+
+    Raises:
+        HTTPException: 404 if job is not found
+        HTTPException: 500 for other server errors
     """
     try:
         # First get the job to ensure it exists and get its title
