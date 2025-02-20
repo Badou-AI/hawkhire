@@ -28,6 +28,7 @@ from fastapi.encoders import jsonable_encoder
 from sentence_transformers import SentenceTransformer
 from pydantic import ValidationError
 from asyncio import Semaphore
+import traceback
 
 # Load environment variables from .env file
 load_dotenv(Path(__file__).parent.parent / '.env')
@@ -135,20 +136,35 @@ class MockSemanticService:
         }
 
     async def generate_embedding(self, text: str) -> List[float]:
-        return [0.0] * 384  # Return zero vector of standard size
+        return [0.0] * 1024  # Return zero vector of standard size
 
     async def extract_knowledge(self, text: str, schema: Dict) -> Dict:
         return {"data": schema}  # Return empty schema structure
+
+    async def analyze_document(self, text: str, schema: Dict) -> Dict:
+        """Mock implementation of document analysis"""
+        return {
+            "justification": "This is a mock analysis of the document.",
+            "score": 0.75  # Mock matching score
+        }
 
 class SemanticService:
     """Service layer for handling semantic operations"""
     def __init__(self):
         self.base_url = os.getenv("REMOTE_API_URL")
+        print(f"\n=== Semantic Service Initialization ===")
+        print(f"Base URL: {self.base_url}")
+        print(f"Environment variables:")
+        print(f"- REMOTE_API_URL: {os.getenv('REMOTE_API_URL')}")
+        print(f"- AI_MODEL: {os.getenv('AI_MODEL')}")
+        
         self.client = httpx.AsyncClient(timeout=30.0)
         self.mock_service = MockSemanticService()
         self.use_mock = self.base_url is None
         if self.use_mock:
-            print("Warning: REMOTE_API_URL not configured, using mock semantic service")
+            print("WARNING: Using mock semantic service - REMOTE_API_URL not configured")
+        else:
+            print(f"Using remote semantic service at {self.base_url}")
 
     async def generate_embedding(self, text: str) -> List[float]:
         """Generate embedding vector for text using remote service"""
@@ -156,15 +172,29 @@ class SemanticService:
             return await self.mock_service.generate_embedding(text)
             
         try:
+            print(f"\n=== Generating Embedding ===")
+            print(f"Text length: {len(text)}")
+            
+            # response = await self.client.post(
+            #     f"{self.base_url}/v1/tools/generate_embedding",
+            #     json={"text": text}
+            # )
             response = await self.client.post(
-                f"{self.base_url}/v1/tools/generate_embedding",
-                json={"text": text}
+                f"{self.base_url}/v1/embedding/text",
+                json={
+                    'texts': [text],
+                    'model': EmbeddingModel.MULTILINGUAL_HEAVY,
+                    'input_type': EmbeddingInputType.SEARCH_DOCUMENT
+                }
             )
             response.raise_for_status()
-            return response.json().get("embedding", [])
+            result = response.json()
+            return result['embeddings'][0]
         except Exception as e:
             print(f"Error generating embedding: {str(e)}, falling back to mock service")
-            return await self.mock_service.generate_embedding(text)
+            mock_embedding = await self.mock_service.generate_embedding(text)
+            print(f"Mock embedding dimensions: {len(mock_embedding)}")
+            return mock_embedding
 
     async def convert_pdf_to_text(self, file_path: Path) -> Dict:
         """Convert PDF to text using remote service"""
@@ -205,26 +235,92 @@ class SemanticService:
 
     async def analyze_document(self, text: str, job_description: str, schema: Dict) -> Dict:
         """Analyze document content and compare with job description"""
-        response = await self.client.post(
-            f"{self.base_url}/v1/tools/analyze_document",
-            json={
-                'document': text,
-                'job_description': job_description,
+        if self.use_mock:
+            return await self.mock_service.analyze_document(text, job_description, schema)
+            
+        try:
+            print(f"\n=== Analyzing Document ===")
+            print(f"Job description length: {len(job_description)} characters")
+            
+            print(f"\n=== Making Request to Analyze Document ===")
+            url = f"{self.base_url}/v1/tools/convert_doc2json"
+            print(f"URL: {url}")
+            
+            payload={
+                'text': f"cv: {text}\n### job: {job_description}",
                 'target_json_schema': schema,
-                'model': os.getenv('AI_MODEL', 'gpt-4')
+                'extraction_steps': 'anlysze the matching of the cv with the job description and provide a score and justification',
+                'model': 'gpt-4'
             }
+            print(f"Payload structure: {list(payload.keys())}")
+            
+            response = await self.client.post(url, json=payload)
+            print(f"Response Status: {response.status_code}")
+            print(f"Response Headers: {dict(response.headers)}")
+            
+            try:
+                response.raise_for_status()
+                return response.json()
+            except httpx.HTTPStatusError as e:
+                print(f"HTTP Error Response Body: {response.text}")
+                raise
+                
+        except Exception as e:
+            print(f"\n=== Error in analyze_document ===")
+            print(f"Error type: {type(e).__name__}")
+            print(f"Error message: {str(e)}")
+            if isinstance(e, httpx.HTTPError):
+                print(f"HTTP Error details: {e.response.text if hasattr(e, 'response') else 'No response'}")
+            traceback.print_exc()
+            print("Falling back to mock service")
+            return await self.mock_service.analyze_document(text, job_description, schema)
+    
+    async def index_document(self, index_name: str, doc_id: str, document: Dict) -> Dict:
+        """Index a processed document"""
+        print(f"\n=== Indexing Current Document ===")
+        response = await self.client.post(
+            f"{self.base_url}/v1/index/{index_name}/document/{doc_id}",
+            json={'structured_doc': document}
         )
         response.raise_for_status()
         return response.json()
 
-    async def index_document(self, index_name: str, doc_id: str, document: Dict) -> Dict:
-        """Index a document in the semantic search index"""
-        response = await self.client.post(
-            f"{self.base_url}/v1/index/{index_name}/document/{doc_id}",
-            json=document
-        )
-        response.raise_for_status()
-        return response.json()
+    # async def index_document(self, index_name: str, doc_id: str, document: Dict) -> Dict:
+    #     """Index a document in the semantic search index"""
+    #     try:
+    #         url = f"{self.base_url}/v1/index/{index_name}/document/{doc_id}"
+    #         print(f"\n=== Indexing Document ===")
+    #         print(f"Service Mode: {'MOCK' if self.use_mock else 'REMOTE'}")
+    #         print(f"URL: {url}")
+    #         print(f"Document ID: {doc_id}")
+    #         print(f"Document structure:")
+    #         print(json.dumps(document, indent=2))
+            
+    #         if self.use_mock:
+    #             print("Using mock service - document will not be actually indexed")
+    #             return {"status": "mocked", "message": "Document indexed in mock mode"}
+            
+    #         response = await self.client.post(url, json=document)
+    #         print(f"Response Status: {response.status_code}")
+    #         print(f"Response Headers: {dict(response.headers)}")
+            
+    #         try:
+    #             response.raise_for_status()
+    #             return response.json()
+    #         except httpx.HTTPStatusError as e:
+    #             print(f"HTTP Error Response Body: {response.text}")
+    #             raise
+                
+    #     except Exception as e:
+    #         print(f"\n=== Error in index_document ===")
+    #         print(f"Error type: {type(e).__name__}")
+    #         print(f"Error message: {str(e)}")
+    #         if isinstance(e, httpx.HTTPError):
+    #             print(f"HTTP Error details: {e.response.text if hasattr(e, 'response') else 'No response'}")
+    #         traceback.print_exc()
+    #         raise
+
+
 
 # Initialize the semantic service
 semantic_service = SemanticService()
@@ -410,69 +506,131 @@ async def process_single_pdf(
 ) -> Dict:
     """Process a single PDF file with all necessary steps"""
     try:
+        print(f"\n=== Starting PDF Processing ===")
+        print(f"File: {file_path}")
+        print(f"Index: {index_name}")
+        print(f"Job ID: {job_id}")
+
+        # Get file stats
         stats = FileStats(file_path)
-        timings = {}
         
+        # Initialize timings
+        timings = {}
+
         # Convert PDF to text
-        text_start = time.time()
+        text_extraction_start = time.time()
         text_result = await semantic_service.convert_pdf_to_text(dest_path)
         text_content = "\n".join(text_result.get('pages', []))
-        timings['text_extraction'] = time.time() - text_start
+        timings['text_extraction'] = time.time() - text_extraction_start
         
-        # Generate document ID
+        
+        # Generate document ID from file content
         doc_id = hashlib.sha256(text_content.encode()).hexdigest()
+        
+       
+       
+        print(f"\n=== Converting PDF to Text ===")
+        print(f"Using path: {file_path}")
+        print(f"Extracted text length: {len(text_content)} characters")
+        print(f"First 200 chars: {text_content[:200]}...")
+        
+        # Detect language
+        language = await detect_language(text_content)
+        print(f"\n=== Language Detection ===")
+        print(f"Resume Language: {language}")
         
         # Generate embedding
         embedding_start = time.time()
+        print(f"\n=== Generating Embedding ===")
+        print(f"Text length: {len(text_content)}")
         embedding = await semantic_service.generate_embedding(text_content)
+        print(f"Embedding vector size: {len(embedding)}")
         timings['embedding'] = time.time() - embedding_start
         
-        # Index the document
-        index_start = time.time()
-        document = {
-            'id': doc_id,
-            'item_data': {
-                'upload_id': upload_id,
-                'job_id': job_id,
-                'timestamp': datetime.now().isoformat(),
-                'content': text_content,
-                'file_info': stats.to_dict(),
-                'embedding': embedding
-            }
-        }
-        
-        # Add the document to the index
-        index_result = await semantic_service.index_document(
-            index_name,
-            doc_id,
-            document
+        # Extract knowledge
+        knowledge_start = time.time()
+        extracted_knowledge = await semantic_service.extract_knowledge(
+            text_content,
+            RESUME_INDEX_CONFIG['mappings']['properties']['content']['properties']
         )
-        timings['indexing'] = time.time() - index_start
+        print(f"\n=== Extracting Knowledge ===")
+        print(f"Extracted knowledge keys: {list(extracted_knowledge.keys())}")
+        timings['knowledge_extraction'] = time.time() - knowledge_start
         
-        # Update progress
-        if progress_callback:
-            await progress_callback({
-                'file': file_path.name,
-                'status': 'indexed',
-                'timings': timings
-            })
+        # Analyze document
+        analysis_start = time.time()
+        extracted_matching_score = await semantic_service.analyze_document(
+            text_content,
+            job_description,
+            RESUME_INDEX_CONFIG['mappings']['properties']['matching_score']['properties']
+        )
+        timings['analysis'] = time.time() - analysis_start
         
-        return {
-            'success': True,
-            'doc_id': doc_id,
-            'timings': timings,
-            'file_info': stats.to_dict()
+        # Create structured document
+        document = {
+            "upload_id": upload_id,
+            "job_id": job_id,
+            "timestamp": datetime.now().isoformat(),
+            "content": extracted_knowledge.get('data', {}),
+            "file_info": {
+                "name": stats.name,
+                "size": stats.size,
+                "mime_type": stats.mime_type,
+                "processed_path": str(dest_path)
+            },
+            "matching_score": extracted_matching_score,
+            "embedding": embedding
         }
+        
+        # Index the document
+        indexing_start = time.time()
+        await semantic_service.index_document(index_name, doc_id, document)
+        timings['indexing'] = time.time() - indexing_start
+        
+        # Calculate total processing time
+        total_time = sum(timings.values())
+        
+        # Prepare result
+        result = {
+            "name": stats.name,
+            "size": stats.size,
+            "human_size": stats.human_size,
+            "mime_type": stats.mime_type,
+            "processed_path": str(dest_path),
+            "doc_id": doc_id,
+            "text_content": text_content[:500] + "...",
+            "status": "processed",
+            "indexed": True,
+            "timings": timings,
+            "total_time": total_time
+        }
+        
+        # Call progress callback
+        if progress_callback:
+            await progress_callback(result)
+            
+        return result
         
     except Exception as e:
-        print(f"Error processing {file_path}: {str(e)}")
+        print(f"\n=== Error Processing PDF ===")
+        print(f"Error details: {str(e)}")
+        print(f"File: {file_path}")
+        traceback.print_exc()
+        
+        error_result = {
+            "name": file_path.name,
+            "size": file_path.stat().st_size,
+            "human_size": humanize.naturalsize(file_path.stat().st_size),
+            "mime_type": 'application/pdf',
+            "processed_path": str(dest_path),
+            "status": "failed",
+            "error": str(e)
+        }
+        
         if progress_callback:
-            await progress_callback({
-                'file': file_path.name,
-                'status': 'error',
-                'error': str(e)
-            })
-        raise
+            await progress_callback(error_result)
+            
+        return error_result
 
 # Get number of CPU cores for optimal threading
 CPU_COUNT = os.cpu_count() or 4
@@ -510,298 +668,235 @@ async def process_pdf_file(
         })
         raise
 
-async def process_zip_file(zip_file: UploadFile, job_id: str, job_title: str = "") -> Dict:
-    temp_dir = tempfile.mkdtemp()
-    zip_path = Path(temp_dir) / "upload.zip"
+async def process_zip_file(zip_file: UploadFile, job_id: str, job_title: str = "", job_description: str = "") -> Dict:  # Add job_description parameter
+    """Process uploaded ZIP file containing resumes with parallel processing"""
+    # Ensure index exists
+    index_name = await ensure_job_index(job_id, job_title)
+    print(f"Using index: {index_name}")
+    
+    # Save the upload
+    upload_info = await save_upload(zip_file, job_id)
+    temp_dir = tempfile.mkdtemp()  # Create a temporary directory that won't auto-delete
     
     try:
-        # Save uploaded file
-        content = await zip_file.read()
-        async with aiofiles.open(zip_path, 'wb') as f:
-            await f.write(content)
-            
-        # Extract files
-        zip_ref = zipfile.ZipFile(zip_path, 'r')
-        zip_ref.extractall(temp_dir)
-        zip_ref.close()
+        temp_path = Path(temp_dir) / zip_file.filename
         
-        # Get list of PDF files
+        # Read the saved file
+        async with aiofiles.open(upload_info["file_path"], 'rb') as file:
+            content = await file.read()
+            
+        # Save to temp for processing
+        async with aiofiles.open(temp_path, 'wb') as out_file:
+            await out_file.write(content)
+        
+        # Extract zip with explicit close
+        zip_ref = None
+        try:
+            zip_ref = zipfile.ZipFile(temp_path, 'r')
+            extract_path = Path(temp_dir) / "extracted"
+            extract_path.mkdir(exist_ok=True)
+            zip_ref.extractall(extract_path)
+        finally:
+            if zip_ref:
+                zip_ref.close()
+                print("ZIP file handle explicitly closed")
+            # Add small delay to ensure file handle is released
+            await asyncio.sleep(0.1)
+        
+        # Process files
+        processed_files = []
+        failed_files = []
+        total_size = 0
+        file_types = {}
+        
+        # Save extracted files to processed directory
+        processed_path = PROCESSED_DIR / upload_info["upload_id"]
+        processed_path.mkdir(parents=True, exist_ok=True)
+
+        # Collect all PDF files first
         pdf_files = []
-        for root, _, files in os.walk(temp_dir):
-            for file in files:
-                if file.lower().endswith('.pdf'):
-                    pdf_files.append(Path(root) / file)
-                    
-        total_files = len(pdf_files)
-        if total_files == 0:
-            raise ValueError("No PDF files found in ZIP archive")
+        other_files = []
+        
+        for file_path in extract_path.rglob('*'):
+            if not file_path.is_file():
+                continue
+                
+            stats = FileStats(file_path)
+            dest_path = processed_path / file_path.relative_to(extract_path)
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
             
-        # Initialize processing state
-        processed = 0
-        failed = 0
-        results = []
+            # Copy with explicit close of file handles
+            with open(file_path, 'rb') as src, open(dest_path, 'wb') as dst:
+                shutil.copyfileobj(src, dst)
+            
+            total_size += stats.size
+            file_type = stats.mime_type.split('/')[0] if stats.mime_type else 'unknown'
+            file_types[file_type] = file_types.get(file_type, 0) + 1
+            
+            if stats.mime_type == 'application/pdf':
+                pdf_files.append((dest_path, dest_path))  # Use destination path for both
+            else:
+                other_files.append({
+                    "name": stats.name,
+                    "size": stats.size,
+                    "human_size": stats.human_size,
+                    "mime_type": stats.mime_type,
+                    "processed_path": str(dest_path),
+                    "status": "unsupported"
+                })
+
+        # Send initial count
+        total_files = len(pdf_files) + len(other_files)
+        print(f"Found {len(pdf_files)} PDFs and {len(other_files)} other files")
+        yield json.dumps({
+            "event": "processing_started",
+            "total_files": total_files,
+            "processed_count": 0,
+            "failed_count": 0
+        })
+
+        # Process PDFs in parallel with semaphore for concurrency control
+        semaphore = asyncio.Semaphore(10)  # Reduced from 15 to 10 for better stability
         
-        # Create semaphores for different operations
-        text_sem = Semaphore(MAX_CONCURRENT_TASKS)  # For PDF to text conversion
-        extract_sem = Semaphore(max(2, MAX_CONCURRENT_TASKS // 2))  # For LLM operations (more resource intensive)
+        async def process_with_semaphore(file_path, dest_path):
+            async with semaphore:
+                return await process_single_pdf(
+                    file_path,
+                    dest_path,
+                    semantic_service,
+                    index_name,
+                    upload_info["upload_id"],
+                    job_id,
+                    job_description,  # Add job_description parameter
+                    progress_callback
+                )
+
+        # Create a queue for progress updates
+        progress_queue = asyncio.Queue()
+
+        async def progress_callback(file_info: Dict):
+            await progress_queue.put(file_info)
+
+        # Create processing tasks
+        tasks = [
+            process_with_semaphore(file_path, dest_path)
+            for file_path, dest_path in pdf_files
+        ]
+
+        # Process all PDFs with controlled concurrency
+        start_time = time.time()
+        processed_count = 0
+        failed_count = 0
         
-        # Create shared semantic service instance
-        semantic_service = SemanticService()
+        # Start processing files
+        processing = asyncio.gather(*tasks)
         
-        # Step 1: Convert PDFs to text concurrently
-        async def convert_to_text(file_path: Path) -> Dict:
-            async with text_sem:
-                try:
-                    text_result = await semantic_service.convert_pdf_to_text(file_path)
-                    text_content = "\n".join(text_result.get('pages', []))
-                    return {
-                        'status': 'success',
-                        'file_path': file_path,
-                        'text': text_content,
-                        'file_name': file_path.name
-                    }
-                except Exception as e:
-                    return {
-                        'status': 'error',
-                        'file_path': file_path,
-                        'error': str(e),
-                        'file_name': file_path.name
-                    }
-        
-        # Convert all PDFs to text concurrently
-        conversion_tasks = [convert_to_text(pdf_file) for pdf_file in pdf_files]
-        conversion_results = await asyncio.gather(*conversion_tasks)
-        
-        # Filter successful conversions
-        successful_conversions = [r for r in conversion_results if r['status'] == 'success']
-        failed_conversions = [r for r in conversion_results if r['status'] == 'error']
-        
-        failed += len(failed_conversions)
-        for fail in failed_conversions:
-            yield {
-                'event': 'file_failed',
-                'processed_count': processed,
-                'failed_count': failed,
-                'total_files': total_files,
-                'file_name': fail['file_name'],
-                'error': fail['error']
-            }
-        
-        # Step 2: Process text content in batches
-        BATCH_SIZE = 5  # Process 5 files at a time to avoid overwhelming the LLM
-        successful_batches = [successful_conversions[i:i + BATCH_SIZE] 
-                            for i in range(0, len(successful_conversions), BATCH_SIZE)]
-        
-        async def process_text_batch(batch: List[Dict]) -> List[Dict]:
-            async with extract_sem:
-                batch_results = []
-                for conv in batch:
-                    try:
-                        # Extract job data
-                        job_data = await semantic_service.extract_job_data(
-                            conv['text'],
-                            conv['file_name']
-                        )
-                        
-                        batch_results.append({
-                            'status': 'success',
-                            'file_name': conv['file_name'],
-                            'data': job_data
-                        })
-                    except Exception as e:
-                        batch_results.append({
-                            'status': 'error',
-                            'file_name': conv['file_name'],
-                            'error': str(e)
-                        })
-                return batch_results
-        
-        # Process batches concurrently
-        batch_tasks = [process_text_batch(batch) for batch in successful_batches]
-        batch_results = await asyncio.gather(*batch_tasks)
-        
-        # Flatten results and update counters
-        for batch_result in batch_results:
-            for result in batch_result:
-                if result['status'] == 'success':
-                    processed += 1
-                    results.append(result['data'])
-                    yield {
-                        'event': 'file_processed',
-                        'processed_count': processed,
-                        'failed_count': failed,
-                        'total_files': total_files,
-                        'file_name': result['file_name']
-                    }
+        # Process files while monitoring progress
+        while not processing.done() or not progress_queue.empty():
+            try:
+                file_info = await asyncio.wait_for(progress_queue.get(), timeout=0.1)
+                if file_info.get("status") == "processed":
+                    processed_files.append(file_info)
+                    processed_count += 1
                 else:
-                    failed += 1
-                    yield {
-                        'event': 'file_failed',
-                        'processed_count': processed,
-                        'failed_count': failed,
-                        'total_files': total_files,
-                        'file_name': result['file_name'],
-                        'error': result['error']
-                    }
+                    failed_files.append(file_info)
+                    failed_count += 1
+                
+                yield json.dumps({
+                    "event": "file_processed" if file_info.get("status") == "processed" else "file_failed",
+                    "file_name": file_info.get("name", "Unknown"),
+                    "total_files": total_files,
+                    "processed_count": processed_count,
+                    "failed_count": failed_count
+                })
+            except asyncio.TimeoutError:
+                if processing.done():
+                    break
+                continue
+            except Exception as e:
+                print(f"Error in progress reporter: {str(e)}")
+                continue
         
-        # Return final results
-        yield {
-            'event': 'complete',
-            'processed_files': processed,
-            'failed_files': failed,
-            'total_files': total_files,
-            'results': results
-        }
+        # Wait for processing to complete and handle any exceptions
+        try:
+            results = await processing
+        except Exception as e:
+            print(f"Error in processing: {str(e)}")
         
+        processing_time = time.time() - start_time
+        print(f"Parallel processing completed in {processing_time:.2f} seconds")
+        print(f"Processed: {len(processed_files)}, Failed: {len(failed_files)}, Other: {len(other_files)}")
+        
+        # Add other files to the list
+        processed_files.extend(other_files)
+
+        # Final response
+        yield json.dumps({
+            "event": "completed",
+            "upload_id": upload_info["upload_id"],
+            "job_id": job_id,
+            "total_files": total_files,
+            "total_size": total_size,
+            "human_total_size": humanize.naturalsize(total_size),
+            "file_types": file_types,
+            "processed_count": len([f for f in processed_files if f.get("status") == "processed"]),
+            "failed_count": len(failed_files),
+            "files": sorted(processed_files + failed_files, key=lambda x: x["size"], reverse=True),
+            "timestamp": upload_info["timestamp"],
+            "processing_time": processing_time
+        })
+        
+    except zipfile.BadZipFile:
+        raise HTTPException(status_code=400, detail="Invalid zip file")
     except Exception as e:
-        yield {
-            'event': 'error',
-            'error': str(e)
-        }
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
-        # Cleanup
-        shutil.rmtree(temp_dir, ignore_errors=True)
+        # Clean up temporary directory
+        try:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            print(f"Cleaned up temp directory: {temp_dir}")
+        except Exception as e:
+            print(f"Warning: Error during cleanup: {str(e)}")
 
 @app.post("/process-zip")
 async def process_zip(
     file: UploadFile,
     job_id: str = Form(...),
     job_title: str = Form(""),
-    job_description: str = Form(...)
+    job_description: str = Form(...)  # Add job_description parameter
 ):
-    """Process a ZIP file containing resumes"""
-    try:
-        print(f"Received file: {file.filename}, content type: {file.content_type}")
-        
-        # Create index if it doesn't exist
-        index_name = generate_index_name(job_id, job_title)
-        await ensure_job_index(job_id, job_title)
-        
-        # Create semantic service instance
-        semantic_service = SemanticService()
-        
-        # Create temporary directory for processing
-        temp_dir = Path(tempfile.mkdtemp())
-        print(f"Created temp directory: {temp_dir}")
-        
+    if not file.filename.endswith('.zip'):
+        raise HTTPException(status_code=400, detail="File must be a ZIP archive")
+    
+    # Read file content and create a new SpooledTemporaryFile
+    content = await file.read()
+    temp_file = tempfile.SpooledTemporaryFile()
+    temp_file.write(content)
+    temp_file.seek(0)
+    
+    # Create new UploadFile with the temp file
+    new_file = UploadFile(
+        filename=file.filename,
+        file=temp_file
+    )
+    
+    async def event_generator():
         try:
-            # Save uploaded file
-            zip_path = temp_dir / "upload.zip"
-            file_content = await file.read()  # Read file content once
-            print(f"Read {len(file_content)} bytes from uploaded file")
-            
-            with open(zip_path, "wb") as f:
-                f.write(file_content)
-            print(f"Saved file to: {zip_path}")
-            
-            try:
-                # Extract files
-                zip_file = zipfile.ZipFile(zip_path)
-                zip_file.extractall(temp_dir)
-                print(f"Extracted ZIP contents to: {temp_dir}")
-                
-                # Get list of PDF files
-                pdf_files = []
-                for root, _, files in os.walk(temp_dir):
-                    for file in files:
-                        if file.lower().endswith('.pdf'):
-                            pdf_files.append(Path(root) / file)
-                            print(f"Found PDF: {file}")
-                
-                total_files = len(pdf_files)
-                print(f"Found {total_files} PDF files")
-                
-                if total_files == 0:
-                    raise HTTPException(status_code=400, detail="No PDF files found in ZIP archive")
-                
-                # Initialize counters
-                processed_count = 0
-                failed_count = 0
-                
-                # Create event generator
-                async def event_generator():
-                    nonlocal processed_count, failed_count
-                    
-                    # Send initial event
-                    yield "data: " + json.dumps({
-                        "event": "processing_started",
-                        "total_files": total_files
-                    }) + "\n\n"
-                    
-                    # Process each file
-                    for pdf_file in pdf_files:
-                        try:
-                            print(f"Processing: {pdf_file.name}")
-                            # Generate unique upload ID using file content hash
-                            upload_id = generate_upload_id(
-                                file_content,  # Use already read content
-                                job_id
-                            )
-                            
-                            # Process the PDF
-                            result = await process_single_pdf(
-                                pdf_file,
-                                pdf_file,
-                                semantic_service,
-                                index_name,
-                                upload_id,
-                                job_id,
-                                job_description,
-                                lambda x: print(f"Progress: {x}")  # Progress callback
-                            )
-                            
-                            processed_count += 1
-                            print(f"Successfully processed: {pdf_file.name}")
-                            
-                            # Send progress event
-                            yield "data: " + json.dumps({
-                                "event": "file_processed",
-                                "file_name": pdf_file.name,
-                                "processed_count": processed_count,
-                                "failed_count": failed_count
-                            }) + "\n\n"
-                            
-                        except Exception as e:
-                            failed_count += 1
-                            print(f"Error processing {pdf_file}: {str(e)}")
-                            
-                            # Send failure event
-                            yield "data: " + json.dumps({
-                                "event": "file_failed",
-                                "file_name": pdf_file.name,
-                                "error": str(e),
-                                "processed_count": processed_count,
-                                "failed_count": failed_count
-                            }) + "\n\n"
-                    
-                    print(f"Processing completed. Total: {total_files}, Processed: {processed_count}, Failed: {failed_count}")
-                    # Send completion event
-                    yield "data: " + json.dumps({
-                        "event": "completed",
-                        "total_files": total_files,
-                        "processed_count": processed_count,
-                        "failed_count": failed_count
-                    }) + "\n\n"
-                
-                return StreamingResponse(
-                    event_generator(),
-                    media_type="text/event-stream"
-                )
-                
-            except zipfile.BadZipFile:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Invalid ZIP file format"
-                )
-                
+            async for event in process_zip_file(new_file, job_id, job_title, job_description):  # Pass job_description
+                yield f"data: {event}\n\n"
         finally:
-            # Cleanup temporary directory
-            shutil.rmtree(temp_dir)
-            print(f"Cleaned up temp directory: {temp_dir}")
-            
-    except Exception as e:
-        print(f"Error in process_zip: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+            await new_file.close()
+            temp_file.close()
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
 
 # Health check endpoint
 @app.get("/health")
@@ -3348,3 +3443,112 @@ async def extract_job_data(body: Dict = Body(...)):
             status_code=500,
             detail=f"Error extracting job data: {str(e)}"
         )
+
+@app.post("/v1/test/process-resume", tags=["Testing"])
+async def test_resume_processing(
+    file: UploadFile = File(...),
+    job_description: str = Form(...),
+    job_id: str = Form(default="test_job_123")
+):
+    """Test endpoint for resume processing with detailed logging"""
+    try:
+        # Create temp directory for processing
+        temp_dir = Path(tempfile.mkdtemp())
+        file_path = temp_dir / file.filename
+        
+        try:
+            # Save uploaded file
+            content = await file.read()
+            async with aiofiles.open(file_path, 'wb') as f:
+                await f.write(content)
+            
+            # Generate unique upload ID
+            upload_id = generate_upload_id(content, job_id)
+            
+            # Create semantic service instance
+            semantic_service = SemanticService()
+            
+            # Create index name
+            index_name = generate_index_name(job_id)
+            await ensure_job_index(job_id)
+            
+            # Process the PDF
+            async def progress_callback(info: Dict):
+                print("\nProgress Update:", json.dumps(info, indent=2))
+            
+            result = await process_single_pdf(
+                file_path=file_path,
+                dest_path=file_path,
+                semantic_service=semantic_service,
+                index_name=index_name,
+                upload_id=upload_id,
+                job_id=job_id,
+                job_description=job_description,
+                progress_callback=progress_callback
+            )
+            
+            return {
+                "message": "Resume processing completed",
+                "result": result
+            }
+            
+        finally:
+            # Cleanup temp directory
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            
+    except Exception as e:
+        print(f"Error in test endpoint: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": "Error processing resume",
+                "error": str(e)
+            }
+        )
+
+@app.get("/v1/jobs/{job_id}/matches", tags=["Jobs"])
+async def get_job_matches(
+    job_id: UUID4,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(5000, le=10000),
+    exclude_fields: str = Query(None)
+):
+    """
+    Fetch candidate matches for a specific job
+    
+    Parameters:
+    - job_id: The ID of the job to fetch matches for
+    - offset: Starting offset for pagination
+    - limit: Maximum number of matches to return
+    - exclude_fields: Comma-separated list of fields to exclude
+    """
+    try:
+        # First get the job to ensure it exists and get its title
+        job_response = await get_job(job_id)
+        if not job_response:
+            raise HTTPException(status_code=404, detail=f"Job with ID {job_id} not found")
+            
+        # Generate the correct index name
+        index_name = generate_index_name(str(job_id), job_response.get('title', {}).get('en', ''))
+        
+        # Fetch matches from the semantic service
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{REMOTE_API_URL}/v1/index/{index_name}/matches",
+                params={
+                    'offset': offset,
+                    'size': limit,
+                    'exclude_fields': exclude_fields
+                },
+                timeout=30.0
+            )
+            response.raise_for_status()
+            return response.json()
+            
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            return {"matches": [], "total": 0}
+        raise HTTPException(status_code=e.response.status_code, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

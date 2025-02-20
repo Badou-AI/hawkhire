@@ -1,8 +1,4 @@
----
-description: 
-globs: 
----
- # List & Table Layout Patterns
+# List & Table Layout Patterns
 
 ## Pattern Recognition Guide
 
@@ -213,4 +209,4 @@ When analyzing list and table designs, look for these common patterns:
    - Bulk actions
    - Selection persistence
 
-Remember: Lists and tables should make data exploration and manipulation intuitive. Layout should support quick scanning and efficient interaction.
+Remember: Lists and tables should make data exploration and manipulation intuitive. Layout should support quick scanning and efficient interaction. 

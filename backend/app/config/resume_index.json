@@ -65,7 +65,7 @@
                             }
                         },
                         "score": {
-                            "type": "integer",
+                            "type": "float",
                             "minimum": 0,
                             "maximum": 1
                         }

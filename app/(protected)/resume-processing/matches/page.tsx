@@ -5,36 +5,36 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import {
-    Sheet,
-    SheetContent,
-    SheetHeader,
-    SheetTitle,
-    SheetDescription,
-    SheetTrigger,
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetTrigger,
 } from "@/components/ui/sheet"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Input } from "@/components/ui/input"
 import {
-    ChevronLeft,
-    Calendar,
-    Clock,
-    Users,
-    Briefcase,
-    Star,
-    CheckCircle2, LayoutList,
-    Table as TableIcon,
-    LayoutGrid,
-    Send,
-    Bot,
-    Plus
+  ChevronLeft,
+  Calendar,
+  Clock,
+  Users,
+  Briefcase,
+  Star,
+  CheckCircle2, LayoutList,
+  Table as TableIcon,
+  LayoutGrid,
+  Send,
+  Bot,
+  Plus
 } from 'lucide-react'
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
@@ -59,11 +59,24 @@ interface JobStats {
 }
 
 const formatDate = (dateString: string) => {
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric'
-  }).format(new Date(dateString))
+  if (!dateString) return 'N/A'
+  
+  try {
+    const date = new Date(dateString)
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      return 'Invalid Date'
+    }
+    
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    }).format(date)
+  } catch (error) {
+    console.error('Error formatting date:', error)
+    return 'Invalid Date'
+  }
 }
 
 // Add pagination config
@@ -119,20 +132,24 @@ export default function MatchesPage() {
   // Fetch candidates and stats
   useEffect(() => {
     const fetchCandidatesAndStats = async () => {
-      if (!currentJob?.id) return
+      if (!currentJob?.id) {
+        console.log('Waiting for job data to load...');
+        return;
+      }
 
       try {
-        setIsLoading(true)
-        const indexName = `job-${currentJob.title.en.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${currentJob.id}`
+        setIsLoading(true);
         
-        // Fetch candidates
-        const response = await fetch(`/api/indices/${indexName}/matches?offset=0&size=5000&exclude_fields=embedding`)
+        // Use the new endpoint to fetch matches
+        const response = await fetch(`/api/jobs/${currentJob.id}/matches?exclude_fields=embedding`);
         if (!response.ok) {
-          throw new Error('Failed to fetch candidates')
+          throw new Error('Failed to fetch candidates');
         }
 
-        const data = await response.json()
-        const transformedData = transformApiResponseToUiFormat(data)
+        const { documents, total } = await response.json()
+        console.log(documents)
+        // The data comes in the format { matches: [], total: number }
+        const transformedData = documents ? transformApiResponseToUiFormat(documents) : []
         // Sort candidates by match score in descending order
         const sortedData = transformedData.sort((a, b) => b.matchScore - a.matchScore)
         setCandidateMatches(sortedData)
@@ -141,7 +158,7 @@ export default function MatchesPage() {
         const stats: JobStats = {
           createdAt: currentJob.created_at,
           processedAt: new Date().toISOString(), // Last processing time
-          totalApplications: sortedData.length,
+          totalApplications: total || 0,
           activelyReviewing: sortedData.filter(c => c.stage === 'reviewing').length,
           averageExperience: calculateAverageExperience(sortedData),
           shortlisted: sortedData.filter(c => c.stage === 'shortlisted').length,
@@ -177,9 +194,9 @@ export default function MatchesPage() {
 
   // Helper function for match score color
   const getMatchScoreColor = (score: number) => {
-    if (score >= 80) return "text-green-600"
-    if (score >= 70) return "text-blue-600"
-    if (score >= 60) return "text-yellow-600"
+    if (score >= 90) return "text-green-600"
+    if (score >= 80) return "text-blue-600"
+    if (score >= 70) return "text-yellow-600"
     return "text-red-600"
   }
 

@@ -3,20 +3,20 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import {
-    Card,
-    CardContent,
-    CardHeader,
-    CardTitle,
-    CardDescription,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
 } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select"
 import { AlertCircle, CheckCircle2, XCircle, Timer, Database, Settings2, Plus } from 'lucide-react'
 import { cn } from "@/lib/utils"
@@ -28,7 +28,7 @@ import { getJobs, type ApiJob } from "@/app/api/jobs/client"
 import { createClient } from "@/lib/supabase/client"
 
 // Import data from shared data file
-import { mockResumeResponse, transformApiResponseToUiFormat, getSkillColor } from "./data"
+import { transformApiResponseToUiFormat, getSkillColor } from "./data"
 import { FileDropzone } from "@/components/resume-evaluator/FileDropzone"
 
 // Add new types
@@ -110,6 +110,7 @@ export default function ResumeProcessingPage() {
   const [error, setError] = useState<string>("")
   const [jobs, setJobs] = useState<ApiJob[]>([])
   const [isLoadingJobs, setIsLoadingJobs] = useState(true)
+  const [matches, setMatches] = useState<ReturnType<typeof transformApiResponseToUiFormat>>([])
 
   // Fetch jobs on component mount
   useEffect(() => {
@@ -238,6 +239,10 @@ export default function ResumeProcessingPage() {
                     unsupported: event.total_files - event.processed_count - event.failed_count
                   }))
                   
+                  if (event.matches) {
+                    setMatches(transformApiResponseToUiFormat(event.matches))
+                  }
+                  
                   // After successful processing, redirect to matches page
                   if (selectedJob) {
                     router.push(`/resume-processing/matches?jobId=${selectedJob.id}`)
@@ -323,8 +328,8 @@ export default function ResumeProcessingPage() {
     }
   }, [selectedJob]);
 
-  // Inside the ResumeProcessingPage component, replace candidateMatches with:
-  const candidateMatches = transformApiResponseToUiFormat(mockResumeResponse);
+  // Replace the candidateMatches line with:
+  const candidateMatches = matches;
 
   return (
     <div className="container mx-auto p-6 space-y-6">

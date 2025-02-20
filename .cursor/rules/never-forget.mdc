@@ -1,4 +1,8 @@
 ---
+description: 
+globs: 
+---
+---
 description: any new UI component or actually as a global rule when starting any task
 globs: *.tsx, *.py
 ---
@@ -53,7 +57,86 @@ When working on this codebase, always remember these critical guidelines:
 
 7. **IPv4/IPv6 Consistency**: Network issues can be subtle and hard to debug. Once fixed, they should stay fixed.
 
+8. **Authentication & Middleware**: Always follow the best practices documented in `docs/auth-middleware.md`. Common issues include:
+   - Using JWT for non-auth purposes (use UUID instead)
+   - Excessive session checks
+   - Improper cookie handling
+   - Rate limiting from Supabase
+   Review the full guidelines before making auth-related changes.
+
 Remember: When in doubt, preserve existing functionality. Your changes should add value without disrupting what already works. 
+
+# Code Integration Rules
+
+## 1. API Endpoint Verification
+- **ALWAYS verify endpoint existence** before using it:
+  - Check the backend code (FastAPI routes) for exact endpoint paths
+  - Verify HTTP methods (GET, POST, etc.) match the implementation
+  - Never assume an endpoint exists based on naming conventions
+  - Document the source file where the endpoint was found
+
+## 2. Method and Function Verification
+- **Before using any function/method:**
+  - Locate the actual implementation in the codebase
+  - Verify the function signature, parameters, and return types
+  - Check for any required dependencies or context
+  - Never assume a function exists just because it follows a pattern
+
+## 3. Package Management
+- **Before suggesting new packages:**
+  - Check `package.json` for frontend dependencies
+  - Check `requirements.txt` or `pyproject.toml` for backend dependencies
+  - Verify the version compatibility with existing packages
+  - Look for potential conflicts with existing dependencies
+
+## 4. Code Search Protocol
+1. Use `grep_search` to find exact function/method names
+2. Use `codebase_search` for semantic understanding
+3. Use `file_search` to locate relevant files
+4. Document the search results before proceeding with implementation
+
+## 5. Integration Checklist
+Before implementing any feature:
+- [ ] List all required endpoints with their source files
+- [ ] List all required functions with their source files
+- [ ] Verify all imports exist in the codebase
+- [ ] Check all required packages are installed
+- [ ] Document any assumptions or dependencies
+
+## 6. Error Prevention
+- Keep a running list of verified endpoints and functions
+- Document the source of each endpoint/function
+- Use TypeScript types and Python type hints from existing code
+- Never create placeholder functions without implementation
+
+## 7. Documentation Requirements
+When implementing features, document:
+- Source of each endpoint used
+- Source of each function called
+- Required permissions or context
+- Any environment variables needed
+
+## 8. Testing Protocol
+Before suggesting code changes:
+- Verify the endpoint response format
+- Check authentication requirements
+- Validate required headers
+- Test error handling paths
+
+## Example Documentation Format
+```typescript
+/**
+ * Endpoint: /v1/jobs/{job_id}/matches
+ * Source: backend/app/main.py:3510
+ * Method: GET
+ * Auth Required: Yes
+ * Parameters:
+ * - job_id: UUID
+ * - offset: number
+ * - limit: number
+ * - exclude_fields: string
+ */
+```
 
 ## IMPORTANT
 

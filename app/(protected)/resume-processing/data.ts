@@ -70,6 +70,57 @@ interface ResumeResponse {
   documents: ResumeDocument[];
 }
 
+interface JobMatchProfile {
+  id: string;
+  item_data: {
+    upload_id: string;
+    job_id: string;
+    timestamp: string;
+    content: {
+      title: string;
+      profile: {
+        first_name: string;
+        last_name: string;
+        tel_num: string;
+        email: string;
+      };
+      years_of_experience: number;
+      summary: string;
+      skills: Array<{
+        skill: string;
+        score: number;
+      }>;
+      topics: string[];
+    };
+    file_info: {
+      name: string;
+      size: number;
+      mime_type: string;
+      processed_path: string;
+    };
+    matching_score: {
+      data: {
+        justification: {
+          type: string;
+          meta: {
+            description: string;
+          };
+        };
+        score: {
+          type: string;
+          minimum: number;
+          maximum: number;
+          meta: {
+            description: string;
+          };
+          value: number;
+        };
+      };
+    };
+  };
+}
+
+
 // Mock jobs data with skill requirements
 export const jobs = [
   { 
@@ -207,32 +258,45 @@ export const mockResumeResponse: ResumeResponse = {
 
 // Helper function for skill color
 export const getSkillColor = (score: number): string => {
-  if (score >= 0.9) return "bg-green-500"
-  if (score >= 0.8) return "bg-blue-500"
-  if (score >= 0.7) return "bg-yellow-500"
+  if (score >= 90) return "bg-green-500"
+  if (score >= 80) return "bg-blue-500"
+  if (score >= 70) return "bg-yellow-500"
   return "bg-red-500"
 }
 
 // Helper function to transform API response to UI format
-export const transformApiResponseToUiFormat = (response: ResumeResponse) => {
-  return response.documents.map(doc => ({
+export const transformApiResponseToUiFormat = (response: JobMatchProfile[]) => {
+  if (!Array.isArray(response)) {
+    console.warn('Expected array of documents, received:', response);
+    return [];
+  }
+
+  return response.map(doc => ({
     id: doc.id,
-    name: `${doc.item_data.content.data.profile.first_name} ${doc.item_data.content.data.profile.last_name}`,
+    name: `${doc.item_data.content.profile.first_name} ${doc.item_data.content.profile.last_name}`,
     avatar: "/placeholder.svg",
     matchScore: Math.round(doc.item_data.matching_score.data.score.value * 100),
-    role: doc.item_data.content.data.title,
-    experience: `${doc.item_data.content.data.years_of_experience} years`,
-    mainSkillScore: Math.round(doc.item_data.content.data.skills[0]?.score * 100) || 0,
+    role: doc.item_data.content.title,
+    experience: `${doc.item_data.content.years_of_experience} years`,
+    mainSkillScore: doc.item_data.content.skills[0] 
+      ? Math.round(doc.item_data.content.skills[0].score * 100)
+      : 0,
     skillRatings: Object.fromEntries(
-      doc.item_data.content.data.skills.map(skill => [
+      doc.item_data.content.skills.map(skill => [
         skill.skill,
         Math.round(skill.score * 100)
       ])
     ),
     summary: doc.item_data.matching_score.data.justification.meta.description,
-    stage: 'new', // Default stage for new matches
+    stage: 'new',
     otherMatches: [
-      { jobTitle: "Similar Role", score: Math.round(doc.item_data.matching_score.data.score.value * 85) }
-    ] as OtherMatch[] // Generate a sample match based on the main score
+      { 
+        jobTitle: "Similar Role", 
+        score: Math.round(doc.item_data.matching_score.data.score.value * 85) 
+      }
+    ] as OtherMatch[]
   }));
-}; 
+};
+
+// Add a development toggle
+export const USE_MOCK_DATA = process.env.NEXT_PUBLIC_USE_MOCK_DATA === 'true'; 

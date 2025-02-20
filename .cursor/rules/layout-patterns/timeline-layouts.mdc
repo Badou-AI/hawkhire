@@ -1,1 +1,150 @@
- 
+# Timeline & Feed Layout Patterns
+
+## Pattern Recognition Guide
+
+When analyzing timeline or feed designs, look for these common patterns:
+
+### 1. Vertical Timeline with Dots
+```tsx
+<div className="relative space-y-4">
+  {/* Timeline line */}
+  <div className="absolute left-[19px] top-5 bottom-5 w-[2px] bg-border" />
+  
+  {items.map((item, index) => (
+    <div key={index} className="flex gap-4">
+      {/* Time column */}
+      <div className="w-16 text-sm text-muted-foreground pt-2 shrink-0">
+        {item.time}
+      </div>
+      
+      {/* Dot indicator */}
+      <div className="relative shrink-0 z-10">
+        <div className={cn(
+          "w-4 h-4 rounded-full border-2 border-background",
+          {
+            'bg-primary': item.type === 'marketing',
+            'bg-green-500': item.type === 'hr',
+            'bg-blue-500': item.type === 'support',
+            'bg-yellow-500': item.type === 'finance',
+          }
+        )} />
+      </div>
+      
+      {/* Content */}
+      <div className={cn(
+        "flex-1 rounded-lg p-3",
+        {
+          'bg-primary/10': item.type === 'marketing',
+          'bg-green-500/10': item.type === 'hr',
+          'bg-blue-500/10': item.type === 'support',
+          'bg-yellow-500/10': item.type === 'finance',
+        }
+      )}>
+        <h4 className="font-medium text-sm">{item.title}</h4>
+        <p className="text-sm text-muted-foreground">{item.department}</p>
+      </div>
+    </div>
+  ))}
+</div>
+```
+
+### 2. Color Strategy
+
+#### Department Colors
+```tsx
+const departmentColors = {
+  marketing: {
+    dot: "bg-primary",
+    bg: "bg-primary/10",
+    hover: "hover:bg-primary/20"
+  },
+  hr: {
+    dot: "bg-green-500",
+    bg: "bg-green-500/10",
+    hover: "hover:bg-green-500/20"
+  },
+  support: {
+    dot: "bg-blue-500",
+    bg: "bg-blue-500/10",
+    hover: "hover:bg-blue-500/20"
+  },
+  finance: {
+    dot: "bg-yellow-500",
+    bg: "bg-yellow-500/10",
+    hover: "hover:bg-yellow-500/20"
+  }
+} as const
+
+type Department = keyof typeof departmentColors
+```
+
+### 3. Interactive Timeline
+```tsx
+<div className="relative space-y-4">
+  <div className="absolute left-[19px] top-5 bottom-5 w-[2px] bg-border" />
+  
+  {items.map((item, index) => {
+    const colors = departmentColors[item.type as Department]
+    
+    return (
+      <div 
+        key={index} 
+        className={cn(
+          "flex gap-4 rounded-lg transition-colors",
+          colors.hover
+        )}
+      >
+        <div className="w-16 text-sm text-muted-foreground pt-2 shrink-0">
+          {item.time}
+        </div>
+        
+        <div className="relative shrink-0 z-10">
+          <div className={cn(
+            "w-4 h-4 rounded-full border-2 border-background",
+            colors.dot
+          )} />
+        </div>
+        
+        <div className={cn(
+          "flex-1 rounded-lg p-3",
+          colors.bg
+        )}>
+          <div className="flex items-start justify-between">
+            <div>
+              <h4 className="font-medium text-sm">{item.title}</h4>
+              <p className="text-sm text-muted-foreground">{item.department}</p>
+            </div>
+            <Button variant="ghost" size="icon">
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  })}
+</div>
+```
+
+### Best Practices
+
+1. **Visual Hierarchy**
+   - Use consistent dot sizes
+   - Maintain even spacing
+   - Clear time indicators
+
+2. **Color Usage**
+   - Use opacity for backgrounds
+   - Ensure sufficient contrast
+   - Consistent color mapping
+
+3. **Interactive States**
+   - Hover effects
+   - Click targets
+   - Action menus
+
+4. **Accessibility**
+   - Color contrast
+   - Focus indicators
+   - Screen reader support
+
+Remember: Timeline layouts should provide clear temporal and hierarchical relationships while maintaining visual interest through color and interaction. 
