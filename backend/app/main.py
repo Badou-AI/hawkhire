@@ -3585,3 +3585,9 @@ async def get_job_matches(
         raise HTTPException(status_code=e.response.status_code, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# Import our new job processing module
+from .jobs.routes import router as jobs_v2_router
+
+# Add the v2 jobs router
+app.include_router(jobs_v2_router)
