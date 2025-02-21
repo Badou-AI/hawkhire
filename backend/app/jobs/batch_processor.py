@@ -4,11 +4,13 @@ Batch job processing implementation with optimized performance.
 from typing import List, Dict, Any, Optional, AsyncGenerator
 import asyncio
 import tempfile
+import time
 from pathlib import Path
 import aiofiles
 import zipfile
 from fastapi import UploadFile
 from pydantic import BaseModel
+from ..services.semantic import semantic_service  # Updated import
 
 class JobProcessingEvent(BaseModel):
     """Event model for job processing status updates"""
@@ -35,11 +37,15 @@ class BatchProcessor:
         self,
         pdf_concurrency: int = 10,
         llm_concurrency: int = 5,
-        batch_size: int = 10
+        batch_size: int = 10,
+        max_retries: int = 3,
+        retry_delay: float = 1.0
     ):
         self.pdf_semaphore = asyncio.Semaphore(pdf_concurrency)
         self.llm_semaphore = asyncio.Semaphore(llm_concurrency)
         self.batch_size = batch_size
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
         self._progress: Dict[str, Any] = {}
 
     async def process_zip(
@@ -104,7 +110,10 @@ class BatchProcessor:
                         results = await self._process_batch(
                             files=batch_files,
                             batch_number=batch_idx + 1,
-                            total_batches=total_batches
+                            total_batches=total_batches,
+                            organization_id=organization_id,
+                            is_mock=is_mock,
+                            status=status
                         )
 
                         # Update counts and yield events
@@ -168,26 +177,101 @@ class BatchProcessor:
         self,
         files: List[Path],
         batch_number: int,
-        total_batches: int
+        total_batches: int,
+        organization_id: str,
+        is_mock: bool,
+        status: str
     ) -> List[ProcessedJobData]:
         """Process a batch of files concurrently"""
-        tasks = [self._process_file(file) for file in files]
+        tasks = [
+            self._process_file(
+                file,
+                organization_id=organization_id,
+                is_mock=is_mock,
+                status=status
+            ) for file in files
+        ]
         return await asyncio.gather(*tasks)
 
-    async def _process_file(self, file: Path) -> ProcessedJobData:
-        """Process a single file with proper error handling"""
-        try:
-            # TODO: Implement actual file processing
-            # For now, return dummy data for testing
-            return ProcessedJobData(
-                original_file=file.name,
-                extracted_data={},
-                processing_time=0.0
-            )
-        except Exception as e:
-            return ProcessedJobData(
-                original_file=file.name,
-                extracted_data={},
-                validation_errors=[str(e)],
-                processing_time=0.0
-            ) 
+    async def _process_file(
+        self,
+        file: Path,
+        organization_id: str,
+        is_mock: bool,
+        status: str
+    ) -> ProcessedJobData:
+        """Process a single file with proper error handling and retries"""
+        start_time = time.time()
+        errors = []
+
+        for attempt in range(self.max_retries):
+            try:
+                async with self.pdf_semaphore:
+                    # Extract text from PDF
+                    text_result = await semantic_service.convert_pdf_to_text(file)
+                    text_content = "\n".join(text_result.get('pages', []))
+
+                    if not text_content or len(text_content.strip()) < 50:
+                        raise ValueError("Extracted text is too short or empty")
+
+                async with self.llm_semaphore:
+                    # Extract job data using LLM
+                    job_data = await semantic_service.extract_knowledge(
+                        text_content,
+                        schema={
+                            "type": "object",
+                            "required": ["title", "description", "job_type", "location"],
+                            "properties": {
+                                "title": {
+                                    "type": "object",
+                                    "properties": {
+                                        "en": {"type": "string"},
+                                        "fr": {"type": "string"}
+                                    }
+                                },
+                                "description": {
+                                    "type": "object",
+                                    "properties": {
+                                        "en": {"type": "string"},
+                                        "fr": {"type": "string"}
+                                    }
+                                },
+                                "job_type": {"type": "string"},
+                                "location": {
+                                    "type": "object",
+                                    "properties": {
+                                        "city": {"type": "object"},
+                                        "state": {"type": "object"},
+                                        "country": {"type": "object"},
+                                        "postal_code": {"type": "object"}
+                                    }
+                                }
+                            }
+                        }
+                    )
+
+                    # Add additional fields
+                    job_data.update({
+                        "organization_id": organization_id,
+                        "is_mock": is_mock,
+                        "status": status
+                    })
+
+                    return ProcessedJobData(
+                        original_file=file.name,
+                        extracted_data=job_data,
+                        processing_time=time.time() - start_time
+                    )
+
+            except Exception as e:
+                errors.append(f"Attempt {attempt + 1}: {str(e)}")
+                if attempt < self.max_retries - 1:
+                    await asyncio.sleep(self.retry_delay * (attempt + 1))
+                continue
+
+        return ProcessedJobData(
+            original_file=file.name,
+            extracted_data={},
+            validation_errors=errors,
+            processing_time=time.time() - start_time
+        ) 

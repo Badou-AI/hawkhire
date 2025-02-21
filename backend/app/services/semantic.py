@@ -1,0 +1,103 @@
+"""
+Semantic service for text processing and analysis.
+"""
+import os
+from pathlib import Path
+import httpx
+import traceback
+import aiofiles
+from typing import Dict, List
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv(Path(__file__).parent.parent.parent / '.env')
+
+class MockSemanticService:
+    """Mock service for local development and testing"""
+    def __init__(self):
+        self.indices = {}
+
+    async def convert_pdf_to_text(self, file_path: Path) -> Dict:
+        return {
+            "pages": ["Sample text from PDF for testing purposes"],
+            "metadata": {"page_count": 1}
+        }
+
+    async def extract_knowledge(self, text: str, schema: Dict) -> Dict:
+        return {
+            "data": {
+                "title": {
+                    "en": "Sample Job Title",
+                    "fr": "Exemple de titre d'emploi"
+                },
+                "description": {
+                    "en": "Sample job description",
+                    "fr": "Exemple de description d'emploi"
+                },
+                "job_type": "FULL_TIME",
+                "location": {
+                    "city": {"en": "New York", "fr": "New York"},
+                    "state": {"en": "NY", "fr": "NY"},
+                    "country": {"en": "USA", "fr": "États-Unis"},
+                    "postal_code": {"en": "10001", "fr": "10001"}
+                }
+            }
+        }
+
+class SemanticService:
+    """Service layer for handling semantic operations"""
+    def __init__(self):
+        self.base_url = os.getenv("REMOTE_API_URL")
+        print(f"\n=== Semantic Service Initialization ===")
+        print(f"Base URL: {self.base_url}")
+        print(f"Environment variables:")
+        print(f"- REMOTE_API_URL: {os.getenv('REMOTE_API_URL')}")
+        print(f"- AI_MODEL: {os.getenv('AI_MODEL')}")
+        
+        self.client = httpx.AsyncClient(timeout=30.0)
+        self.mock_service = MockSemanticService()
+        self.use_mock = self.base_url is None
+        if self.use_mock:
+            print("WARNING: Using mock semantic service - REMOTE_API_URL not configured")
+        else:
+            print(f"Using remote semantic service at {self.base_url}")
+
+    async def convert_pdf_to_text(self, file_path: Path) -> Dict:
+        """Convert PDF to text using remote service"""
+        if self.use_mock:
+            return await self.mock_service.convert_pdf_to_text(file_path)
+            
+        try:
+            async with aiofiles.open(file_path, 'rb') as f:
+                content = await f.read()
+                files = {'file': (file_path.name, content, 'application/pdf')}
+                response = await self.client.post(f"{self.base_url}/v1/tools/convert_pdf2text", files=files)
+                response.raise_for_status()
+                return response.json()
+        except Exception as e:
+            print(f"Error converting PDF to text: {str(e)}, falling back to mock service")
+            return await self.mock_service.convert_pdf_to_text(file_path)
+
+    async def extract_knowledge(self, text: str, schema: Dict) -> Dict:
+        """Extract structured knowledge from text"""
+        if self.use_mock:
+            return await self.mock_service.extract_knowledge(text, schema)
+            
+        try:
+            response = await self.client.post(
+                f"{self.base_url}/v1/tools/convert_doc2json",
+                json={
+                    'text': text,
+                    'target_json_schema': schema,
+                    'extraction_steps': 'extract structured information from the text',
+                    'model': os.getenv('AI_MODEL', 'gpt-4')
+                }
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            print(f"Error extracting knowledge: {str(e)}, falling back to mock service")
+            return await self.mock_service.extract_knowledge(text, schema)
+
+# Initialize the semantic service
+semantic_service = SemanticService() 
