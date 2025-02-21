@@ -250,7 +250,7 @@ class SemanticService:
                 'text': f"cv: {text}\n### job: {job_description}",
                 'target_json_schema': schema,
                 'extraction_steps': 'anlysze the matching of the cv with the job description and provide a score and justification',
-                'model': 'gpt-4'
+                'model': 'gpt-4o-mini'
             }
             print(f"Payload structure: {list(payload.keys())}")
             
