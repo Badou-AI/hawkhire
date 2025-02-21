@@ -243,13 +243,18 @@ async def test_performance_optimizations():
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             
-            # Create test PDFs
+            # Create test PDFs of different sizes
             pdf_files = []
-            for i in range(5):
-                pdf_path = temp_path / f"job_{i}.pdf"
-                with open(pdf_path, 'wb') as f:
-                    f.write(SAMPLE_JOB_PDF)
-                pdf_files.append(pdf_path)
+            sizes = [1, 5, 10]  # Different sizes in MB
+            for size in sizes:
+                for i in range(2):  # 2 files of each size
+                    pdf_path = temp_path / f"job_{size}mb_{i}.pdf"
+                    # Create PDF with specified size
+                    with open(pdf_path, 'wb') as f:
+                        f.write(SAMPLE_JOB_PDF)
+                        # Pad the file to reach desired size
+                        f.write(b'0' * (size * 1024 * 1024))
+                    pdf_files.append(pdf_path)
             
             # Create ZIP file
             zip_path = temp_path / "test.zip"
@@ -261,12 +266,24 @@ async def test_performance_optimizations():
             with open(zip_path, 'rb') as f:
                 zip_content = f.read()
             
-            # Create mock UploadFile
+            # Create mock UploadFile with streaming support
             class MockFile:
+                def __init__(self, content):
+                    self.content = content
+                    self.pos = 0
+                
                 async def read(self):
-                    return zip_content
+                    return self.content
+                
+                async def stream(self):
+                    chunk_size = 8192
+                    while self.pos < len(self.content):
+                        end = min(self.pos + chunk_size, len(self.content))
+                        chunk = self.content[self.pos:end]
+                        self.pos += chunk_size
+                        yield chunk
                     
-            mock_file = MockFile()
+            mock_file = MockFile(zip_content)
             mock_file.filename = "test.zip"
             
             # Initialize processor with optimized settings
@@ -276,7 +293,9 @@ async def test_performance_optimizations():
                 batch_size=2,
                 max_retries=2,
                 retry_delay=0.5,
-                cache_ttl=60
+                cache_ttl=60,
+                max_memory_percent=80.0,
+                chunk_size=8192
             )
             
             # Replace the HTTP client with our mock
@@ -299,7 +318,15 @@ async def test_performance_optimizations():
             first_run_time = time.time() - start_time
             print(f"\nFirst run completed in {first_run_time:.2f}s")
             
+            # Check metrics after first run
+            metrics = processor.metrics
+            print("\nPerformance metrics after first run:")
+            print(f"Memory usage: {metrics['memory_usage']['current']['memory_rss']:.2f}MB")
+            print(f"Average processing time: {metrics['processing_times']['average']:.2f}s")
+            print(f"Average batch size: {metrics['batch_sizes']['average']:.2f}")
+            
             print("\nTesting second run (with cache)...")
+            mock_file.pos = 0  # Reset file position
             start_time = time.time()
             
             # Second run - should use cache
@@ -315,6 +342,13 @@ async def test_performance_optimizations():
             
             second_run_time = time.time() - start_time
             print(f"\nSecond run completed in {second_run_time:.2f}s")
+            
+            # Check metrics after second run
+            metrics = processor.metrics
+            print("\nPerformance metrics after second run:")
+            print(f"Memory usage: {metrics['memory_usage']['current']['memory_rss']:.2f}MB")
+            print(f"Average processing time: {metrics['processing_times']['average']:.2f}s")
+            print(f"Average batch size: {metrics['batch_sizes']['average']:.2f}")
             
             # Verify cache effectiveness
             cache_speedup = first_run_time / second_run_time if second_run_time > 0 else float('inf')
@@ -332,6 +366,12 @@ async def test_performance_optimizations():
             print(f"First run successful files: {first_run_success}")
             print(f"Second run successful files: {second_run_success}")
             assert first_run_success == second_run_success, "Number of successful files should match"
+            
+            # Verify memory optimization
+            memory_samples = metrics['memory_usage']['history']
+            max_memory = max(sample['memory_percent'] for sample in memory_samples)
+            print(f"\nMemory usage stayed under limit: {max_memory:.1f}% < {processor.max_memory_percent:.1f}%")
+            assert max_memory < processor.max_memory_percent, "Memory usage exceeded limit"
             
             print("\nPerformance optimization test completed!")
         
