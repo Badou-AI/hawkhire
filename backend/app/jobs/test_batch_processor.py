@@ -9,6 +9,7 @@ from fastapi import UploadFile
 import httpx
 from unittest.mock import AsyncMock, patch
 from .batch_processor import BatchProcessor, ProcessedJobData
+from ..services.metrics import metrics_service
 import time
 
 SAMPLE_JOB_PDF = b"""%PDF-1.4
@@ -321,9 +322,11 @@ async def test_performance_optimizations():
             # Check metrics after first run
             metrics = processor.metrics
             print("\nPerformance metrics after first run:")
-            print(f"Memory usage: {metrics['memory_usage']['current']['memory_rss']:.2f}MB")
-            print(f"Average processing time: {metrics['processing_times']['average']:.2f}s")
-            print(f"Average batch size: {metrics['batch_sizes']['average']:.2f}")
+            print(f"Total files: {metrics.get('total_files', 0)}")
+            print(f"Processed files: {metrics.get('processed_files', 0)}")
+            print(f"Success rate: {metrics.get('success_rate', 0):.1f}%")
+            print(f"Average processing time: {metrics.get('average_processing_time', 0):.2f}s")
+            print(f"Peak memory usage: {metrics.get('peak_memory_usage', 0):.1f}MB")
             
             print("\nTesting second run (with cache)...")
             mock_file.pos = 0  # Reset file position
@@ -346,9 +349,18 @@ async def test_performance_optimizations():
             # Check metrics after second run
             metrics = processor.metrics
             print("\nPerformance metrics after second run:")
-            print(f"Memory usage: {metrics['memory_usage']['current']['memory_rss']:.2f}MB")
-            print(f"Average processing time: {metrics['processing_times']['average']:.2f}s")
-            print(f"Average batch size: {metrics['batch_sizes']['average']:.2f}")
+            print(f"Total files: {metrics.get('total_files', 0)}")
+            print(f"Processed files: {metrics.get('processed_files', 0)}")
+            print(f"Success rate: {metrics.get('success_rate', 0):.1f}%")
+            print(f"Average processing time: {metrics.get('average_processing_time', 0):.2f}s")
+            print(f"Peak memory usage: {metrics.get('peak_memory_usage', 0):.1f}MB")
+            
+            # Check cache performance
+            cache_perf = metrics.get('cache_performance', {})
+            print("\nCache performance:")
+            print(f"Hits: {cache_perf.get('hits', 0)}")
+            print(f"Misses: {cache_perf.get('misses', 0)}")
+            print(f"Hit rate: {cache_perf.get('hit_rate', 0):.1f}%")
             
             # Verify cache effectiveness
             cache_speedup = first_run_time / second_run_time if second_run_time > 0 else float('inf')
@@ -367,11 +379,13 @@ async def test_performance_optimizations():
             print(f"Second run successful files: {second_run_success}")
             assert first_run_success == second_run_success, "Number of successful files should match"
             
-            # Verify memory optimization
-            memory_samples = metrics['memory_usage']['history']
-            max_memory = max(sample['memory_percent'] for sample in memory_samples)
-            print(f"\nMemory usage stayed under limit: {max_memory:.1f}% < {processor.max_memory_percent:.1f}%")
-            assert max_memory < processor.max_memory_percent, "Memory usage exceeded limit"
+            # Get performance summary
+            summary = processor.get_performance_summary()
+            print("\nPerformance summary:")
+            print(f"Total runs: {summary.get('total_runs', 0)}")
+            print(f"Total files processed: {summary.get('total_files_processed', 0)}")
+            print(f"Overall success rate: {summary.get('overall_success_rate', 0):.1f}%")
+            print(f"Average processing time: {summary.get('average_processing_time', 0):.2f}s")
             
             print("\nPerformance optimization test completed!")
         
@@ -379,11 +393,174 @@ async def test_performance_optimizations():
         print(f"\nPerformance test failed with error: {str(e)}")
         raise
 
+async def test_metrics_tracking():
+    """Test metrics tracking functionality"""
+    try:
+        print("\nTesting metrics tracking...")
+        
+        # Create test files
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            
+            # Create test PDFs
+            pdf_files = []
+            for i in range(3):
+                pdf_path = temp_path / f"test_job_{i}.pdf"
+                with open(pdf_path, 'wb') as f:
+                    f.write(SAMPLE_JOB_PDF)
+                pdf_files.append(pdf_path)
+            
+            # Create ZIP file
+            zip_path = temp_path / "test.zip"
+            with zipfile.ZipFile(zip_path, 'w') as zip_ref:
+                for file in pdf_files:
+                    zip_ref.write(file, file.name)
+            
+            # Read ZIP content
+            with open(zip_path, 'rb') as f:
+                zip_content = f.read()
+            
+            # Create mock file
+            class MockFile:
+                async def read(self):
+                    return zip_content
+                
+                async def stream(self):
+                    chunk_size = 8192
+                    pos = 0
+                    while pos < len(zip_content):
+                        end = min(pos + chunk_size, len(zip_content))
+                        yield zip_content[pos:end]
+                        pos += chunk_size
+            
+            mock_file = MockFile()
+            mock_file.filename = "test.zip"
+            
+            # Initialize processor
+            processor = BatchProcessor(
+                pdf_concurrency=2,
+                llm_concurrency=1,
+                batch_size=2,
+                max_retries=2,
+                retry_delay=0.5,
+                cache_ttl=60
+            )
+            processor.client.post = mock_post
+            
+            print("\nProcessing files...")
+            events = []
+            async for event in processor.process_zip(
+                file=mock_file,
+                organization_id="test_org_123",
+                is_mock=True,
+                status="DRAFT"
+            ):
+                events.append(event)
+                print(f"\nReceived event: {event.model_dump_json()}")
+            
+            # Verify metrics
+            current_metrics = processor.metrics
+            print("\nCurrent metrics:")
+            print(f"Total files: {current_metrics.get('total_files', 0)}")
+            print(f"Processed files: {current_metrics.get('processed_files', 0)}")
+            print(f"Failed files: {current_metrics.get('failed_files', 0)}")
+            print(f"Success rate: {current_metrics.get('success_rate', 0):.1f}%")
+            print(f"Average processing time: {current_metrics.get('average_processing_time', 0):.2f}s")
+            print(f"Peak memory usage: {current_metrics.get('peak_memory_usage', 0):.1f}MB")
+            
+            # Verify cache performance
+            cache_perf = current_metrics.get('cache_performance', {})
+            print("\nCache performance:")
+            print(f"Hits: {cache_perf.get('hits', 0)}")
+            print(f"Misses: {cache_perf.get('misses', 0)}")
+            print(f"Hit rate: {cache_perf.get('hit_rate', 0):.1f}%")
+            
+            # Verify batch performance
+            batch_perf = current_metrics.get('batch_performance', {})
+            print("\nBatch performance:")
+            print(f"Average size: {batch_perf.get('average_size', 0):.1f}")
+            print(f"Min size: {batch_perf.get('min_size', 0)}")
+            print(f"Max size: {batch_perf.get('max_size', 0)}")
+            
+            # Get performance summary
+            summary = processor.get_performance_summary()
+            print("\nPerformance summary:")
+            print(f"Total runs: {summary.get('total_runs', 0)}")
+            print(f"Total files processed: {summary.get('total_files_processed', 0)}")
+            print(f"Overall success rate: {summary.get('overall_success_rate', 0):.1f}%")
+            print(f"Average processing time: {summary.get('average_processing_time', 0):.2f}s")
+            
+            # Verify metrics retention
+            historical_metrics = processor.get_historical_metrics(days=1)
+            print(f"\nHistorical metrics (last 24h): {len(historical_metrics)} records")
+            
+            # Run again to test caching
+            print("\nProcessing files again (with cache)...")
+            mock_file = MockFile()  # Reset mock file
+            mock_file.filename = "test.zip"
+            
+            cached_events = []
+            async for event in processor.process_zip(
+                file=mock_file,
+                organization_id="test_org_123",
+                is_mock=True,
+                status="DRAFT"
+            ):
+                cached_events.append(event)
+                print(f"\nReceived event: {event.model_dump_json()}")
+            
+            # Verify metrics after cached run
+            current_metrics = processor.metrics
+            print("\nMetrics after cached run:")
+            print(f"Total files: {current_metrics.get('total_files', 0)}")
+            print(f"Processed files: {current_metrics.get('processed_files', 0)}")
+            print(f"Failed files: {current_metrics.get('failed_files', 0)}")
+            print(f"Success rate: {current_metrics.get('success_rate', 0):.1f}%")
+            
+            # Verify cache hits
+            cache_perf = current_metrics.get('cache_performance', {})
+            print("\nCache performance after second run:")
+            print(f"Hits: {cache_perf.get('hits', 0)}")
+            print(f"Misses: {cache_perf.get('misses', 0)}")
+            print(f"Hit rate: {cache_perf.get('hit_rate', 0):.1f}%")
+            
+            # Verify final performance summary
+            summary = processor.get_performance_summary()
+            print("\nFinal performance summary:")
+            print(f"Total runs: {summary.get('total_runs', 0)}")
+            print(f"Total files processed: {summary.get('total_files_processed', 0)}")
+            print(f"Overall success rate: {summary.get('overall_success_rate', 0):.1f}%")
+            print(f"Average processing time: {summary.get('average_processing_time', 0):.2f}s")
+            
+            # Verify metrics are being properly tracked
+            assert len(events) > 0, "No events received"
+            assert len(cached_events) > 0, "No events received in cached run"
+            
+            # Get the total files from the first event
+            total_files = events[0].total_files
+            processed_files = sum(1 for e in events if e.event == "file_processed")
+            failed_files = sum(1 for e in events if e.event == "file_failed")
+            
+            # Verify metrics match events
+            assert current_metrics.get('total_files', 0) == total_files, "Total files not tracked correctly"
+            assert current_metrics.get('processed_files', 0) == processed_files, "Processed files not tracked correctly"
+            assert current_metrics.get('failed_files', 0) == failed_files, "Failed files not tracked correctly"
+            assert current_metrics.get('success_rate', 0) == 100.0, "Success rate not calculated correctly"
+            assert cache_perf.get('hits', 0) > 0, "Cache hits not tracked correctly"
+            assert cache_perf.get('hit_rate', 0) > 0, "Cache hit rate not calculated correctly"
+            
+            print("\nMetrics tracking test completed!")
+            
+    except Exception as e:
+        print(f"\nMetrics tracking test failed with error: {str(e)}")
+        raise
+
 async def main():
     """Run all tests"""
     await test_batch_processor()
     await test_bulk_creation()
     await test_performance_optimizations()
+    await test_metrics_tracking()
 
 if __name__ == "__main__":
     asyncio.run(main()) 

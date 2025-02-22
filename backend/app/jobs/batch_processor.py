@@ -17,6 +17,13 @@ from uuid import UUID
 from functools import lru_cache
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+import logging
+from ..services.metrics import metrics_service
+from ..services.semantic import semantic_service
+
+# Configure logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 @dataclass
 class CacheEntry:
@@ -81,14 +88,33 @@ class BatchProcessor:
         self.chunk_size = chunk_size
         self._progress: Dict[str, Any] = {}
         self._cache: Dict[str, CacheEntry] = {}
-        self._metrics: Dict[str, Any] = {
-            'memory_usage': [],
-            'processing_times': [],
-            'batch_sizes': [],
-            'concurrent_tasks': 0
-        }
-        self.client = httpx.AsyncClient(
+        
+        # Use the existing semantic service
+        self.semantic_service = semantic_service
+        logger.debug(f"Using semantic service with base URL: {self.semantic_service.base_url}")
+        
+        # Configure HTTP clients
+        remote_url = os.getenv("REMOTE_API_URL")
+        if not remote_url:
+            raise ValueError("REMOTE_API_URL environment variable is not set")
+        
+        # Client for remote services (PDF conversion, data extraction)
+        logger.debug(f"Initializing remote client with API URL: {remote_url}")
+        self.remote_client = httpx.AsyncClient(
             timeout=30.0,
+            base_url=remote_url,
+            limits=httpx.Limits(
+                max_keepalive_connections=20,
+                max_connections=100
+            )
+        )
+        
+        # Client for local endpoints (job creation)
+        local_url = f"http://{os.getenv('HOST', 'localhost')}:{os.getenv('PORT', '8080')}"
+        logger.debug(f"Initializing local client with API URL: {local_url}")
+        self.local_client = httpx.AsyncClient(
+            timeout=30.0,
+            base_url=local_url,
             limits=httpx.Limits(
                 max_keepalive_connections=20,
                 max_connections=100
@@ -107,10 +133,7 @@ class BatchProcessor:
 
     def _update_metrics(self, metric_type: str, value: Any):
         """Update performance metrics"""
-        if metric_type == 'memory_usage':
-            self._metrics['memory_usage'].append(self._get_system_metrics())
-        elif metric_type in self._metrics:
-            self._metrics[metric_type].append(value)
+        metrics_service.update_metrics(metric_type, value)
 
     def _adjust_batch_size(self, file_size: int) -> int:
         """Dynamically adjust batch size based on file size and system resources"""
@@ -144,25 +167,102 @@ class BatchProcessor:
         """
         Process a ZIP file containing job descriptions with optimized parallel execution.
         """
+        logger.debug(f"Starting ZIP processing: file={file.filename}, org={organization_id}, mock={is_mock}, status={status}")
+        
         # Create temporary directory for processing
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
+            logger.debug(f"Created temp directory: {temp_dir}")
             
             try:
                 # Save and extract ZIP using streaming
                 zip_path = temp_path / "upload.zip"
-                async with aiofiles.open(zip_path, 'wb') as f:
-                    async for chunk in file.stream():
-                        await f.write(chunk)
-                        self._update_metrics('memory_usage', None)
+                logger.debug(f"Saving ZIP file to: {zip_path}")
+                try:
+                    # Read the entire file content first
+                    file_content = await file.read()
+                    if not file_content:
+                        raise ValueError("Empty file received")
+                    
+                    logger.debug(f"Read {len(file_content)} bytes from upload")
+                    
+                    # Write to disk
+                    async with aiofiles.open(zip_path, 'wb') as f:
+                        await f.write(file_content)
+                    
+                    logger.debug("ZIP file saved successfully")
+                    
+                    # Verify the file exists and has content
+                    if not zip_path.exists():
+                        raise FileNotFoundError("ZIP file was not saved correctly")
+                    
+                    file_size = zip_path.stat().st_size
+                    logger.debug(f"Saved ZIP file size: {file_size} bytes")
+                    
+                    if file_size == 0:
+                        raise ValueError("Saved ZIP file is empty")
+                        
+                except Exception as e:
+                    logger.error(f"Error saving ZIP file: {str(e)}", exc_info=True)
+                    raise ValueError(f"Failed to save ZIP file: {str(e)}")
 
                 # Extract files
-                with zipfile.ZipFile(zip_path) as zip_ref:
-                    zip_ref.extractall(temp_path / "extracted")
+                logger.debug("Starting ZIP extraction")
+                try:
+                    with zipfile.ZipFile(zip_path) as zip_ref:
+                        # Log ZIP contents before extraction
+                        file_list = zip_ref.namelist()
+                        logger.debug(f"ZIP contents: {file_list}")
+                        
+                        # Create extraction directory
+                        extract_path = temp_path / "extracted"
+                        extract_path.mkdir(exist_ok=True)
+                        logger.debug(f"Extracting to: {extract_path}")
+                        
+                        # Extract with detailed error handling
+                        try:
+                            zip_ref.extractall(extract_path)
+                            logger.debug("ZIP extraction completed successfully")
+                        except Exception as extract_error:
+                            logger.error(f"Error during ZIP extraction: {str(extract_error)}", exc_info=True)
+                            raise
+                        
+                        # Verify extraction
+                        extracted_files = list(extract_path.rglob("*"))
+                        logger.debug(f"Extracted files: {[f.name for f in extracted_files]}")
+                except zipfile.BadZipFile as zip_error:
+                    logger.error(f"Invalid ZIP file: {str(zip_error)}", exc_info=True)
+                    raise
+                except Exception as e:
+                    logger.error(f"ZIP handling error: {str(e)}", exc_info=True)
+                    raise
+                logger.debug("ZIP file extracted successfully")
                 
-                # Get list of PDF files
-                pdf_files = list(Path(temp_path / "extracted").rglob("*.pdf"))
-                total_files = len(pdf_files)
+                # Get list of PDF files with detailed error handling
+                try:
+                    pdf_files = list(Path(temp_path / "extracted").rglob("*.pdf"))
+                    logger.debug(f"PDF files found: {[f.name for f in pdf_files]}")
+                    total_files = len(pdf_files)
+                    logger.debug(f"Found {total_files} PDF files")
+                    
+                    # Verify PDF files are readable
+                    for pdf_file in pdf_files:
+                        try:
+                            if not pdf_file.is_file():
+                                logger.error(f"PDF file not accessible: {pdf_file}")
+                            else:
+                                size = pdf_file.stat().st_size
+                                logger.debug(f"PDF file: {pdf_file.name}, size: {size} bytes")
+                        except Exception as pdf_error:
+                            logger.error(f"Error checking PDF file {pdf_file}: {str(pdf_error)}", exc_info=True)
+                except Exception as e:
+                    logger.error(f"Error discovering PDF files: {str(e)}", exc_info=True)
+                    raise
+
+                # Start metrics tracking
+                metrics_service.start_processing(total_files)
+                self._update_metrics('total_files', total_files)
+                logger.debug("Started metrics tracking")
 
                 # Send initial event
                 yield JobProcessingEvent(
@@ -180,6 +280,7 @@ class BatchProcessor:
                         failed_count=0,
                         error="No PDF files found in ZIP"
                     )
+                    metrics_service.end_processing()
                     return
 
                 # Process files in optimized batches
@@ -201,30 +302,38 @@ class BatchProcessor:
                 
                 for size_group, group_files in files_by_size.items():
                     batch_size = self._adjust_batch_size(size_group * 1024 * 1024)
-                    self._update_metrics('batch_sizes', batch_size)
+                    self._update_metrics('batch_size', batch_size)
+                    logger.debug(f"Processing size group {size_group}MB with batch size {batch_size}")
                     
                     group_batches = (len(group_files) + batch_size - 1) // batch_size
                     total_batches += group_batches
+                    logger.debug(f"Group will be processed in {group_batches} batches")
                     
                     for batch_idx in range(group_batches):
                         start_idx = batch_idx * batch_size
                         end_idx = min(start_idx + batch_size, len(group_files))
                         batch_files = group_files[start_idx:end_idx]
                         current_batch += 1
+                        logger.debug(f"Processing batch {current_batch}/{total_batches} with {len(batch_files)} files")
 
                         try:
                             # Process batch with parallel execution
+                            logger.debug("Starting parallel processing of batch")
                             results = await self._process_files_in_parallel(
                                 files=batch_files,
                                 organization_id=organization_id,
                                 is_mock=is_mock,
                                 status=status
                             )
+                            logger.debug(f"Batch processing completed with {len(results)} results")
 
                             # Update counts and yield events
                             for result in results:
                                 if result.validation_errors:
                                     failed_count += 1
+                                    self._update_metrics('failed_file', None)
+                                    self._update_metrics('error', result.validation_errors[0])
+                                    logger.debug(f"File failed: {result.original_file} - {result.validation_errors}")
                                     yield JobProcessingEvent(
                                         event="file_failed",
                                         total_files=total_files,
@@ -237,6 +346,8 @@ class BatchProcessor:
                                     )
                                 else:
                                     processed_count += 1
+                                    self._update_metrics('processed_file', None)
+                                    logger.debug(f"File processed successfully: {result.original_file}")
                                     yield JobProcessingEvent(
                                         event="file_processed",
                                         total_files=total_files,
@@ -250,6 +361,9 @@ class BatchProcessor:
                         except Exception as e:
                             # Handle batch processing error
                             failed_count += len(batch_files)
+                            self._update_metrics('error', str(e))
+                            for _ in range(len(batch_files)):
+                                self._update_metrics('failed_file', None)
                             yield JobProcessingEvent(
                                 event="file_failed",
                                 total_files=total_files,
@@ -273,6 +387,7 @@ class BatchProcessor:
 
             except Exception as e:
                 # Handle overall processing error
+                self._update_metrics('error', str(e))
                 yield JobProcessingEvent(
                     event="completed",
                     total_files=total_files if 'total_files' in locals() else 0,
@@ -282,8 +397,9 @@ class BatchProcessor:
                 )
             finally:
                 # Cleanup and final metrics
-                await self.client.aclose()
-                self._update_metrics('memory_usage', None)
+                await self.remote_client.aclose()
+                await self.local_client.aclose()
+                metrics_service.end_processing()
 
     async def _process_file(
         self,
@@ -300,27 +416,31 @@ class BatchProcessor:
         cache_key = f"file:{file.name}:{organization_id}"
         cached_result = self._get_cache(cache_key)
         if cached_result:
+            self._update_metrics('cache_hit', None)
+            self._update_metrics('processing_time', time.time() - start_time)
             return cached_result
 
-        # Track concurrent tasks
-        self._metrics['concurrent_tasks'] += 1
+        self._update_metrics('cache_miss', None)
+
         try:
             for attempt in range(self.max_retries):
                 try:
                     async with self.pdf_semaphore:
-                        # Convert PDF to text using existing endpoint and streaming
-                        files = {'file': (file.name, await self._stream_to_bytes(file), 'application/pdf')}
-                        response = await self.client.post("/v1/jobs/convert-pdf", files=files)
-                        response.raise_for_status()
-                        text_result = response.json()
-                        text_content = text_result.get('text', '')
+                        # First convert PDF to text using the existing endpoint
+                        async with aiofiles.open(file, 'rb') as f:
+                            content = await f.read()
+                            files = {'file': (file.name, content, 'application/pdf')}
+                            response = await self.remote_client.post("/v1/jobs/convert-pdf", files=files)
+                            response.raise_for_status()
+                            text_result = response.json()
+                            text_content = text_result.get('text', '')
 
                         if not text_content or len(text_content.strip()) < 50:
                             raise ValueError("Extracted text is too short or empty")
 
                     async with self.llm_semaphore:
-                        # Extract job data using existing endpoint
-                        response = await self.client.post(
+                        # Extract job data using the existing endpoint
+                        response = await self.remote_client.post(
                             "/v1/jobs/extract-data",
                             json={
                                 'text': text_content,
@@ -328,10 +448,10 @@ class BatchProcessor:
                             }
                         )
                         response.raise_for_status()
-                        job_data = response.json()
+                        extracted_data = response.json()
 
                         # Add additional fields
-                        job_data.update({
+                        extracted_data.update({
                             "organization_id": organization_id,
                             "is_mock": is_mock,
                             "status": status
@@ -339,12 +459,13 @@ class BatchProcessor:
 
                         result = ProcessedJobData(
                             original_file=file.name,
-                            extracted_data=job_data,
+                            extracted_data=extracted_data,
                             processing_time=time.time() - start_time
                         )
 
                         # Cache successful result
                         self._set_cache(cache_key, result)
+                        self._update_metrics('processing_time', time.time() - start_time)
                         return result
 
                 except Exception as e:
@@ -361,8 +482,8 @@ class BatchProcessor:
             )
         finally:
             # Update metrics
-            self._metrics['concurrent_tasks'] -= 1
-            self._metrics['processing_times'].append(time.time() - start_time)
+            processing_time = time.time() - start_time
+            self._update_metrics('processing_time', processing_time)
             self._update_metrics('memory_usage', None)
 
     async def _stream_to_bytes(self, file: Path) -> bytes:
@@ -376,22 +497,15 @@ class BatchProcessor:
     @property
     def metrics(self) -> Dict[str, Any]:
         """Get current performance metrics"""
-        return {
-            'memory_usage': {
-                'current': self._get_system_metrics(),
-                'history': self._metrics['memory_usage'][-10:]  # Last 10 measurements
-            },
-            'processing_times': {
-                'average': sum(self._metrics['processing_times']) / len(self._metrics['processing_times']) if self._metrics['processing_times'] else 0,
-                'min': min(self._metrics['processing_times']) if self._metrics['processing_times'] else 0,
-                'max': max(self._metrics['processing_times']) if self._metrics['processing_times'] else 0
-            },
-            'batch_sizes': {
-                'average': sum(self._metrics['batch_sizes']) / len(self._metrics['batch_sizes']) if self._metrics['batch_sizes'] else 0,
-                'current': self.batch_size
-            },
-            'concurrent_tasks': self._metrics['concurrent_tasks']
-        }
+        return metrics_service.current_metrics or {}
+
+    def get_historical_metrics(self, days: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Get historical metrics for specified period"""
+        return metrics_service.get_historical_metrics(days=days)
+
+    def get_performance_summary(self) -> Dict[str, Any]:
+        """Get summary of processing performance"""
+        return metrics_service.get_performance_summary()
 
     def _get_cache(self, key: str) -> Optional[Any]:
         """Get value from cache if not expired"""
@@ -540,22 +654,21 @@ class BatchProcessor:
 
             if valid_jobs:
                 try:
-                    # Create jobs in a single transaction
-                    response = await self.client.post(
+                    # Create jobs in bulk using the existing endpoint
+                    response = await self.local_client.post(
                         "/v1/jobs/bulk",
                         json=valid_jobs
                     )
                     response.raise_for_status()
-                    
-                    # Add successful jobs
                     created_jobs = response.json()
                     successful_jobs.extend(created_jobs)
                     
                 except Exception as e:
+                    logger.error(f"Error during bulk job creation: {str(e)}", exc_info=True)
                     # If bulk creation fails, try individual creation
                     for job_data in valid_jobs:
                         try:
-                            response = await self.client.post(
+                            response = await self.local_client.post(
                                 "/v1/jobs",
                                 json=job_data
                             )
@@ -579,4 +692,13 @@ class BatchProcessor:
                 "successful": len(successful_jobs),
                 "failed": len(failed_jobs)
             }
-        ) 
+        )
+
+    async def __aenter__(self):
+        """Async context manager entry"""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit"""
+        await self.remote_client.aclose()
+        await self.local_client.aclose() 

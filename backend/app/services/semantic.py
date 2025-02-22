@@ -8,9 +8,12 @@ import traceback
 import aiofiles
 from typing import Dict, List
 from dotenv import load_dotenv
+import logging
 
 # Load environment variables
 load_dotenv(Path(__file__).parent.parent.parent / '.env')
+
+logger = logging.getLogger(__name__)
 
 class MockSemanticService:
     """Mock service for local development and testing"""
@@ -54,7 +57,10 @@ class SemanticService:
         print(f"- REMOTE_API_URL: {os.getenv('REMOTE_API_URL')}")
         print(f"- AI_MODEL: {os.getenv('AI_MODEL')}")
         
-        self.client = httpx.AsyncClient(timeout=30.0)
+        self.client = httpx.AsyncClient(
+            timeout=30.0,
+            base_url=self.base_url if self.base_url else "http://localhost:8000"
+        )
         self.mock_service = MockSemanticService()
         self.use_mock = self.base_url is None
         if self.use_mock:
@@ -64,28 +70,37 @@ class SemanticService:
 
     async def convert_pdf_to_text(self, file_path: Path) -> Dict:
         """Convert PDF to text using remote service"""
+        logger.debug(f"Converting PDF to text: {file_path}")
         if self.use_mock:
+            logger.debug("Using mock service for PDF conversion")
             return await self.mock_service.convert_pdf_to_text(file_path)
             
         try:
+            logger.debug(f"Sending PDF to remote service: {self.base_url}/v1/tools/convert_pdf2text")
             async with aiofiles.open(file_path, 'rb') as f:
                 content = await f.read()
                 files = {'file': (file_path.name, content, 'application/pdf')}
-                response = await self.client.post(f"{self.base_url}/v1/tools/convert_pdf2text", files=files)
+                response = await self.client.post("/v1/tools/convert_pdf2text", files=files)
                 response.raise_for_status()
-                return response.json()
+                result = response.json()
+                logger.debug(f"PDF conversion successful: {len(result.get('text', ''))} characters extracted")
+                return result
         except Exception as e:
-            print(f"Error converting PDF to text: {str(e)}, falling back to mock service")
+            logger.error(f"Error converting PDF to text: {str(e)}", exc_info=True)
+            logger.debug("Falling back to mock service")
             return await self.mock_service.convert_pdf_to_text(file_path)
 
     async def extract_knowledge(self, text: str, schema: Dict) -> Dict:
         """Extract structured knowledge from text"""
+        logger.debug("Extracting knowledge from text")
         if self.use_mock:
+            logger.debug("Using mock service for knowledge extraction")
             return await self.mock_service.extract_knowledge(text, schema)
             
         try:
+            logger.debug(f"Sending text to remote service: {self.base_url}/v1/tools/convert_doc2json")
             response = await self.client.post(
-                f"{self.base_url}/v1/tools/convert_doc2json",
+                "/v1/tools/convert_doc2json",
                 json={
                     'text': text,
                     'target_json_schema': schema,
@@ -94,9 +109,12 @@ class SemanticService:
                 }
             )
             response.raise_for_status()
-            return response.json()
+            result = response.json()
+            logger.debug("Knowledge extraction successful")
+            return result
         except Exception as e:
-            print(f"Error extracting knowledge: {str(e)}, falling back to mock service")
+            logger.error(f"Error extracting knowledge: {str(e)}", exc_info=True)
+            logger.debug("Falling back to mock service")
             return await self.mock_service.extract_knowledge(text, schema)
 
 # Initialize the semantic service

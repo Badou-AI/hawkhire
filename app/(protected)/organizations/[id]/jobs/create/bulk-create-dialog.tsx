@@ -73,8 +73,8 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
       setProcessingStatus('uploading')
       const formData = new FormData()
       formData.append('file', file)
-      formData.append('organizationId', organizationId)
-      formData.append('isMock', String(isMock))
+      formData.append('organization_id', organizationId)
+      formData.append('is_mock', String(isMock))
       formData.append('status', isPublished ? 'PUBLISHED' : 'DRAFT')
 
       const response = await fetch("/api/jobs/process-zip", {
