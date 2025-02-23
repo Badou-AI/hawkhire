@@ -21,6 +21,7 @@ import logging
 from ..services.metrics import metrics_service
 from ..services.semantic import semantic_service
 
+
 # Configure logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -101,24 +102,38 @@ class BatchProcessor:
         # Client for remote services (PDF conversion, data extraction)
         logger.debug(f"Initializing remote client with API URL: {remote_url}")
         self.remote_client = httpx.AsyncClient(
-            timeout=30.0,
+            timeout=httpx.Timeout(
+                connect=30.0,  # Connection timeout
+                read=30.0,     # Read timeout
+                write=30.0,    # Write timeout
+                pool=30.0      # Pool timeout
+            ),
             base_url=remote_url,
             limits=httpx.Limits(
                 max_keepalive_connections=20,
-                max_connections=100
-            )
+                max_connections=100,
+                keepalive_expiry=30.0
+            ),
+            http2=True  # Enable HTTP/2 for better performance
         )
         
         # Client for local endpoints (job creation)
-        local_url = f"http://{os.getenv('HOST', 'localhost')}:{os.getenv('PORT', '8080')}"
+        local_url = f"http://{os.getenv('HOST', '127.0.0.1')}:{os.getenv('PORT', '8080')}"
         logger.debug(f"Initializing local client with API URL: {local_url}")
         self.local_client = httpx.AsyncClient(
-            timeout=30.0,
+            timeout=httpx.Timeout(
+                connect=30.0,
+                read=30.0,
+                write=30.0,
+                pool=30.0
+            ),
             base_url=local_url,
             limits=httpx.Limits(
                 max_keepalive_connections=20,
-                max_connections=100
-            )
+                max_connections=100,
+                keepalive_expiry=30.0
+            ),
+            http2=True
         )
 
     def _get_system_metrics(self) -> Dict[str, float]:
@@ -326,7 +341,12 @@ class BatchProcessor:
                                 status=status
                             )
                             logger.debug(f"Batch processing completed with {len(results)} results")
-
+                            
+                            # Add this: Create jobs from the processed results
+                            if results:
+                                creation_result = await self.create_jobs_bulk(results)
+                                logger.debug(f"Bulk job creation result: {creation_result}")
+                            
                             # Update counts and yield events
                             for result in results:
                                 if result.validation_errors:
@@ -430,17 +450,21 @@ class BatchProcessor:
                         async with aiofiles.open(file, 'rb') as f:
                             content = await f.read()
                             files = {'file': (file.name, content, 'application/pdf')}
-                            response = await self.remote_client.post("/v1/jobs/convert-pdf", files=files)
+                            response = await self.remote_client.post("/v1/tools/convert_pdf2text", files=files)
+                            #response = await self.semantic_service.convert_pdf_to_text(file)    
                             response.raise_for_status()
+                            
                             text_result = response.json()
-                            text_content = text_result.get('text', '')
+                            #logger.debug(f"Extract Text Response: {text_result}")
+                            # Add breakpoint for debugging text extraction
+                            text_content = "\n".join(text_result.get('pages', []))
+                            logger.debug(f"Extract Text Response: {text_content}")
 
                         if not text_content or len(text_content.strip()) < 50:
                             raise ValueError("Extracted text is too short or empty")
 
                     async with self.llm_semaphore:
-                        # Extract job data using the existing endpoint
-                        response = await self.remote_client.post(
+                        response = await self.local_client.post(
                             "/v1/jobs/extract-data",
                             json={
                                 'text': text_content,
@@ -448,7 +472,12 @@ class BatchProcessor:
                             }
                         )
                         response.raise_for_status()
+                        logger.debug(f"Extract Job Data Response: {response}")
                         extracted_data = response.json()
+
+                        # Fix: Remove 'data' wrapper if it exists
+                        if isinstance(extracted_data, dict) and 'data' in extracted_data:
+                            extracted_data = extracted_data['data']
 
                         # Add additional fields
                         extracted_data.update({
@@ -456,6 +485,12 @@ class BatchProcessor:
                             "is_mock": is_mock,
                             "status": status
                         })
+
+                        # Debug log the extracted data structure
+                        logger.debug(f"Final extracted data structure for {file.name}:")
+                        logger.debug(f"Keys at root level: {list(extracted_data.keys())}")
+                        for key, value in extracted_data.items():
+                            logger.debug(f"  {key}: {type(value)}")
 
                         result = ProcessedJobData(
                             original_file=file.name,
@@ -577,41 +612,55 @@ class BatchProcessor:
     async def _validate_job_data(self, job_data: Dict[str, Any]) -> Tuple[bool, List[str]]:
         """Validate job data against schema"""
         errors = []
-        required_fields = {
-            "title": {"en", "fr"},
-            "description": {"en", "fr"},
-            "job_type": {"FULL_TIME", "PART_TIME", "CONTRACT", "FREELANCE", "INTERNSHIP", "VOLUNTEER"},
-            "location": {
-                "city": {"en", "fr"},
-                "state": {"en", "fr"},
-                "country": {"en", "fr"},
-                "postal_code": {"en", "fr"}
-            }
-        }
+        
+        # Validate job type
+        valid_job_types = [
+            "FULL_TIME", "PART_TIME", "CONTRACT", "FREELANCE", 
+            "INTERNSHIP", "VOLUNTEER", "TO_BE_DETERMINED"
+        ]
+        
+        if "job_type" not in job_data:
+            errors.append("Missing job_type")
+        elif job_data["job_type"] not in valid_job_types:
+            errors.append(f"Invalid job type: {job_data['job_type']}")
 
-        # Check required fields
-        for field, subfields in required_fields.items():
+        # Validate required fields
+        required_fields = ["title", "description", "location", "requirements"]
+        for field in required_fields:
             if field not in job_data:
-                errors.append(f"Missing required field: {field}")
+                errors.append(f"Missing {field}")
                 continue
 
-            if field in ["title", "description"]:
-                for lang in subfields:
+        # Validate translations
+        langs = ["en", "fr"]
+        for field in ["title", "description"]:
+            if field in job_data:
+                for lang in langs:
                     if lang not in job_data[field] or not job_data[field][lang]:
                         errors.append(f"Missing {lang} translation for {field}")
 
-            elif field == "job_type":
-                if job_data[field] not in subfields:
-                    errors.append(f"Invalid job type: {job_data[field]}")
+        # Validate location fields
+        if "location" in job_data:
+            required_loc_fields = ["city", "country"]  # Remove state from default required fields
+            
+            # Check if state is required (only for US)
+            is_us = False
+            if "country" in job_data["location"]:
+                country_en = job_data["location"]["country"].get("en", "").lower()
+                country_fr = job_data["location"]["country"].get("fr", "").lower()
+                is_us = "usa" in country_en or "united states" in country_en or "états-unis" in country_fr
 
-            elif field == "location":
-                for loc_field, langs in subfields.items():
-                    if loc_field not in job_data[field]:
-                        errors.append(f"Missing location field: {loc_field}")
-                        continue
-                    for lang in langs:
-                        if lang not in job_data[field][loc_field] or not job_data[field][loc_field][lang]:
-                            errors.append(f"Missing {lang} translation for location.{loc_field}")
+            if is_us:
+                required_loc_fields.append("state")
+
+            for loc_field in required_loc_fields:
+                if loc_field not in job_data["location"]:
+                    errors.append(f"Missing location.{loc_field}")
+                    continue
+
+                for lang in langs:
+                    if lang not in job_data["location"][loc_field] or not job_data["location"][loc_field][lang]:
+                        errors.append(f"Missing {lang} translation for location.{loc_field}")
 
         # Validate organization_id
         try:
