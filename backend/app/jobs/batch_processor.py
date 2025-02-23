@@ -342,20 +342,12 @@ class BatchProcessor:
                             )
                             logger.debug(f"Batch processing completed with {len(results)} results")
                             
-                            # Add this: Create jobs from the processed results
-                            if results:
-                                creation_result = await self.create_jobs_bulk(results)
-                                logger.debug(f"Bulk job creation result: {creation_result}")
-                            
-                            # Update counts and yield events
+                            # Add processing status events for each file
                             for result in results:
                                 if result.validation_errors:
                                     failed_count += 1
-                                    self._update_metrics('failed_file', None)
-                                    self._update_metrics('error', result.validation_errors[0])
-                                    logger.debug(f"File failed: {result.original_file} - {result.validation_errors}")
                                     yield JobProcessingEvent(
-                                        event="file_failed",
+                                        event="file_processing_failed",
                                         total_files=total_files,
                                         processed_count=processed_count,
                                         failed_count=failed_count,
@@ -365,11 +357,8 @@ class BatchProcessor:
                                         batch_total=total_batches
                                     )
                                 else:
-                                    processed_count += 1
-                                    self._update_metrics('processed_file', None)
-                                    logger.debug(f"File processed successfully: {result.original_file}")
                                     yield JobProcessingEvent(
-                                        event="file_processed",
+                                        event="file_processing_complete",
                                         total_files=total_files,
                                         processed_count=processed_count,
                                         failed_count=failed_count,
@@ -377,6 +366,50 @@ class BatchProcessor:
                                         batch_number=current_batch,
                                         batch_total=total_batches
                                     )
+
+                            # Then proceed with bulk creation
+                            if results:
+                                creation_result = await self.create_jobs_bulk(results)
+                                logger.debug(f"Bulk job creation result: {creation_result}")
+                            
+                            # Update counts based on actual creation results
+                            for job in creation_result.successful_jobs:
+                                processed_count += 1
+                                yield JobProcessingEvent(
+                                    event="job_created",
+                                    total_files=total_files,
+                                    processed_count=processed_count,
+                                    failed_count=failed_count,
+                                    file_name=job.get("original_file", "unknown"),
+                                    batch_number=current_batch,
+                                    batch_total=total_batches,
+                                    status="success"
+                                )
+                            
+                            for failed_job in creation_result.failed_jobs:
+                                failed_count += 1
+                                yield JobProcessingEvent(
+                                    event="job_creation_failed",
+                                    total_files=total_files,
+                                    processed_count=processed_count,
+                                    failed_count=failed_count,
+                                    file_name=failed_job.get("file", "unknown"),
+                                    error=str(failed_job.get("errors", [])),
+                                    batch_number=current_batch,
+                                    batch_total=total_batches,
+                                    status="error"
+                                )
+
+                            # Send a batch completion event
+                            yield JobProcessingEvent(
+                                event="batch_completed",
+                                total_files=total_files,
+                                processed_count=processed_count,
+                                failed_count=failed_count,
+                                batch_number=current_batch,
+                                batch_total=total_batches,
+                                stats=creation_result.stats
+                            )
 
                         except Exception as e:
                             # Handle batch processing error
@@ -431,38 +464,37 @@ class BatchProcessor:
         """Process a single file with proper error handling and retries"""
         start_time = time.time()
         errors = []
+        last_error = None
 
-        # Check cache for previously processed file
+        # Check cache
         cache_key = f"file:{file.name}:{organization_id}"
         cached_result = self._get_cache(cache_key)
         if cached_result:
-            self._update_metrics('cache_hit', None)
-            self._update_metrics('processing_time', time.time() - start_time)
             return cached_result
-
-        self._update_metrics('cache_miss', None)
 
         try:
             for attempt in range(self.max_retries):
                 try:
                     async with self.pdf_semaphore:
-                        # First convert PDF to text using the existing endpoint
+                        # First convert PDF to text
                         async with aiofiles.open(file, 'rb') as f:
                             content = await f.read()
                             files = {'file': (file.name, content, 'application/pdf')}
-                            response = await self.remote_client.post("/v1/tools/convert_pdf2text", files=files)
-                            #response = await self.semantic_service.convert_pdf_to_text(file)    
-                            response.raise_for_status()
                             
-                            text_result = response.json()
-                            #logger.debug(f"Extract Text Response: {text_result}")
-                            # Add breakpoint for debugging text extraction
-                            text_content = "\n".join(text_result.get('pages', []))
-                            logger.debug(f"Extract Text Response: {text_content}")
+                            # Add timeout to prevent hanging
+                            async with asyncio.timeout(30):  # 30 second timeout
+                                response = await self.remote_client.post(
+                                    "/v1/tools/convert_pdf2text", 
+                                    files=files
+                                )
+                                response.raise_for_status()
+                                text_result = response.json()
+                                text_content = "\n".join(text_result.get('pages', []))
 
                         if not text_content or len(text_content.strip()) < 50:
                             raise ValueError("Extracted text is too short or empty")
 
+                    # If we get here, text extraction succeeded - proceed with data extraction
                     async with self.llm_semaphore:
                         response = await self.local_client.post(
                             "/v1/jobs/extract-data",
@@ -472,54 +504,48 @@ class BatchProcessor:
                             }
                         )
                         response.raise_for_status()
-                        logger.debug(f"Extract Job Data Response: {response}")
                         extracted_data = response.json()
 
-                        # Fix: Remove 'data' wrapper if it exists
-                        if isinstance(extracted_data, dict) and 'data' in extracted_data:
-                            extracted_data = extracted_data['data']
-
-                        # Add additional fields
-                        extracted_data.update({
-                            "organization_id": organization_id,
-                            "is_mock": is_mock,
-                            "status": status
-                        })
-
-                        # Debug log the extracted data structure
-                        logger.debug(f"Final extracted data structure for {file.name}:")
-                        logger.debug(f"Keys at root level: {list(extracted_data.keys())}")
-                        for key, value in extracted_data.items():
-                            logger.debug(f"  {key}: {type(value)}")
-
-                        result = ProcessedJobData(
-                            original_file=file.name,
-                            extracted_data=extracted_data,
-                            processing_time=time.time() - start_time
-                        )
-
-                        # Cache successful result
-                        self._set_cache(cache_key, result)
-                        self._update_metrics('processing_time', time.time() - start_time)
-                        return result
+                    # If we get here, both steps succeeded - break the retry loop
+                    break
 
                 except Exception as e:
-                    errors.append(f"Attempt {attempt + 1}: {str(e)}")
+                    last_error = str(e)
+                    errors.append(f"Attempt {attempt + 1}: {last_error}")
                     if attempt < self.max_retries - 1:
                         await asyncio.sleep(self.retry_delay * (attempt + 1))
                     continue
 
+            else:  # No break occurred - all retries failed
+                raise Exception(f"All retries failed. Last error: {last_error}")
+
+            # Process successful result
+            if isinstance(extracted_data, dict) and 'data' in extracted_data:
+                extracted_data = extracted_data['data']
+
+            extracted_data.update({
+                "organization_id": organization_id,
+                "is_mock": is_mock,
+                "status": status
+            })
+
+            result = ProcessedJobData(
+                original_file=file.name,
+                extracted_data=extracted_data,
+                processing_time=time.time() - start_time
+            )
+
+            self._set_cache(cache_key, result)
+            return result
+
+        except Exception as e:
+            logger.error(f"Failed to process file {file.name}: {str(e)}", exc_info=True)
             return ProcessedJobData(
                 original_file=file.name,
                 extracted_data={},
-                validation_errors=errors,
+                validation_errors=errors or [str(e)],
                 processing_time=time.time() - start_time
             )
-        finally:
-            # Update metrics
-            processing_time = time.time() - start_time
-            self._update_metrics('processing_time', processing_time)
-            self._update_metrics('memory_usage', None)
 
     async def _stream_to_bytes(self, file: Path) -> bytes:
         """Convert file stream to bytes with memory monitoring"""
