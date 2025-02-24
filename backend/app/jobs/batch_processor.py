@@ -107,44 +107,21 @@ class BatchProcessor:
         
         # Configure HTTP clients
         remote_url = os.getenv("REMOTE_API_URL")
+        local_url = os.getenv("LOCAL_API_URL", "http://localhost:8080")
+        
         if not remote_url:
             raise ValueError("REMOTE_API_URL environment variable is not set")
         
-        # Client for remote services (PDF conversion, data extraction)
-        logger.debug(f"Initializing remote client with API URL: {remote_url}")
+        # Client for remote services (PDF conversion)
         self.remote_client = httpx.AsyncClient(
-            timeout=httpx.Timeout(
-                connect=30.0,  # Connection timeout
-                read=30.0,     # Read timeout
-                write=30.0,    # Write timeout
-                pool=30.0      # Pool timeout
-            ),
             base_url=remote_url,
-            limits=httpx.Limits(
-                max_keepalive_connections=20,
-                max_connections=100,
-                keepalive_expiry=30.0
-            ),
-            http2=True  # Enable HTTP/2 for better performance
+            timeout=30.0
         )
         
-        # Client for local endpoints (job creation)
-        local_url = f"http://{os.getenv('HOST', '127.0.0.1')}:{os.getenv('PORT', '8080')}"
-        logger.debug(f"Initializing local client with API URL: {local_url}")
+        # Client for local services (job data extraction)
         self.local_client = httpx.AsyncClient(
-            timeout=httpx.Timeout(
-                connect=30.0,
-                read=30.0,
-                write=30.0,
-                pool=30.0
-            ),
             base_url=local_url,
-            limits=httpx.Limits(
-                max_keepalive_connections=20,
-                max_connections=100,
-                keepalive_expiry=30.0
-            ),
-            http2=True
+            timeout=30.0
         )
 
     def _get_system_metrics(self) -> Dict[str, float]:
@@ -191,8 +168,15 @@ class BatchProcessor:
         status: str = "DRAFT"
     ) -> AsyncGenerator[JobProcessingEvent, None]:
         """Process a ZIP file containing job descriptions"""
+        logger.debug(f"Processing ZIP file: {file.filename}")  # Note: filename not name
         start_time = time.time()
-        
+        current_file = None
+        processed_count = 0
+        failed_count = 0
+        pdf_files = []
+        unsupported_files = []
+        processed_jobs = []
+
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             extract_path = temp_path / "extracted"
@@ -210,9 +194,6 @@ class BatchProcessor:
                 
                 # Get list of all files and categorize them
                 all_files = list(extract_path.rglob("*"))
-                pdf_files = []
-                unsupported_files = []
-                
                 for file_path in all_files:
                     if file_path.is_file():
                         if file_path.suffix.lower() == '.pdf':
@@ -227,7 +208,7 @@ class BatchProcessor:
                 total_files = len(pdf_files)
                 logger.info(f"Found {total_files} PDF files and {len(unsupported_files)} unsupported files")
                 
-                # Send initial event with file counts
+                # Initial event with file counts
                 yield JobProcessingEvent(
                     event="processing_started",
                     total_files=total_files,
@@ -235,85 +216,59 @@ class BatchProcessor:
                     failed_count=0,
                     unsupported_files=unsupported_files,
                     processing_details={
+                        "stage": "starting",
                         "total_pdf_files": total_files,
                         "unsupported_count": len(unsupported_files)
                     }
                 )
-                
-                processed_count = 0
-                failed_count = 0
-                
+
+                # Update all events to include unsupported_files
+                async def include_unsupported_files(event: JobProcessingEvent) -> JobProcessingEvent:
+                    event.unsupported_files = unsupported_files
+                    return event
+
                 # Process files in batches
                 for batch_start in range(0, len(pdf_files), self.batch_size):
                     batch = pdf_files[batch_start:batch_start + self.batch_size]
-                    current_batch = batch_start // self.batch_size + 1
-                    total_batches = (len(pdf_files) + self.batch_size - 1) // self.batch_size
                     
-                    try:
-                        # Process batch
-                        results = await self._process_files_in_parallel(
-                            batch,
-                            organization_id=organization_id,
-                            is_mock=is_mock,
-                            status=status
-                        )
-                        
-                        # Process creation results and emit events
-                        async for event in self.create_jobs_bulk(results):
-                            if event.event == "job_created":
-                                processed_count += 1
-                            elif event.event == "job_creation_failed":
-                                failed_count += 1
-                            
-                            # Update counts in the event
-                            event.processed_count = processed_count
-                            event.failed_count = failed_count
-                            event.total_files = total_files
-                            event.batch_number = current_batch
-                            event.batch_total = total_batches
-                            
-                            yield event
-                        
-                    except Exception as e:
-                        logger.error(f"Error processing batch: {str(e)}", exc_info=True)
-                        yield JobProcessingEvent(
-                            event="error",
-                            total_files=total_files,
-                            processed_count=processed_count,
-                            failed_count=failed_count,
-                            error=str(e),
-                            batch_number=current_batch,
-                            batch_total=total_batches
-                        )
-                
-                # Send final completion event
-                processing_time = time.time() - start_time
+                    # Process the batch
+                    async for event in self._process_files_in_parallel(batch, organization_id, is_mock, status):
+                        if event.event == "file_processing_complete" and event.processing_details.get("job_data"):
+                            processed_jobs.append(ProcessedJobData(
+                                original_file=event.file_name,
+                                extracted_data=event.processing_details["job_data"],
+                                processing_time=time.time() - start_time
+                            ))
+                            processed_count += 1
+                        elif event.event == "file_processing_failed":
+                            failed_count += 1
+                        yield await include_unsupported_files(event)
+
+                # After all files are processed, create jobs in bulk
+                if processed_jobs:
+                    async for event in self.create_jobs_bulk(processed_jobs):
+                        yield await include_unsupported_files(event)
+
+                # Final completion event
                 yield JobProcessingEvent(
-                    event="batch_completed",
+                    event="processing_complete",
                     total_files=total_files,
                     processed_count=processed_count,
                     failed_count=failed_count,
-                    unsupported_files=unsupported_files,
                     processing_details={
-                        "total_time": processing_time,
-                        "total_pdf_files": total_files,
-                        "unsupported_count": len(unsupported_files),
-                        "stats": {
-                            "total": total_files,
-                            "successful": processed_count,
-                            "failed": failed_count,
-                            "unsupported": len(unsupported_files)
-                        }
+                        "total_time": time.time() - start_time,
+                        "successful_jobs": len(processed_jobs),
+                        "failed_jobs": failed_count
                     }
                 )
-                
+
             except Exception as e:
-                logger.error(f"Error processing ZIP file: {str(e)}", exc_info=True)
+                logger.error(f"Error in process_zip: {str(e)}", exc_info=True)
                 yield JobProcessingEvent(
-                    event="error",
-                    total_files=0,
-                    processed_count=0,
-                    failed_count=0,
+                    event="processing_failed",
+                    total_files=len(pdf_files),
+                    processed_count=processed_count,
+                    failed_count=failed_count,
                     error=str(e)
                 )
 
@@ -328,7 +283,7 @@ class BatchProcessor:
         start_time = time.time()
         errors = []
         last_error = None
-
+        
         # Check cache
         cache_key = f"file:{file.name}:{organization_id}"
         cached_result = self._get_cache(cache_key)
@@ -338,68 +293,65 @@ class BatchProcessor:
         try:
             for attempt in range(self.max_retries):
                 try:
+                    # Check for auth errors before proceeding
+                    if any("InvalidJWTToken" in err for err in errors):
+                        raise Exception("Authentication failed - token expired")
+
+                    # Add exponential backoff for retries
+                    if attempt > 0:
+                        retry_delay = self.retry_delay * (2 ** (attempt - 1))
+                        await asyncio.sleep(retry_delay)
+
                     async with self.pdf_semaphore:
                         # First convert PDF to text
                         async with aiofiles.open(file, 'rb') as f:
                             content = await f.read()
                             files = {'file': (file.name, content, 'application/pdf')}
                             
-                            # Add timeout to prevent hanging
-                            async with asyncio.timeout(30):  # 30 second timeout
-                                response = await self.remote_client.post(
-                                    "/v1/tools/convert_pdf2text", 
-                                    files=files
-                                )
-                                response.raise_for_status()
-                                text_result = response.json()
-                                text_content = "\n".join(text_result.get('pages', []))
+                            response = await self.remote_client.post(
+                                "/v1/tools/convert_pdf2text", 
+                                files=files,
+                                timeout=30.0
+                            )
+                            
+                            # Check for specific error types
+                            if response.status_code == 429:
+                                raise Exception("Rate limit exceeded")
+                            elif response.status_code == 401:
+                                raise Exception("InvalidJWTToken")
+                                
+                            response.raise_for_status()
+                            text_result = response.json()
+                            text_content = "\n".join(text_result.get('pages', []))
 
-                        if not text_content or len(text_content.strip()) < 50:
-                            raise ValueError("Extracted text is too short or empty")
+                    if not text_content or len(text_content.strip()) < 50:
+                        raise ValueError("Extracted text is too short or empty")
 
-                    # If we get here, text extraction succeeded - proceed with data extraction
-                    async with self.llm_semaphore:
-                        response = await self.local_client.post(
-                            "/v1/jobs/extract-data",
-                            json={
-                                'text': text_content,
-                                'filename': file.name
-                            }
-                        )
-                        response.raise_for_status()
-                        extracted_data = response.json()
-
-                    # If we get here, both steps succeeded - break the retry loop
+                    # Break early if we hit auth errors
                     break
 
                 except Exception as e:
                     last_error = str(e)
-                    errors.append(f"Attempt {attempt + 1}: {last_error}")
+                    errors.append(last_error)
+                    
+                    # Don't retry on auth errors or rate limits
+                    if "InvalidJWTToken" in last_error or "Rate limit exceeded" in last_error:
+                        raise
+                        
                     if attempt < self.max_retries - 1:
-                        await asyncio.sleep(self.retry_delay * (attempt + 1))
-                    continue
-
-            else:  # No break occurred - all retries failed
-                raise Exception(f"All retries failed. Last error: {last_error}")
+                        continue
+                    
+                    raise Exception(f"All retries failed. Last error: {last_error}")
 
             # Process successful result
-            if isinstance(extracted_data, dict) and 'data' in extracted_data:
-                extracted_data = extracted_data['data']
-
-            extracted_data.update({
-                "organization_id": organization_id,
-                "is_mock": is_mock,
-                "status": status
-            })
-
-            result = ProcessedJobData(
-                original_file=file.name,
-                extracted_data=extracted_data,
-                processing_time=time.time() - start_time
+            return await self._create_processed_job_data(
+                file=file,
+                text_content=text_content,
+                organization_id=organization_id,
+                is_mock=is_mock,
+                status=status,
+                start_time=start_time
             )
-
-            self._set_cache(cache_key, result)
-            return result
 
         except Exception as e:
             logger.error(f"Failed to process file {file.name}: {str(e)}", exc_info=True)
@@ -458,45 +410,46 @@ class BatchProcessor:
         organization_id: str,
         is_mock: bool,
         status: str
-    ) -> List[ProcessedJobData]:
-        """Process multiple files in parallel with optimized concurrency"""
-        # Group files by type for batch processing
-        files_by_type = {}
+    ) -> AsyncGenerator[JobProcessingEvent, None]:
+        """Process multiple files in parallel"""
+        tasks = []
+
         for file in files:
-            file_type = self._get_file_type(file.name)
-            if file_type not in files_by_type:
-                files_by_type[file_type] = []
-            files_by_type[file_type].append(file)
+            task = asyncio.create_task(self._process_file(
+                file=file,
+                organization_id=organization_id,
+                is_mock=is_mock,
+                status=status
+            ))
+            tasks.append((file, task))
 
-        all_results = []
-        for file_type, type_files in files_by_type.items():
-            # Process each file type with appropriate concurrency
-            tasks = [
-                self._process_file(
-                    file,
-                    organization_id=organization_id,
-                    is_mock=is_mock,
-                    status=status
+        for file, task in tasks:
+            try:
+                result = await task
+                
+                yield JobProcessingEvent(
+                    event="file_processing_complete",
+                    total_files=len(files),
+                    processed_count=1,
+                    failed_count=0,
+                    file_name=file.name,
+                    processing_details={
+                        "stage": "completed",
+                        "current_file": file.name,
+                        "job_data": result.extracted_data
+                    }
                 )
-                for file in type_files
-            ]
-            
-            # Use gather with return_exceptions=True for better error handling
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            # Handle any exceptions
-            for i, result in enumerate(results):
-                if isinstance(result, Exception):
-                    all_results.append(ProcessedJobData(
-                        original_file=type_files[i].name,
-                        extracted_data={},
-                        validation_errors=[str(result)],
-                        processing_time=0.0
-                    ))
-                else:
-                    all_results.append(result)
 
-        return all_results
+            except Exception as e:
+                logger.error(f"Error processing file {file.name}: {str(e)}", exc_info=True)
+                yield JobProcessingEvent(
+                    event="file_processing_failed",
+                    total_files=len(files),
+                    processed_count=0,
+                    failed_count=1,
+                    file_name=file.name,
+                    error=str(e)
+                )
 
     async def _validate_job_data(self, job_data: Dict[str, Any]) -> Tuple[bool, List[str]]:
         """Validate job data against schema"""
@@ -564,6 +517,7 @@ class BatchProcessor:
 
     async def create_jobs_bulk(self, processed_jobs: List[ProcessedJobData]) -> AsyncGenerator[JobProcessingEvent, None]:
         """Create jobs in bulk with validation and error handling"""
+        logger.info(f"Attempting to create {len(processed_jobs)} jobs in bulk")
         start_time = time.time()
         successful_jobs = []
         failed_jobs = []
@@ -579,7 +533,9 @@ class BatchProcessor:
             
             # Validate all jobs in batch
             for job in batch:
+                logger.debug(f"Validating job from file: {job.original_file}")
                 is_valid, validation_errors = await self._validate_job_data(job.extracted_data)
+                logger.debug(f"Validation result for {job.original_file}: valid={is_valid}, errors={validation_errors}")
                 
                 if is_valid:
                     valid_jobs.append(job.extracted_data)
@@ -600,15 +556,18 @@ class BatchProcessor:
 
             if valid_jobs:
                 try:
-                    # Create jobs in bulk using the existing endpoint
+                    logger.info(f"Sending {len(valid_jobs)} valid jobs to bulk creation endpoint")
                     response = await self.local_client.post(
                         "/v1/jobs/bulk",
                         json=valid_jobs
                     )
+                    logger.info(f"Bulk creation response status: {response.status_code}")
                     response.raise_for_status()
-                    created_jobs = response.json()
+                    response_data = response.json()
+                    created_jobs = response_data.get('data', [])  # Extract jobs from response data
+                    logger.info(f"Successfully created {len(created_jobs)} jobs")
                     successful_jobs.extend(created_jobs)
-                    
+
                     # Yield success events for each created job
                     for job in created_jobs:
                         yield JobProcessingEvent(
@@ -684,4 +643,59 @@ class BatchProcessor:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit"""
         await self.remote_client.aclose()
-        await self.local_client.aclose() 
+        await self.local_client.aclose()
+
+    async def _create_processed_job_data(
+        self,
+        file: Path,
+        text_content: str,
+        organization_id: str,
+        is_mock: bool,
+        status: str,
+        start_time: float
+    ) -> ProcessedJobData:
+        """Create processed job data from extracted text"""
+        try:
+            # Extract job data using local endpoint
+            response = await self.local_client.post(
+                "/v1/jobs/extract-data",
+                json={
+                    'text': text_content,
+                    'filename': file.name
+                }
+            )
+            
+            if response.status_code == 429:
+                raise Exception("Rate limit exceeded")
+            elif response.status_code == 401:
+                raise Exception("InvalidJWTToken")
+                
+            response.raise_for_status()
+            response_data = response.json()
+            # Extract the actual job data from the response
+            job_data = response_data.get('data', {})
+            
+            logger.debug(f"Extracted job data for {file.name}: {job_data}")
+
+            # Add additional metadata
+            job_data.update({
+                "organization_id": organization_id,
+                "is_mock": is_mock,
+                "status": status,
+                "original_file": file.name
+            })
+
+            return ProcessedJobData(
+                original_file=file.name,
+                extracted_data=job_data,
+                processing_time=time.time() - start_time
+            )
+
+        except Exception as e:
+            logger.error(f"Error creating job data for {file.name}: {str(e)}", exc_info=True)
+            return ProcessedJobData(
+                original_file=file.name,
+                extracted_data={},
+                validation_errors=[str(e)],
+                processing_time=time.time() - start_time
+            ) 

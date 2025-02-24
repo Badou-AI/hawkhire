@@ -194,11 +194,11 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
       case 'uploading':
         return 'Uploading files...'
       case 'processing':
-        return `Processing jobs (${stats.processedCount}/${stats.totalFiles})`
+        return `Processing files (${stats.processedCount + stats.failedCount} of ${stats.totalFiles})`
       case 'completed':
-        return `Processing completed in ${stats.processingTime.toFixed(1)}s`
+        return `Completed processing ${stats.totalFiles} files`
       case 'error':
-        return error || 'Error processing files'
+        return 'Error processing files'
       default:
         return 'Ready to process'
     }
@@ -208,7 +208,11 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
     if (processingStatus === 'idle' || processingStatus === 'error') return 0
     if (processingStatus === 'completed') return 100
     if (stats.totalFiles === 0) return 0
-    return ((stats.processedCount + stats.failedCount) / stats.totalFiles) * 100
+    
+    // Include all processed files (successful, failed, and unsupported) in progress
+    const totalProcessed = stats.processedCount + stats.failedCount + (stats.unsupportedCount || 0)
+    // Ensure we never exceed 100%
+    return Math.min((totalProcessed / stats.totalFiles) * 100, 100)
   }
 
   return (
@@ -261,7 +265,7 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
 
           {processingStatus !== 'idle' && (
             <div className="space-y-4">
-              <Progress value={getProgressValue()} />
+              {/* <Progress value={getProgressValue()} /> */}
               <BulkJobProgress
                 stats={stats}
                 processingStatus={processingStatus}
@@ -270,7 +274,7 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
                 unsupportedFiles={unsupportedFiles}
               />
               
-              <div className="grid grid-cols-2 gap-4">
+              {/* <div className="grid grid-cols-2 gap-4">
                 <Card>
                   <CardContent className="pt-6">
                     <div className="flex justify-between items-center">
@@ -326,7 +330,7 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
                     </div>
                   </CardContent>
                 </Card>
-              </div>
+              </div> */}
             </div>
           )}
 
