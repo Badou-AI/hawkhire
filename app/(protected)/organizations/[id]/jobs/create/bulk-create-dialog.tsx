@@ -3,13 +3,13 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog"
 import { Upload, CheckCircle2, XCircle, Timer, AlertCircle } from "lucide-react"
 import { Label } from "@/components/ui/label"
@@ -20,6 +20,7 @@ import { FileDropzone } from "@/components/resume-evaluator/FileDropzone"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/useAuth"
 import { toast } from "sonner"
+import { BulkJobProgress } from "@/components/jobs/BulkJobProgress"
 
 interface BulkCreateDialogProps {
   organizationId: string
@@ -244,6 +245,12 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
           {processingStatus !== 'idle' && (
             <div className="space-y-4">
               <Progress value={getProgressValue()} />
+              <BulkJobProgress
+                stats={stats}
+                processingStatus={processingStatus}
+                currentFile={file?.name}
+                error={error}
+              />
               
               <div className="grid grid-cols-2 gap-4">
                 <Card>
