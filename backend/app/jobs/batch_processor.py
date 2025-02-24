@@ -6,6 +6,15 @@ import asyncio
 import tempfile
 import time
 import os
+import sys
+print("Python executable path:")
+print(sys.executable)
+print("\nPython path:")
+print(sys.path)
+print("\nEnvironment:")
+import os
+print(os.environ.get('VIRTUAL_ENV'))
+
 import psutil
 from pathlib import Path
 import aiofiles
@@ -46,8 +55,8 @@ class BatchCreationResult(BaseModel):
     stats: Dict[str, int]
 
 class JobProcessingEvent(BaseModel):
-    """Event model for job processing status updates"""
-    event: str  # 'processing_started' | 'file_processed' | 'file_failed' | 'completed'
+    """Enhanced event model for job processing status updates"""
+    event: str
     total_files: int
     processed_count: int
     failed_count: int
@@ -55,6 +64,8 @@ class JobProcessingEvent(BaseModel):
     error: Optional[str] = None
     batch_number: Optional[int] = None
     batch_total: Optional[int] = None
+    unsupported_files: Optional[List[Dict[str, str]]] = None
+    processing_details: Optional[Dict[str, Any]] = None
 
 class ProcessedJobData(BaseModel):
     """Model for processed job data"""
@@ -179,280 +190,132 @@ class BatchProcessor:
         is_mock: bool = False,
         status: str = "DRAFT"
     ) -> AsyncGenerator[JobProcessingEvent, None]:
-        """
-        Process a ZIP file containing job descriptions with optimized parallel execution.
-        """
-        logger.debug(f"Starting ZIP processing: file={file.filename}, org={organization_id}, mock={is_mock}, status={status}")
+        """Process a ZIP file containing job descriptions"""
+        start_time = time.time()
         
-        # Create temporary directory for processing
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
-            logger.debug(f"Created temp directory: {temp_dir}")
+            extract_path = temp_path / "extracted"
+            extract_path.mkdir()
             
             try:
-                # Save and extract ZIP using streaming
+                # Save and extract ZIP
                 zip_path = temp_path / "upload.zip"
-                logger.debug(f"Saving ZIP file to: {zip_path}")
-                try:
-                    # Read the entire file content first
-                    file_content = await file.read()
-                    if not file_content:
-                        raise ValueError("Empty file received")
-                    
-                    logger.debug(f"Read {len(file_content)} bytes from upload")
-                    
-                    # Write to disk
-                    async with aiofiles.open(zip_path, 'wb') as f:
-                        await f.write(file_content)
-                    
-                    logger.debug("ZIP file saved successfully")
-                    
-                    # Verify the file exists and has content
-                    if not zip_path.exists():
-                        raise FileNotFoundError("ZIP file was not saved correctly")
-                    
-                    file_size = zip_path.stat().st_size
-                    logger.debug(f"Saved ZIP file size: {file_size} bytes")
-                    
-                    if file_size == 0:
-                        raise ValueError("Saved ZIP file is empty")
-                        
-                except Exception as e:
-                    logger.error(f"Error saving ZIP file: {str(e)}", exc_info=True)
-                    raise ValueError(f"Failed to save ZIP file: {str(e)}")
-
-                # Extract files
-                logger.debug("Starting ZIP extraction")
-                try:
-                    with zipfile.ZipFile(zip_path) as zip_ref:
-                        # Log ZIP contents before extraction
-                        file_list = zip_ref.namelist()
-                        logger.debug(f"ZIP contents: {file_list}")
-                        
-                        # Create extraction directory
-                        extract_path = temp_path / "extracted"
-                        extract_path.mkdir(exist_ok=True)
-                        logger.debug(f"Extracting to: {extract_path}")
-                        
-                        # Extract with detailed error handling
-                        try:
-                            zip_ref.extractall(extract_path)
-                            logger.debug("ZIP extraction completed successfully")
-                        except Exception as extract_error:
-                            logger.error(f"Error during ZIP extraction: {str(extract_error)}", exc_info=True)
-                            raise
-                        
-                        # Verify extraction
-                        extracted_files = list(extract_path.rglob("*"))
-                        logger.debug(f"Extracted files: {[f.name for f in extracted_files]}")
-                except zipfile.BadZipFile as zip_error:
-                    logger.error(f"Invalid ZIP file: {str(zip_error)}", exc_info=True)
-                    raise
-                except Exception as e:
-                    logger.error(f"ZIP handling error: {str(e)}", exc_info=True)
-                    raise
-                logger.debug("ZIP file extracted successfully")
+                async with aiofiles.open(zip_path, 'wb') as f:
+                    while chunk := await file.read(self.chunk_size):
+                        await f.write(chunk)
                 
-                # Get list of PDF files with detailed error handling
-                try:
-                    pdf_files = list(Path(temp_path / "extracted").rglob("*.pdf"))
-                    logger.debug(f"PDF files found: {[f.name for f in pdf_files]}")
-                    total_files = len(pdf_files)
-                    logger.debug(f"Found {total_files} PDF files")
-                    
-                    # Verify PDF files are readable
-                    for pdf_file in pdf_files:
-                        try:
-                            if not pdf_file.is_file():
-                                logger.error(f"PDF file not accessible: {pdf_file}")
-                            else:
-                                size = pdf_file.stat().st_size
-                                logger.debug(f"PDF file: {pdf_file.name}, size: {size} bytes")
-                        except Exception as pdf_error:
-                            logger.error(f"Error checking PDF file {pdf_file}: {str(pdf_error)}", exc_info=True)
-                except Exception as e:
-                    logger.error(f"Error discovering PDF files: {str(e)}", exc_info=True)
-                    raise
-
-                # Start metrics tracking
-                metrics_service.start_processing(total_files)
-                self._update_metrics('total_files', total_files)
-                logger.debug("Started metrics tracking")
-
-                # Send initial event
+                with zipfile.ZipFile(zip_path) as zip_ref:
+                    zip_ref.extractall(extract_path)
+                
+                # Get list of all files and categorize them
+                all_files = list(extract_path.rglob("*"))
+                pdf_files = []
+                unsupported_files = []
+                
+                for file_path in all_files:
+                    if file_path.is_file():
+                        if file_path.suffix.lower() == '.pdf':
+                            pdf_files.append(file_path)
+                        else:
+                            unsupported_files.append({
+                                "name": file_path.name,
+                                "type": file_path.suffix,
+                                "reason": "Unsupported file format - only PDF files are accepted"
+                            })
+                
+                total_files = len(pdf_files)
+                logger.info(f"Found {total_files} PDF files and {len(unsupported_files)} unsupported files")
+                
+                # Send initial event with file counts
                 yield JobProcessingEvent(
                     event="processing_started",
                     total_files=total_files,
                     processed_count=0,
-                    failed_count=0
+                    failed_count=0,
+                    unsupported_files=unsupported_files,
+                    processing_details={
+                        "total_pdf_files": total_files,
+                        "unsupported_count": len(unsupported_files)
+                    }
                 )
-
-                if total_files == 0:
-                    yield JobProcessingEvent(
-                        event="completed",
-                        total_files=0,
-                        processed_count=0,
-                        failed_count=0,
-                        error="No PDF files found in ZIP"
-                    )
-                    metrics_service.end_processing()
-                    return
-
-                # Process files in optimized batches
+                
                 processed_count = 0
                 failed_count = 0
                 
-                # Group files by size for better batch processing
-                files_by_size = {}
-                for pdf_file in pdf_files:
-                    size = os.path.getsize(pdf_file)
-                    size_group = size // (1024 * 1024)  # Group by MB
-                    if size_group not in files_by_size:
-                        files_by_size[size_group] = []
-                    files_by_size[size_group].append(pdf_file)
-
-                # Process each size group with appropriate batch size
-                total_batches = 0
-                current_batch = 0
-                
-                for size_group, group_files in files_by_size.items():
-                    batch_size = self._adjust_batch_size(size_group * 1024 * 1024)
-                    self._update_metrics('batch_size', batch_size)
-                    logger.debug(f"Processing size group {size_group}MB with batch size {batch_size}")
+                # Process files in batches
+                for batch_start in range(0, len(pdf_files), self.batch_size):
+                    batch = pdf_files[batch_start:batch_start + self.batch_size]
+                    current_batch = batch_start // self.batch_size + 1
+                    total_batches = (len(pdf_files) + self.batch_size - 1) // self.batch_size
                     
-                    group_batches = (len(group_files) + batch_size - 1) // batch_size
-                    total_batches += group_batches
-                    logger.debug(f"Group will be processed in {group_batches} batches")
-                    
-                    for batch_idx in range(group_batches):
-                        start_idx = batch_idx * batch_size
-                        end_idx = min(start_idx + batch_size, len(group_files))
-                        batch_files = group_files[start_idx:end_idx]
-                        current_batch += 1
-                        logger.debug(f"Processing batch {current_batch}/{total_batches} with {len(batch_files)} files")
-
-                        try:
-                            # Process batch with parallel execution
-                            logger.debug("Starting parallel processing of batch")
-                            results = await self._process_files_in_parallel(
-                                files=batch_files,
-                                organization_id=organization_id,
-                                is_mock=is_mock,
-                                status=status
-                            )
-                            logger.debug(f"Batch processing completed with {len(results)} results")
-                            
-                            # Add processing status events for each file
-                            for result in results:
-                                if result.validation_errors:
-                                    failed_count += 1
-                                    yield JobProcessingEvent(
-                                        event="file_processing_failed",
-                                        total_files=total_files,
-                                        processed_count=processed_count,
-                                        failed_count=failed_count,
-                                        file_name=result.original_file,
-                                        error=str(result.validation_errors),
-                                        batch_number=current_batch,
-                                        batch_total=total_batches
-                                    )
-                                else:
-                                    yield JobProcessingEvent(
-                                        event="file_processing_complete",
-                                        total_files=total_files,
-                                        processed_count=processed_count,
-                                        failed_count=failed_count,
-                                        file_name=result.original_file,
-                                        batch_number=current_batch,
-                                        batch_total=total_batches
-                                    )
-
-                            # Then proceed with bulk creation
-                            if results:
-                                creation_result = await self.create_jobs_bulk(results)
-                                logger.debug(f"Bulk job creation result: {creation_result}")
-                            
-                            # Update counts based on actual creation results
-                            for job in creation_result.successful_jobs:
+                    try:
+                        # Process batch
+                        results = await self._process_files_in_parallel(
+                            batch,
+                            organization_id=organization_id,
+                            is_mock=is_mock,
+                            status=status
+                        )
+                        
+                        # Process creation results and emit events
+                        async for event in self.create_jobs_bulk(results):
+                            if event.event == "job_created":
                                 processed_count += 1
-                                yield JobProcessingEvent(
-                                    event="job_created",
-                                    total_files=total_files,
-                                    processed_count=processed_count,
-                                    failed_count=failed_count,
-                                    file_name=job.get("original_file", "unknown"),
-                                    batch_number=current_batch,
-                                    batch_total=total_batches,
-                                    status="success"
-                                )
-                            
-                            for failed_job in creation_result.failed_jobs:
+                            elif event.event == "job_creation_failed":
                                 failed_count += 1
-                                yield JobProcessingEvent(
-                                    event="job_creation_failed",
-                                    total_files=total_files,
-                                    processed_count=processed_count,
-                                    failed_count=failed_count,
-                                    file_name=failed_job.get("file", "unknown"),
-                                    error=str(failed_job.get("errors", [])),
-                                    batch_number=current_batch,
-                                    batch_total=total_batches,
-                                    status="error"
-                                )
-
-                            # Send a batch completion event
-                            yield JobProcessingEvent(
-                                event="batch_completed",
-                                total_files=total_files,
-                                processed_count=processed_count,
-                                failed_count=failed_count,
-                                batch_number=current_batch,
-                                batch_total=total_batches,
-                                stats=creation_result.stats
-                            )
-
-                        except Exception as e:
-                            # Handle batch processing error
-                            failed_count += len(batch_files)
-                            self._update_metrics('error', str(e))
-                            for _ in range(len(batch_files)):
-                                self._update_metrics('failed_file', None)
-                            yield JobProcessingEvent(
-                                event="file_failed",
-                                total_files=total_files,
-                                processed_count=processed_count,
-                                failed_count=failed_count,
-                                error=f"Batch processing error: {str(e)}",
-                                batch_number=current_batch,
-                                batch_total=total_batches
-                            )
-
-                        # Update memory metrics after each batch
-                        self._update_metrics('memory_usage', None)
-
-                # Send completion event
+                            
+                            # Update counts in the event
+                            event.processed_count = processed_count
+                            event.failed_count = failed_count
+                            event.total_files = total_files
+                            event.batch_number = current_batch
+                            event.batch_total = total_batches
+                            
+                            yield event
+                        
+                    except Exception as e:
+                        logger.error(f"Error processing batch: {str(e)}", exc_info=True)
+                        yield JobProcessingEvent(
+                            event="error",
+                            total_files=total_files,
+                            processed_count=processed_count,
+                            failed_count=failed_count,
+                            error=str(e),
+                            batch_number=current_batch,
+                            batch_total=total_batches
+                        )
+                
+                # Send final completion event
+                processing_time = time.time() - start_time
                 yield JobProcessingEvent(
-                    event="completed",
+                    event="batch_completed",
                     total_files=total_files,
                     processed_count=processed_count,
-                    failed_count=failed_count
+                    failed_count=failed_count,
+                    unsupported_files=unsupported_files,
+                    processing_details={
+                        "total_time": processing_time,
+                        "total_pdf_files": total_files,
+                        "unsupported_count": len(unsupported_files),
+                        "stats": {
+                            "total": total_files,
+                            "successful": processed_count,
+                            "failed": failed_count,
+                            "unsupported": len(unsupported_files)
+                        }
+                    }
                 )
-
+                
             except Exception as e:
-                # Handle overall processing error
-                self._update_metrics('error', str(e))
+                logger.error(f"Error processing ZIP file: {str(e)}", exc_info=True)
                 yield JobProcessingEvent(
-                    event="completed",
-                    total_files=total_files if 'total_files' in locals() else 0,
-                    processed_count=processed_count if 'processed_count' in locals() else 0,
-                    failed_count=failed_count if 'failed_count' in locals() else 0,
-                    error=f"Processing error: {str(e)}"
+                    event="error",
+                    total_files=0,
+                    processed_count=0,
+                    failed_count=0,
+                    error=str(e)
                 )
-            finally:
-                # Cleanup and final metrics
-                await self.remote_client.aclose()
-                await self.local_client.aclose()
-                metrics_service.end_processing()
 
     async def _process_file(
         self,
@@ -699,7 +562,7 @@ class BatchProcessor:
 
         return len(errors) == 0, errors
 
-    async def create_jobs_bulk(self, processed_jobs: List[ProcessedJobData]) -> BatchCreationResult:
+    async def create_jobs_bulk(self, processed_jobs: List[ProcessedJobData]) -> AsyncGenerator[JobProcessingEvent, None]:
         """Create jobs in bulk with validation and error handling"""
         start_time = time.time()
         successful_jobs = []
@@ -726,6 +589,14 @@ class BatchProcessor:
                         "errors": validation_errors,
                         "data": job.extracted_data
                     })
+                    yield JobProcessingEvent(
+                        event="job_creation_failed",
+                        total_files=len(processed_jobs),
+                        processed_count=len(successful_jobs),
+                        failed_count=len(failed_jobs),
+                        file_name=job.original_file,
+                        error=str(validation_errors)
+                    )
 
             if valid_jobs:
                 try:
@@ -738,6 +609,19 @@ class BatchProcessor:
                     created_jobs = response.json()
                     successful_jobs.extend(created_jobs)
                     
+                    # Yield success events for each created job
+                    for job in created_jobs:
+                        yield JobProcessingEvent(
+                            event="job_created",
+                            total_files=len(processed_jobs),
+                            processed_count=len(successful_jobs),
+                            failed_count=len(failed_jobs),
+                            file_name=job.get("original_file", "unknown"),
+                            processing_details={
+                                "job_id": job.get("id"),
+                                "status": "success"
+                            }
+                        )
                 except Exception as e:
                     logger.error(f"Error during bulk job creation: {str(e)}", exc_info=True)
                     # If bulk creation fails, try individual creation
@@ -748,24 +632,48 @@ class BatchProcessor:
                                 json=job_data
                             )
                             response.raise_for_status()
-                            successful_jobs.append(response.json())
+                            created_job = response.json()
+                            successful_jobs.append(created_job)
+                            yield JobProcessingEvent(
+                                event="job_created",
+                                total_files=len(processed_jobs),
+                                processed_count=len(successful_jobs),
+                                failed_count=len(failed_jobs),
+                                file_name=job_data.get("original_file", "unknown"),
+                                processing_details={
+                                    "job_id": created_job.get("id"),
+                                    "status": "success"
+                                }
+                            )
                         except Exception as job_error:
                             failed_jobs.append({
                                 "file": job_data.get("original_file", "unknown"),
                                 "errors": [str(job_error)],
                                 "data": job_data
                             })
+                            yield JobProcessingEvent(
+                                event="job_creation_failed",
+                                total_files=len(processed_jobs),
+                                processed_count=len(successful_jobs),
+                                failed_count=len(failed_jobs),
+                                file_name=job_data.get("original_file", "unknown"),
+                                error=str(job_error)
+                            )
 
+        # Yield final completion event
         total_time = time.time() - start_time
-        
-        return BatchCreationResult(
-            successful_jobs=successful_jobs,
-            failed_jobs=failed_jobs,
-            total_time=total_time,
-            stats={
-                "total": len(processed_jobs),
-                "successful": len(successful_jobs),
-                "failed": len(failed_jobs)
+        yield JobProcessingEvent(
+            event="batch_completed",
+            total_files=len(processed_jobs),
+            processed_count=len(successful_jobs),
+            failed_count=len(failed_jobs),
+            processing_details={
+                "total_time": total_time,
+                "stats": {
+                    "total": len(processed_jobs),
+                    "successful": len(successful_jobs),
+                    "failed": len(failed_jobs)
+                }
             }
         )
 

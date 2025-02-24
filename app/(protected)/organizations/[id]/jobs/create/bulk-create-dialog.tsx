@@ -31,6 +31,7 @@ interface ProcessingStats {
   processedCount: number;
   failedCount: number;
   processingTime: number;
+  unsupportedCount?: number;
 }
 
 type ProcessingStatus = 'idle' | 'uploading' | 'processing' | 'completed' | 'error';
@@ -45,9 +46,11 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
     totalFiles: 0,
     processedCount: 0,
     failedCount: 0,
-    processingTime: 0
+    processingTime: 0,
+    unsupportedCount: 0
   })
   const [error, setError] = useState<string>("")
+  const [unsupportedFiles, setUnsupportedFiles] = useState<Array<{name: string, type: string, reason: string}>>([])
 
   const handleFileSelect = (selectedFile: File) => {
     setFile(selectedFile)
@@ -57,7 +60,8 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
       totalFiles: 0,
       processedCount: 0,
       failedCount: 0,
-      processingTime: 0
+      processingTime: 0,
+      unsupportedCount: 0
     })
   }
 
@@ -116,12 +120,18 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
                   setProcessingStatus('processing')
                   setStats(prev => ({
                     ...prev,
-                    totalFiles: event.total_files
+                    totalFiles: event.total_files,
+                    unsupportedCount: event.unsupported_files?.length || 0
                   }))
+                  if (event.unsupported_files?.length) {
+                    setUnsupportedFiles(event.unsupported_files)
+                  }
                   break
 
-                case 'file_processed':
-                case 'file_failed':
+                case 'file_processing_complete':
+                case 'file_processing_failed':
+                case 'job_created':
+                case 'job_creation_failed':
                   setStats(prev => ({
                     ...prev,
                     processedCount: event.processed_count,
@@ -130,15 +140,22 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
                   }))
                   break
 
-                case 'completed':
+                case 'batch_completed':
                   setProcessingStatus('completed')
-                  setStats({
-                    totalFiles: event.total_files,
+                  setStats(prev => ({
+                    ...prev,
                     processedCount: event.processed_count,
                     failedCount: event.failed_count,
-                    processingTime: (Date.now() - startTime) / 1000
-                  })
-                  toast.success(`Successfully processed ${event.processed_count} jobs`)
+                    processingTime: event.processing_details.total_time,
+                    unsupportedCount: event.unsupported_files?.length || 0
+                  }))
+                  
+                  if (event.processed_count > 0) {
+                    toast.success(`Successfully processed ${event.processed_count} jobs`)
+                  }
+                  if (event.failed_count > 0) {
+                    toast.error(`Failed to process ${event.failed_count} jobs`)
+                  }
                   break
               }
             } catch (e) {
@@ -191,7 +208,7 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
     if (processingStatus === 'idle' || processingStatus === 'error') return 0
     if (processingStatus === 'completed') return 100
     if (stats.totalFiles === 0) return 0
-    return (stats.processedCount / stats.totalFiles) * 100
+    return ((stats.processedCount + stats.failedCount) / stats.totalFiles) * 100
   }
 
   return (
@@ -250,6 +267,7 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
                 processingStatus={processingStatus}
                 currentFile={file?.name}
                 error={error}
+                unsupportedFiles={unsupportedFiles}
               />
               
               <div className="grid grid-cols-2 gap-4">
