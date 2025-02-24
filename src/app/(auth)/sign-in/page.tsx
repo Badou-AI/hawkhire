@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Eye, EyeOff } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,16 +12,31 @@ import { toast } from "sonner"
 import { AuthError } from "@supabase/supabase-js"
 import AuthLayout from './layout'
 
+const RETRY_AFTER_DEFAULT = 60 // Default retry after 60 seconds if header not present
+const MAX_RETRIES = 3
+const INITIAL_RETRY_DELAY = 1000 // 1 second
+
+// Add render counter
+let renderCount = 0;
+
 export default function SignInPage() {
+  renderCount++;
+  
+  useEffect(() => {
+    console.log(`[SignInPage] Render count: ${renderCount}`);
+  });
+
   const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [retryAfter, setRetryAfter] = useState<number | null>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
 
   useEffect(() => {
+    console.log('[SignInPage] Component mounted');
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession()
       if (session) {
@@ -29,10 +44,33 @@ export default function SignInPage() {
       }
     }
     checkSession()
+    return () => console.log('[SignInPage] Component unmounted');
   }, [router, supabase.auth])
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Memoize the submit handler
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
+    console.log('[SignInPage] Submit attempt', {
+      timestamp: new Date().toISOString(),
+      renderCount,
+      hasExistingRateLimit: !!localStorage.getItem('auth_rate_limit'),
+    });
+    
+    // Check if we're in a rate-limited state
+    const rateLimitKey = 'auth_rate_limit'
+    const rateLimitData = localStorage.getItem(rateLimitKey)
+    
+    if (rateLimitData) {
+      const { timestamp, retryAfter } = JSON.parse(rateLimitData)
+      const now = Date.now()
+      if (now < timestamp + (retryAfter * 1000)) {
+        const remainingSeconds = Math.ceil((timestamp + (retryAfter * 1000) - now) / 1000)
+        toast.error(`Please wait ${remainingSeconds} seconds before trying again`)
+        return
+      }
+      localStorage.removeItem(rateLimitKey)
+    }
+
     setIsLoading(true)
 
     try {
@@ -41,7 +79,18 @@ export default function SignInPage() {
         password,
       })
 
-      if (error) throw error
+      if (error) {
+        if (error.status === 429) {
+          const retryAfter = parseInt(error.message.match(/\d+/)?.[0] || '60', 10)
+          localStorage.setItem(rateLimitKey, JSON.stringify({
+            timestamp: Date.now(),
+            retryAfter
+          }))
+          toast.error(`Too many attempts. Please try again in ${retryAfter} seconds.`)
+          return
+        }
+        throw error
+      }
 
       if (data.session) {
         toast.success('Successfully signed in!')
@@ -57,7 +106,7 @@ export default function SignInPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [email, password])
 
   return (
     <AuthLayout>

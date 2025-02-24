@@ -266,37 +266,127 @@ export const getSkillColor = (score: number): string => {
 
 // Helper function to transform API response to UI format
 export const transformApiResponseToUiFormat = (response: JobMatchProfile[]) => {
+  console.log('Raw API Response:', JSON.stringify(response, null, 2));
+  
   if (!Array.isArray(response)) {
     console.warn('Expected array of documents, received:', response);
     return [];
   }
 
-  return response.map(doc => ({
-    id: doc.id,
-    name: `${doc.item_data.content.profile.first_name} ${doc.item_data.content.profile.last_name}`,
-    avatar: "/placeholder.svg",
-    matchScore: Math.round(doc.item_data.matching_score.data.score.value * 100),
-    role: doc.item_data.content.title,
-    experience: `${doc.item_data.content.years_of_experience} years`,
-    mainSkillScore: doc.item_data.content.skills[0] 
-      ? Math.round(doc.item_data.content.skills[0].score * 100)
-      : 0,
-    skillRatings: Object.fromEntries(
-      doc.item_data.content.skills.map(skill => [
-        skill.skill,
-        Math.round(skill.score * 100)
-      ])
-    ),
-    summary: doc.item_data.matching_score.data.justification.meta.description,
-    stage: 'new',
-    otherMatches: [
-      { 
-        jobTitle: "Similar Role", 
-        score: Math.round(doc.item_data.matching_score.data.score.value * 85) 
-      }
-    ] as OtherMatch[]
-  }));
+  return response.map(doc => {
+    console.log('Processing document:', {
+      id: doc.id,
+      hasItemData: !!doc.item_data,
+      hasContent: !!doc.item_data?.content,
+      hasProfile: !!doc.item_data?.content?.profile,
+      contentKeys: doc.item_data?.content ? Object.keys(doc.item_data.content) : [],
+      profileKeys: doc.item_data?.content?.profile ? Object.keys(doc.item_data.content.profile) : []
+    });
+
+    // Add null checks
+    if (!doc.item_data?.content?.profile) {
+      console.error('Invalid document structure:', doc);
+      return {
+        id: doc.id,
+        name: 'Unknown Candidate',
+        avatar: "/placeholder.svg",
+        matchScore: 0,
+        role: 'No Title',
+        experience: '0 years',
+        mainSkillScore: 0,
+        skillRatings: {},
+        summary: 'No summary available',
+        stage: 'new',
+        otherMatches: []
+      };
+    }
+
+    return {
+      id: doc.id,
+      name: `${doc.item_data.content.profile.first_name} ${doc.item_data.content.profile.last_name}`,
+      avatar: "/placeholder.svg",
+      matchScore: Math.round(doc.item_data.matching_score.data.score.value * 100),
+      role: doc.item_data.content.title,
+      experience: `${doc.item_data.content.years_of_experience} years`,
+      mainSkillScore: doc.item_data.content.skills[0] 
+        ? Math.round(doc.item_data.content.skills[0].score * 100)
+        : 0,
+      skillRatings: Object.fromEntries(
+        doc.item_data.content.skills.map(skill => [
+          skill.skill,
+          Math.round(skill.score * 100)
+        ])
+      ),
+      summary: doc.item_data.matching_score.data.justification.meta.description,
+      stage: 'new',
+      otherMatches: [
+        { 
+          jobTitle: "Similar Role", 
+          score: Math.round(doc.item_data.matching_score.data.score.value * 85) 
+        }
+      ] as OtherMatch[]
+    };
+  });
 };
 
 // Add a development toggle
-export const USE_MOCK_DATA = process.env.NEXT_PUBLIC_USE_MOCK_DATA === 'true'; 
+export const USE_MOCK_DATA = process.env.NEXT_PUBLIC_USE_MOCK_DATA === 'true';
+
+// Update the getResumeData function to handle the documents array
+export async function getResumeData() {
+  try {
+    console.log('Fetching resume data...');
+    const response = await fetch('/api/resumes');
+    console.log('Response status:', response.status);
+    
+    const data = await response.json();
+    console.log('API Response data structure:', {
+      hasDocuments: !!data.documents,
+      documentCount: data.documents?.length,
+      firstDocumentKeys: data.documents?.[0] ? Object.keys(data.documents[0]) : [],
+      sampleDocument: data.documents?.[0]
+    });
+
+    const documents = data.documents || [];
+    
+    if (!documents.length) {
+      console.warn('No documents found in response');
+      return [];
+    }
+
+    return documents.map(doc => {
+      // Add validation logging
+      if (!doc.item_data?.content?.profile) {
+        console.error('Invalid document structure:', {
+          id: doc.id,
+          hasItemData: !!doc.item_data,
+          hasContent: !!doc.item_data?.content,
+          hasProfile: !!doc.item_data?.content?.profile
+        });
+      }
+      
+      return {
+        id: doc.id,
+        name: `${doc.item_data.content.profile.first_name} ${doc.item_data.content.profile.last_name}`,
+        avatar: "/placeholder.svg",
+        matchScore: doc.item_data.matching_score.data.score.value ? 
+          Math.round(doc.item_data.matching_score.data.score.value * 100) : 0,
+        role: doc.item_data.content.title || 'No Title',
+        status: doc.item_data.content.status || 'pending',
+        email: doc.item_data.content.profile.email,
+        phone: doc.item_data.content.profile.tel_num, // Changed from phone to tel_num
+        location: doc.item_data.content.profile ? 
+          `${doc.item_data.content.profile.city || ''}, ${doc.item_data.content.profile.country || ''}` : '',
+        experience: doc.item_data.content.years_of_experience,
+        education: doc.item_data.content.education || [],
+        skills: doc.item_data.content.skills || [],
+        languages: doc.item_data.content.languages || [],
+        createdAt: doc.item_data.timestamp ? new Date(doc.item_data.timestamp).toLocaleDateString() : '',
+        updatedAt: doc.item_data.timestamp ? new Date(doc.item_data.timestamp).toLocaleDateString() : ''
+      };
+    });
+  } catch (error) {
+    console.error('Error fetching resume data:', error);
+    return [];
+  }
+} 

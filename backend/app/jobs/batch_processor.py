@@ -7,6 +7,7 @@ import tempfile
 import time
 import os
 import sys
+import uuid
 print("Python executable path:")
 print(sys.executable)
 print("\nPython path:")
@@ -19,7 +20,7 @@ import psutil
 from pathlib import Path
 import aiofiles
 import zipfile
-from fastapi import UploadFile
+from fastapi import UploadFile, HTTPException, status
 from pydantic import BaseModel, ValidationError
 import httpx
 from uuid import UUID
@@ -29,6 +30,10 @@ from datetime import datetime, timedelta
 import logging
 from ..services.metrics import metrics_service
 from ..services.semantic import semantic_service
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware import Middleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from collections import defaultdict
 
 
 # Configure logging
@@ -73,6 +78,30 @@ class ProcessedJobData(BaseModel):
     extracted_data: Dict[str, Any]
     validation_errors: Optional[List[str]] = None
     processing_time: float
+
+class RateLimiter:
+    def __init__(self, requests_per_minute=30):
+        self.requests_per_minute = requests_per_minute
+        self.requests = defaultdict(list)
+        
+    def is_rate_limited(self, client_id: str) -> Tuple[bool, int]:
+        now = time.time()
+        minute_ago = now - 60
+        
+        # Clean old requests
+        self.requests[client_id] = [req_time for req_time in self.requests[client_id] 
+                                  if req_time > minute_ago]
+        
+        # Check if rate limited
+        if len(self.requests[client_id]) >= self.requests_per_minute:
+            retry_after = 60 - (now - self.requests[client_id][0])
+            return True, int(retry_after)
+            
+        # Add new request
+        self.requests[client_id].append(now)
+        return False, 0
+
+rate_limiter = RateLimiter()
 
 class BatchProcessor:
     """Handles batch processing of job files with optimized performance"""
@@ -656,20 +685,39 @@ class BatchProcessor:
     ) -> ProcessedJobData:
         """Create processed job data from extracted text"""
         try:
+            # Check rate limit
+            client_id = organization_id  # Use organization_id as client identifier
+            is_limited, retry_after = rate_limiter.is_rate_limited(client_id)
+            
+            if is_limited:
+                headers = {"Retry-After": str(retry_after)}
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Rate limit exceeded",
+                    headers=headers
+                )
+
             # Extract job data using local endpoint
             response = await self.local_client.post(
                 "/v1/jobs/extract-data",
                 json={
                     'text': text_content,
                     'filename': file.name
+                },
+                headers={
+                    "X-Organization-ID": organization_id,
+                    "X-Request-ID": str(uuid.uuid4())
                 }
             )
             
             if response.status_code == 429:
-                raise Exception("Rate limit exceeded")
-            elif response.status_code == 401:
-                raise Exception("InvalidJWTToken")
-                
+                retry_after = response.headers.get("Retry-After", "60")
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Rate limit exceeded",
+                    headers={"Retry-After": retry_after}
+                )
+
             response.raise_for_status()
             response_data = response.json()
             # Extract the actual job data from the response
