@@ -80,7 +80,7 @@ const formatDate = (dateString: string) => {
 }
 
 // Add pagination config
-const ITEMS_PER_PAGE = 5
+const ITEMS_PER_PAGE = 50
 
 // Define the candidate type to fix type errors
 interface Candidate {

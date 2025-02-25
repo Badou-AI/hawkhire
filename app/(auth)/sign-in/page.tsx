@@ -34,28 +34,64 @@ export default function SignInPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return;
     setIsLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      console.log('[SignInPage] Attempting sign in via proxy');
+      
+      // Use the proxy endpoint instead of direct Supabase call
+      const response = await fetch('/api/auth/signin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
       });
-
-      if (error) throw error;
-
-      if (data.session) {
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        console.error('[SignInPage] Sign-in error:', result.error);
+        
+        if (response.status === 429) {
+          toast.error('Too many sign-in attempts', {
+            description: 'Please try again later or use a different network',
+            duration: 5000
+          });
+        } else {
+          toast.error(result.error || 'Failed to sign in');
+        }
+        setIsLoading(false);
+        return;
+      }
+      
+      const { data } = result;
+      
+      if (data?.session) {
+        console.log('[SignInPage] Successfully signed in with session:', data.session.user.id);
+        
+        // Force a session refresh to sync the server-side session with the client
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        
+        if (refreshError) {
+          console.error('[SignInPage] Session refresh error:', refreshError);
+        } else {
+          console.log('[SignInPage] Session refreshed successfully');
+        }
+        
         toast.success('Successfully signed in!');
-        router.push('/dashboard');
-        router.refresh();
+        
+        // Use window.location for a hard redirect instead of router.push
+        window.location.href = '/dashboard';
+      } else {
+        console.error('[SignInPage] No session returned:', data);
+        toast.error('No session returned');
+        setIsLoading(false);
       }
     } catch (error) {
-      if (error instanceof AuthError) {
-        toast.error(error.message);
-      } else {
-        toast.error('Failed to sign in');
-      }
-    } finally {
+      console.error('[SignInPage] Error during sign-in:', error);
+      toast.error('An unexpected error occurred');
       setIsLoading(false);
     }
   };
