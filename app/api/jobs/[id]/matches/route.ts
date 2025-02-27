@@ -50,6 +50,48 @@ export async function GET(
     }
 
     const data = await response.json()
+    
+    // Filter out John Doe entries if data contains documents
+    if (data && data.documents && Array.isArray(data.documents)) {
+      console.log(`Processing ${data.documents.length} documents from job matches API`);
+      
+      const originalCount = data.documents.length;
+      
+      // Filter out John Doe entries
+      data.documents = data.documents.filter((doc: any) => {
+        // Check if document has valid profile data
+        const hasValidProfile = doc.item_data?.content?.profile?.first_name && 
+                               doc.item_data?.content?.profile?.last_name;
+        
+        // Check if name is "John Doe" (case insensitive)
+        const isJohnDoe = hasValidProfile && 
+                         doc.item_data.content.profile.first_name.toLowerCase() === "john" && 
+                         doc.item_data.content.profile.last_name.toLowerCase() === "doe";
+        
+        // Log any John Doe entries we're filtering out
+        if (isJohnDoe) {
+          console.log('API route: Filtering out John Doe entry:', {
+            id: doc.id,
+            name: `${doc.item_data.content.profile.first_name} ${doc.item_data.content.profile.last_name}`,
+            timestamp: doc.item_data.timestamp
+          });
+        }
+        
+        // Keep only valid profiles that are not John Doe
+        return hasValidProfile && !isJohnDoe;
+      });
+      
+      const filteredCount = originalCount - data.documents.length;
+      if (filteredCount > 0) {
+        console.log(`API route: Filtered out ${filteredCount} John Doe entries from job matches`);
+        
+        // Update total count if it exists
+        if (data.total) {
+          data.total = data.documents.length;
+        }
+      }
+    }
+    
     return NextResponse.json(data)
   } catch (error) {
     console.error('Error fetching job matches:', error)

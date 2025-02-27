@@ -273,33 +273,42 @@ export const transformApiResponseToUiFormat = (response: JobMatchProfile[]) => {
     return [];
   }
 
-  return response.map(doc => {
+  // First filter out invalid documents and "John Doe" entries
+  const validDocuments = response.filter(doc => {
+    // Check if document has valid structure
+    const hasValidProfile = doc.item_data?.content?.profile?.first_name && 
+                           doc.item_data?.content?.profile?.last_name;
+    
+    // Check if name is "John Doe" (case insensitive)
+    const isJohnDoe = hasValidProfile && 
+                     doc.item_data.content.profile.first_name.toLowerCase() === "john" && 
+                     doc.item_data.content.profile.last_name.toLowerCase() === "doe";
+    
+    // Log any John Doe entries we're filtering out
+    if (isJohnDoe) {
+      console.log('Filtering out John Doe entry:', {
+        id: doc.id,
+        name: `${doc.item_data.content.profile.first_name} ${doc.item_data.content.profile.last_name}`,
+        timestamp: doc.item_data.timestamp
+      });
+    }
+    
+    // Filter out invalid profiles and John Doe entries
+    return hasValidProfile && !isJohnDoe;
+  });
+
+  console.log(`Filtered out ${response.length - validDocuments.length} invalid or John Doe entries`);
+
+  return validDocuments.map(doc => {
     console.log('Processing document:', {
       id: doc.id,
+      name: `${doc.item_data.content.profile.first_name} ${doc.item_data.content.profile.last_name}`,
       hasItemData: !!doc.item_data,
       hasContent: !!doc.item_data?.content,
       hasProfile: !!doc.item_data?.content?.profile,
       contentKeys: doc.item_data?.content ? Object.keys(doc.item_data.content) : [],
       profileKeys: doc.item_data?.content?.profile ? Object.keys(doc.item_data.content.profile) : []
     });
-
-    // Add null checks
-    if (!doc.item_data?.content?.profile) {
-      console.error('Invalid document structure:', doc);
-      return {
-        id: doc.id,
-        name: 'Unknown Candidate',
-        avatar: "/placeholder.svg",
-        matchScore: 0,
-        role: 'No Title',
-        experience: '0 years',
-        mainSkillScore: 0,
-        skillRatings: {},
-        summary: 'No summary available',
-        stage: 'new',
-        otherMatches: []
-      };
-    }
 
     return {
       id: doc.id,
@@ -354,7 +363,28 @@ export async function getResumeData() {
       return [];
     }
 
-    return documents.map(doc => {
+    // Filter out John Doe entries
+    const filteredDocuments = documents.filter((doc: any) => {
+      const hasValidProfile = doc.item_data?.content?.profile?.first_name && 
+                             doc.item_data?.content?.profile?.last_name;
+      
+      const isJohnDoe = hasValidProfile && 
+                       doc.item_data.content.profile.first_name.toLowerCase() === "john" && 
+                       doc.item_data.content.profile.last_name.toLowerCase() === "doe";
+      
+      if (isJohnDoe) {
+        console.log('Filtering out John Doe entry in getResumeData:', {
+          id: doc.id,
+          name: `${doc.item_data.content.profile.first_name} ${doc.item_data.content.profile.last_name}`
+        });
+      }
+      
+      return hasValidProfile && !isJohnDoe;
+    });
+    
+    console.log(`Filtered out ${documents.length - filteredDocuments.length} John Doe entries in getResumeData`);
+
+    return filteredDocuments.map((doc: JobMatchProfile) => {
       // Add validation logging
       if (!doc.item_data?.content?.profile) {
         console.error('Invalid document structure:', {
@@ -372,15 +402,14 @@ export async function getResumeData() {
         matchScore: doc.item_data.matching_score.data.score.value ? 
           Math.round(doc.item_data.matching_score.data.score.value * 100) : 0,
         role: doc.item_data.content.title || 'No Title',
-        status: doc.item_data.content.status || 'pending',
+        status: 'pending', // Default status since it doesn't exist in the type
         email: doc.item_data.content.profile.email,
-        phone: doc.item_data.content.profile.tel_num, // Changed from phone to tel_num
-        location: doc.item_data.content.profile ? 
-          `${doc.item_data.content.profile.city || ''}, ${doc.item_data.content.profile.country || ''}` : '',
+        phone: doc.item_data.content.profile.tel_num,
+        location: 'Unknown', // Default location since profile doesn't have city/country
         experience: doc.item_data.content.years_of_experience,
-        education: doc.item_data.content.education || [],
+        education: [], // Default empty array since education doesn't exist in the type
         skills: doc.item_data.content.skills || [],
-        languages: doc.item_data.content.languages || [],
+        languages: [], // Default empty array since languages doesn't exist in the type
         createdAt: doc.item_data.timestamp ? new Date(doc.item_data.timestamp).toLocaleDateString() : '',
         updatedAt: doc.item_data.timestamp ? new Date(doc.item_data.timestamp).toLocaleDateString() : ''
       };
