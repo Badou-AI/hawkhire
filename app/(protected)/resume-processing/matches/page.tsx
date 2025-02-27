@@ -38,7 +38,7 @@ import {
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { usePipelineStore } from '@/lib/store/pipeline-store'
 import { PipelineStatus } from '@/components/pipeline-status'
 import { useSearchParams } from "next/navigation"
@@ -109,6 +109,7 @@ export default function MatchesPage() {
   const [candidateMatches, setCandidateMatches] = useState<Candidate[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [jobStats, setJobStats] = useState<JobStats | null>(null)
+  const [showOnlyShortlisted, setShowOnlyShortlisted] = useState(true)
 
   // Fetch job data
   useEffect(() => {
@@ -227,11 +228,24 @@ export default function MatchesPage() {
     return "outline"
   }
 
-  // Calculate pagination values
-  const totalPages = Math.ceil(candidateMatches.length / ITEMS_PER_PAGE)
+  // Filter candidates based on the showOnlyShortlisted toggle
+  const filteredCandidates = useMemo(() => {
+    if (!showOnlyShortlisted) {
+      return candidateMatches;
+    }
+    return candidateMatches.filter(candidate => candidate.matchScore >= 80);
+  }, [candidateMatches, showOnlyShortlisted]);
+
+  // Calculate pagination values based on filtered candidates
+  const totalPages = Math.ceil(filteredCandidates.length / ITEMS_PER_PAGE)
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
   const endIndex = startIndex + ITEMS_PER_PAGE
-  const currentCandidates = candidateMatches?.slice(startIndex, endIndex) || []
+  const currentCandidates = filteredCandidates?.slice(startIndex, endIndex) || []
+
+  // Reset to page 1 when toggling the filter to avoid empty pages
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [showOnlyShortlisted]);
 
   // Function to handle page changes
   const handlePageChange = (page: number) => {
@@ -563,6 +577,36 @@ export default function MatchesPage() {
         )}
       </div>
 
+      {/* Display toggle for shortlisted candidates */}
+      <div className="flex items-center justify-between mb-4 px-1">
+        <div className="flex items-center gap-2">
+          <Button 
+            variant={showOnlyShortlisted ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowOnlyShortlisted(true)}
+            className={cn(
+              "gap-2",
+              showOnlyShortlisted && "bg-blue-600 hover:bg-blue-700"
+            )}
+          >
+            <CheckCircle2 className="h-4 w-4" />
+            Shortlisted Only ({jobStats?.shortlisted || 0})
+          </Button>
+          <Button 
+            variant={!showOnlyShortlisted ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowOnlyShortlisted(false)}
+          >
+            <Users className="h-4 w-4" />
+            All Candidates ({candidateMatches.length})
+          </Button>
+        </div>
+        
+        <div className="text-sm text-muted-foreground">
+          Showing {currentCandidates.length} of {filteredCandidates.length} {showOnlyShortlisted ? "shortlisted " : ""}candidates
+        </div>
+      </div>
+
       {/* Scrollable content area */}
       <div className="min-h-0 flex-1 flex flex-col">
         {/* Content - scrollable */}
@@ -570,6 +614,34 @@ export default function MatchesPage() {
           {isLoading ? (
             <div className="flex items-center justify-center h-full">
               <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent" />
+            </div>
+          ) : filteredCandidates.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 text-center p-8">
+              <div className="rounded-full bg-muted p-3 mb-4">
+                {showOnlyShortlisted ? (
+                  <CheckCircle2 className="h-6 w-6 text-muted-foreground" />
+                ) : (
+                  <Users className="h-6 w-6 text-muted-foreground" />
+                )}
+              </div>
+              <h3 className="text-lg font-medium mb-1">
+                {showOnlyShortlisted 
+                  ? "No shortlisted candidates found" 
+                  : "No candidates found"}
+              </h3>
+              <p className="text-muted-foreground max-w-md mb-4">
+                {showOnlyShortlisted 
+                  ? "There are no candidates with a match score of 80% or higher. Try viewing all candidates instead." 
+                  : "No candidates match the current filters. Try adjusting your search criteria."}
+              </p>
+              {showOnlyShortlisted && candidateMatches.length > 0 && (
+                <Button 
+                  variant="outline" 
+                  onClick={() => setShowOnlyShortlisted(false)}
+                >
+                  View All Candidates
+                </Button>
+              )}
             </div>
           ) : viewMode === 'table' ? (
             <div className="pb-16">
@@ -806,14 +878,16 @@ export default function MatchesPage() {
         </div>
 
         {/* Pagination */}
-        <div className="flex justify-center mt-6">
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={handlePageChange}
-            className="mb-6"
-          />
-        </div>
+        {filteredCandidates.length > 0 && (
+          <div className="flex justify-center mt-6">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={handlePageChange}
+              className="mb-6"
+            />
+          </div>
+        )}
       </div>
     </div>
   )
