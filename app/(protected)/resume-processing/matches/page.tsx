@@ -112,6 +112,7 @@ export default function MatchesPage() {
 
   // Fetch job data
   useEffect(() => {
+    console.log('Fetching job data...');
     const fetchJob = async () => {
       const jobId = searchParams.get('jobId')
       if (!jobId) return
@@ -135,6 +136,8 @@ export default function MatchesPage() {
       if (!currentJob?.id) {
         console.log('Waiting for job data to load...');
         return;
+      } else {
+        console.log('Job data loaded:', currentJob);
       }
 
       try {
@@ -315,8 +318,8 @@ export default function MatchesPage() {
               </Button>
             </Link>
             <div>
-              <h1 className="text-4xl font-bold">{currentJob?.title.en || 'Loading...'}</h1>
-              <p className="text-muted-foreground mt-1">Review matched candidates based on skills and experience</p>
+              <h1 className="text-4xl font-bold">{currentJob?.title || 'Loading...'}</h1>
+              {/* <p className="text-muted-foreground mt-1  text-ellipsis overflow-hidden">{currentJob?.description || 'Loading...'}</p> */}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -450,7 +453,7 @@ export default function MatchesPage() {
                     <Calendar className="h-4 w-4" />
                     <span>Posted Date</span>
                   </div>
-                  <p className="text-lg font-semibold">{formatDate(jobStats.createdAt)}</p>
+                  <p className="text-lg font-semibold">{formatDate(jobStats.processedAt)}</p>
                 </div>
               </CardContent>
             </Card>

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getJob } from '../../client'
 
-const REMOTE_API_URL = process.env.NEXT_PUBLIC_REMOTE_API_URL || 'http://147.79.115.55:8000'
+const REMOTE_API_URL = process.env.NEXT_PUBLIC_REMOTE_API_URL || 'http://147.93.44.131:8000'
 
 export async function GET(
   request: Request,

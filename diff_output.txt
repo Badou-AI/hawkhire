@@ -69,7 +69,7 @@ index 26604bd..9c6186f 100644
  class SemanticService:
      """Service layer for handling semantic operations"""
      def __init__(self):
--        self.base_url = os.getenv("REMOTE_API_URL", "http://147.79.115.55:8000")
+-        self.base_url = os.getenv("REMOTE_API_URL", "http://147.93.44.131:8000")
 +        self.base_url = os.getenv("REMOTE_API_URL")
          self.client = httpx.AsyncClient(timeout=30.0)
 +        self.mock_service = MockSemanticService()

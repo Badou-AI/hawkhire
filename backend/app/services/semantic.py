@@ -15,6 +15,15 @@ load_dotenv(Path(__file__).parent.parent.parent / '.env')
 
 logger = logging.getLogger(__name__)
 
+class ProcessingError(Exception):
+    """Exception raised when processing a file fails"""
+    def __init__(self, file_path: str, operation: str, error: Exception):
+        self.file_path = file_path
+        self.operation = operation
+        self.original_error = error
+        self.message = f"Error during {operation} for file {file_path}: {str(error)}"
+        super().__init__(self.message)
+
 class MockSemanticService:
     """Mock service for local development and testing"""
     def __init__(self):
@@ -87,8 +96,7 @@ class SemanticService:
                 return result
         except Exception as e:
             logger.error(f"Error converting PDF to text: {str(e)}", exc_info=True)
-            logger.debug("Falling back to mock service")
-            return await self.mock_service.convert_pdf_to_text(file_path)
+            raise ProcessingError(file_path=str(file_path), operation="PDF to text conversion", error=e)
 
     async def extract_knowledge(self, text: str, schema: Dict) -> Dict:
         """Extract structured knowledge from text"""
@@ -114,8 +122,7 @@ class SemanticService:
             return result
         except Exception as e:
             logger.error(f"Error extracting knowledge: {str(e)}", exc_info=True)
-            logger.debug("Falling back to mock service")
-            return await self.mock_service.extract_knowledge(text, schema)
+            raise ProcessingError(file_path="text input", operation="knowledge extraction", error=e)
 
 # Initialize the semantic service
 semantic_service = SemanticService() 

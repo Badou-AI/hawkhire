@@ -141,7 +141,7 @@ class MockSemanticService:
     async def extract_knowledge(self, text: str, schema: Dict) -> Dict:
         return {"data": schema}  # Return empty schema structure
 
-    async def analyze_document(self, text: str, schema: Dict) -> Dict:
+    async def analyze_document(self, text: str, job_description: str, schema: Dict) -> Dict:
         """Mock implementation of document analysis"""
         return {
             "justification": "This is a mock analysis of the document.",
@@ -191,10 +191,8 @@ class SemanticService:
             result = response.json()
             return result['embeddings'][0]
         except Exception as e:
-            print(f"Error generating embedding: {str(e)}, falling back to mock service")
-            mock_embedding = await self.mock_service.generate_embedding(text)
-            print(f"Mock embedding dimensions: {len(mock_embedding)}")
-            return mock_embedding
+            print(f"Error generating embedding: {str(e)}")
+            raise ProcessingError(operation="embedding generation", file_path="text input", error=e)
 
     async def convert_pdf_to_text(self, file_path: Path) -> Dict:
         """Convert PDF to text using remote service"""
@@ -209,8 +207,8 @@ class SemanticService:
                 response.raise_for_status()
                 return response.json()
         except Exception as e:
-            print(f"Error converting PDF to text: {str(e)}, falling back to mock service")
-            return await self.mock_service.convert_pdf_to_text(file_path)
+            print(f"Error converting PDF to text: {str(e)}")
+            raise ProcessingError(operation="PDF to text conversion", file_path=str(file_path), error=e)
 
     async def extract_knowledge(self, text: str, schema: Dict) -> Dict:
         """Extract structured knowledge from text"""
@@ -230,8 +228,8 @@ class SemanticService:
             response.raise_for_status()
             return response.json()
         except Exception as e:
-            print(f"Error extracting knowledge: {str(e)}, falling back to mock service")
-            return await self.mock_service.extract_knowledge(text, schema)
+            print(f"Error extracting knowledge: {str(e)}")
+            raise ProcessingError(operation="knowledge extraction", file_path="text input", error=e)
 
     async def analyze_document(self, text: str, job_description: str, schema: Dict) -> Dict:
         """Analyze document content and compare with job description"""
@@ -272,8 +270,7 @@ class SemanticService:
             if isinstance(e, httpx.HTTPError):
                 print(f"HTTP Error details: {e.response.text if hasattr(e, 'response') else 'No response'}")
             traceback.print_exc()
-            print("Falling back to mock service")
-            return await self.mock_service.analyze_document(text, job_description, schema)
+            raise ProcessingError(operation="document analysis", file_path="text input", error=e)
     
     async def index_document(self, index_name: str, doc_id: str, document: Dict) -> Dict:
         """Index a processed document"""
@@ -505,66 +502,118 @@ async def process_single_pdf(
     progress_callback: callable
 ) -> Dict:
     """Process a single PDF file with all necessary steps"""
+    # Get file stats
+    stats = FileStats(file_path)
+    
+    # Initialize result structure
+    result = {
+        "name": stats.name,
+        "size": stats.size,
+        "human_size": stats.human_size,
+        "mime_type": stats.mime_type,
+        "processed_path": str(dest_path),
+        "status": "processing",
+        "failures": [],
+        "timings": {}
+    }
+    
     try:
         print(f"\n=== Starting PDF Processing ===")
         print(f"File: {file_path}")
         print(f"Index: {index_name}")
         print(f"Job ID: {job_id}")
-
-        # Get file stats
-        stats = FileStats(file_path)
         
         # Initialize timings
         timings = {}
 
         # Convert PDF to text
         text_extraction_start = time.time()
-        text_result = await semantic_service.convert_pdf_to_text(dest_path)
-        text_content = "\n".join(text_result.get('pages', []))
-        timings['text_extraction'] = time.time() - text_extraction_start
+        try:
+            text_result = await semantic_service.convert_pdf_to_text(dest_path)
+            text_content = "\n".join(text_result.get('pages', []))
+            timings['text_extraction'] = time.time() - text_extraction_start
+            
+            print(f"\n=== Converting PDF to Text ===")
+            print(f"Using path: {file_path}")
+            print(f"Extracted text length: {len(text_content)} characters")
+            print(f"First 200 chars: {text_content[:200]}...")
+        except ProcessingError as e:
+            result["failures"].append({
+                "operation": e.operation,
+                "error": str(e.original_error)
+            })
+            # Cannot proceed without text content
+            raise
         
+        # Detect language
+        try:
+            language = await detect_language(text_content)
+            print(f"\n=== Language Detection ===")
+            print(f"Resume Language: {language}")
+        except Exception as e:
+            # Default to English if language detection fails
+            language = "en"
+            result["failures"].append({
+                "operation": "language detection",
+                "error": str(e)
+            })
+        
+        # Generate embedding
+        try:
+            embedding_start = time.time()
+            print(f"\n=== Generating Embedding ===")
+            print(f"Text length: {len(text_content)}")
+            embedding = await semantic_service.generate_embedding(text_content)
+            print(f"Embedding vector size: {len(embedding)}")
+            timings['embedding'] = time.time() - embedding_start
+        except ProcessingError as e:
+            result["failures"].append({
+                "operation": e.operation,
+                "error": str(e.original_error)
+            })
+            # Cannot proceed without embedding for search
+            raise
+        
+        # Extract knowledge
+        try:
+            knowledge_start = time.time()
+            extracted_knowledge = await semantic_service.extract_knowledge(
+                text_content,
+                RESUME_INDEX_CONFIG['mappings']['properties']['content']['properties']
+            )
+            print(f"\n=== Extracting Knowledge ===")
+            print(f"Extracted knowledge keys: {list(extracted_knowledge.keys())}")
+            timings['knowledge_extraction'] = time.time() - knowledge_start
+        except ProcessingError as e:
+            result["failures"].append({
+                "operation": e.operation,
+                "error": str(e.original_error)
+            })
+            # Use empty knowledge structure if extraction fails
+            extracted_knowledge = {"data": {}}
+        
+        # Analyze document
+        try:
+            analysis_start = time.time()
+            extracted_matching_score = await semantic_service.analyze_document(
+                text_content,
+                job_description,
+                RESUME_INDEX_CONFIG['mappings']['properties']['matching_score']['properties']
+            )
+            timings['analysis'] = time.time() - analysis_start
+        except ProcessingError as e:
+            result["failures"].append({
+                "operation": e.operation,
+                "error": str(e.original_error)
+            })
+            # Use default matching score if analysis fails
+            extracted_matching_score = {
+                "justification": "Analysis failed due to technical error.",
+                "score": 0.0
+            }
         
         # Generate document ID from file content
         doc_id = hashlib.sha256(text_content.encode()).hexdigest()
-        
-       
-       
-        print(f"\n=== Converting PDF to Text ===")
-        print(f"Using path: {file_path}")
-        print(f"Extracted text length: {len(text_content)} characters")
-        print(f"First 200 chars: {text_content[:200]}...")
-        
-        # Detect language
-        language = await detect_language(text_content)
-        print(f"\n=== Language Detection ===")
-        print(f"Resume Language: {language}")
-        
-        # Generate embedding
-        embedding_start = time.time()
-        print(f"\n=== Generating Embedding ===")
-        print(f"Text length: {len(text_content)}")
-        embedding = await semantic_service.generate_embedding(text_content)
-        print(f"Embedding vector size: {len(embedding)}")
-        timings['embedding'] = time.time() - embedding_start
-        
-        # Extract knowledge
-        knowledge_start = time.time()
-        extracted_knowledge = await semantic_service.extract_knowledge(
-            text_content,
-            RESUME_INDEX_CONFIG['mappings']['properties']['content']['properties']
-        )
-        print(f"\n=== Extracting Knowledge ===")
-        print(f"Extracted knowledge keys: {list(extracted_knowledge.keys())}")
-        timings['knowledge_extraction'] = time.time() - knowledge_start
-        
-        # Analyze document
-        analysis_start = time.time()
-        extracted_matching_score = await semantic_service.analyze_document(
-            text_content,
-            job_description,
-            RESUME_INDEX_CONFIG['mappings']['properties']['matching_score']['properties']
-        )
-        timings['analysis'] = time.time() - analysis_start
         
         # Create structured document
         document = {
@@ -583,27 +632,28 @@ async def process_single_pdf(
         }
         
         # Index the document
-        indexing_start = time.time()
-        await semantic_service.index_document(index_name, doc_id, document)
-        timings['indexing'] = time.time() - indexing_start
+        try:
+            indexing_start = time.time()
+            await semantic_service.index_document(index_name, doc_id, document)
+            timings['indexing'] = time.time() - indexing_start
+        except Exception as e:
+            result["failures"].append({
+                "operation": "document indexing",
+                "error": str(e)
+            })
         
         # Calculate total processing time
         total_time = sum(timings.values())
         
-        # Prepare result
-        result = {
-            "name": stats.name,
-            "size": stats.size,
-            "human_size": stats.human_size,
-            "mime_type": stats.mime_type,
-            "processed_path": str(dest_path),
+        # Update result
+        result.update({
             "doc_id": doc_id,
             "text_content": text_content[:500] + "...",
-            "status": "processed",
-            "indexed": True,
+            "status": "processed" if not result["failures"] else "partially_processed",
+            "indexed": "document indexing" not in [f["operation"] for f in result["failures"]],
             "timings": timings,
             "total_time": total_time
-        }
+        })
         
         # Call progress callback
         if progress_callback:
@@ -617,20 +667,16 @@ async def process_single_pdf(
         print(f"File: {file_path}")
         traceback.print_exc()
         
-        error_result = {
-            "name": file_path.name,
-            "size": file_path.stat().st_size,
-            "human_size": humanize.naturalsize(file_path.stat().st_size),
-            "mime_type": 'application/pdf',
-            "processed_path": str(dest_path),
+        # Update result with error information
+        result.update({
             "status": "failed",
             "error": str(e)
-        }
+        })
         
         if progress_callback:
-            await progress_callback(error_result)
+            await progress_callback(result)
             
-        return error_result
+        return result
 
 # Get number of CPU cores for optimal threading
 CPU_COUNT = os.cpu_count() or 4
@@ -3591,3 +3637,17 @@ from .jobs.routes import router as jobs_v2_router
 
 # Add the v2 jobs router
 app.include_router(jobs_v2_router)
+
+class ProcessingError(Exception):
+    """Exception raised when processing a file fails"""
+    def __init__(self, file_path: str, operation: str, error: Exception):
+        self.file_path = file_path
+        self.operation = operation
+        self.original_error = error
+        self.message = f"Error during {operation} for file {file_path}: {str(error)}"
+        super().__init__(self.message)
+
+# Load configuration from environment variables
+REMOTE_API_URL = os.getenv("REMOTE_API_URL")
+if not REMOTE_API_URL:
+    print("Warning: REMOTE_API_URL not set, services will use mock mode")

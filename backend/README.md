@@ -27,7 +27,7 @@ pip install -r requirements.txt
 4. Create a `.env` file in the backend directory with your configuration:
 ```env
 # Environment variables
-REMOTE_API_URL=http://147.79.115.55:8000
+REMOTE_API_URL=http://147.93.44.131:8000
 ```
 
 ## Running the Server

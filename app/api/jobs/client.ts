@@ -35,7 +35,7 @@ export interface Organization {
 
 export interface ApiJob {
   id: string
-  title: LocalizedText
+  title: string
   organizations: Organization
   location: {
     city: LocalizedText
@@ -43,7 +43,7 @@ export interface ApiJob {
   }
   job_type: string
   rating: number | null
-  description: LocalizedText
+  description: string
   salary_min: number | null
   salary_max: number | null
   salary_currency: string
