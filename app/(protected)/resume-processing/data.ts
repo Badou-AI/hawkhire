@@ -310,11 +310,26 @@ export const transformApiResponseToUiFormat = (response: JobMatchProfile[]) => {
       profileKeys: doc.item_data?.content?.profile ? Object.keys(doc.item_data.content.profile) : []
     });
 
+    // Calculate match score
+    const matchScore = Math.round(doc.item_data.matching_score.data.score.value * 100);
+    
+    // Determine stage based on match score - automatically shortlist candidates with 80%+ match scores
+    const stage = matchScore >= 80 ? 'shortlisted' : 'new';
+    
+    // Log shortlisted candidates
+    if (matchScore >= 80) {
+      console.log('Auto-shortlisting candidate with high match score:', {
+        id: doc.id,
+        name: `${doc.item_data.content.profile.first_name} ${doc.item_data.content.profile.last_name}`,
+        matchScore
+      });
+    }
+
     return {
       id: doc.id,
       name: `${doc.item_data.content.profile.first_name} ${doc.item_data.content.profile.last_name}`,
       avatar: "/placeholder.svg",
-      matchScore: Math.round(doc.item_data.matching_score.data.score.value * 100),
+      matchScore,
       role: doc.item_data.content.title,
       experience: `${doc.item_data.content.years_of_experience} years`,
       mainSkillScore: doc.item_data.content.skills[0] 
@@ -327,7 +342,7 @@ export const transformApiResponseToUiFormat = (response: JobMatchProfile[]) => {
         ])
       ),
       summary: doc.item_data.matching_score.data.justification.meta.description,
-      stage: 'new',
+      stage,
       otherMatches: [
         { 
           jobTitle: "Similar Role", 

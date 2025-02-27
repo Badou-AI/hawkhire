@@ -157,14 +157,31 @@ export default function MatchesPage() {
         const sortedData = transformedData.sort((a, b) => b.matchScore - a.matchScore)
         setCandidateMatches(sortedData)
 
+        // Count shortlisted candidates (those with match score >= 80%)
+        const shortlistedCandidates = sortedData.filter(c => c.matchScore >= 80);
+        const shortlistedCount = shortlistedCandidates.length;
+        console.log(`Auto-shortlisted ${shortlistedCount} candidates with match scores >= 80%`);
+        
+        // Automatically add shortlisted candidates to the pipeline
+        shortlistedCandidates.forEach(candidate => {
+          addCandidate({
+            id: candidate.id,
+            name: candidate.name,
+            role: candidate.role,
+            score: candidate.matchScore,
+            imageUrl: candidate.avatar
+          });
+        });
+        console.log(`Added ${shortlistedCount} shortlisted candidates to the pipeline`);
+
         // Calculate stats
         const stats: JobStats = {
           createdAt: currentJob.created_at,
           processedAt: new Date().toISOString(), // Last processing time
-          totalApplications: total || 0,
+          totalApplications: total || transformedData.length, // Use total from API or fallback to transformed data length
           activelyReviewing: sortedData.filter(c => c.stage === 'reviewing').length,
           averageExperience: calculateAverageExperience(sortedData),
-          shortlisted: sortedData.filter(c => c.stage === 'shortlisted').length,
+          shortlisted: shortlistedCount, // Update to use the count of candidates with match score >= 80%
           averageMatchScore: calculateAverageMatchScore(sortedData)
         }
         setJobStats(stats)
@@ -176,7 +193,7 @@ export default function MatchesPage() {
     }
 
     fetchCandidatesAndStats()
-  }, [currentJob])
+  }, [currentJob, addCandidate])
 
   const calculateAverageExperience = (candidates: Candidate[]): string => {
     const experienceValues = candidates
@@ -222,6 +239,9 @@ export default function MatchesPage() {
   }
 
   const renderCandidateCard = (candidate: typeof candidateMatches[0]) => {
+    // Check if candidate is already shortlisted (match score >= 80%)
+    const isShortlisted = candidate.matchScore >= 80;
+    
     return (
       <div className="flex items-start gap-6">
         {/* Left section: Avatar and basic info */}
@@ -236,25 +256,46 @@ export default function MatchesPage() {
               <span className="text-sm text-muted-foreground">
                 {candidate.experience} experience
               </span>
+              {isShortlisted && (
+                <Badge variant="default" className="bg-blue-500 hover:bg-blue-600">Shortlisted</Badge>
+              )}
             </div>
             <p className="text-sm text-muted-foreground col-span-2">
               {candidate.summary}
             </p>
-            <Button
-              onClick={() => addCandidate({
-                id: candidate.id,
-                name: candidate.name,
-                role: candidate.role,
-                score: candidate.matchScore,
-                imageUrl: candidate.avatar
-              })}
-              variant="outline"
-              size="sm"
-              className="gap-2 mt-2 h-7 text-xs"
-            >
-              <Plus className="h-3 w-3" />
-              Add to Pipeline
-            </Button>
+            {isShortlisted ? (
+              <Button
+                onClick={() => addCandidate({
+                  id: candidate.id,
+                  name: candidate.name,
+                  role: candidate.role,
+                  score: candidate.matchScore,
+                  imageUrl: candidate.avatar
+                })}
+                variant="default"
+                size="sm"
+                className="gap-2 mt-2 h-7 text-xs"
+              >
+                <Plus className="h-3 w-3" />
+                Add to Pipeline
+              </Button>
+            ) : (
+              <Button
+                onClick={() => addCandidate({
+                  id: candidate.id,
+                  name: candidate.name,
+                  role: candidate.role,
+                  score: candidate.matchScore,
+                  imageUrl: candidate.avatar
+                })}
+                variant="outline"
+                size="sm"
+                className="gap-2 mt-2 h-7 text-xs"
+              >
+                <Plus className="h-3 w-3" />
+                Add to Pipeline
+              </Button>
+            )}
           </div>
         </div>
 
@@ -494,14 +535,15 @@ export default function MatchesPage() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="border-blue-200 bg-blue-50">
               <CardContent className="p-4">
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <CheckCircle2 className="h-4 w-4" />
-                    <span>Shortlisted</span>
+                    <CheckCircle2 className="h-4 w-4 text-blue-600" />
+                    <span className="font-medium">Shortlisted</span>
+                    <span className="text-xs text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full" title="Candidates with match scores of 80% or higher are automatically shortlisted">Auto (80%+)</span>
                   </div>
-                  <p className="text-lg font-semibold">{jobStats.shortlisted}</p>
+                  <p className="text-lg font-semibold text-blue-700">{jobStats.shortlisted}</p>
                 </div>
               </CardContent>
             </Card>
