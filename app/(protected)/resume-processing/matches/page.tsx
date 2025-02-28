@@ -328,7 +328,7 @@ export default function MatchesPage() {
                 {candidate.experience} experience
               </span>
               {isShortlisted && (
-                <Badge variant="default" className="bg-blue-500 hover:bg-blue-600">Shortlisted</Badge>
+                <Badge variant="default" className="bg-blue-500 hover:bg-blue-600 print:hidden">Shortlisted</Badge>
               )}
             </div>
             <p className="text-sm text-muted-foreground col-span-2">
@@ -353,7 +353,7 @@ export default function MatchesPage() {
         </div>
 
         {/* Center section: Key skills */}
-        <div className="flex-1">
+        <div className="flex-1 print:hidden">
           <div className="grid grid-cols-2 gap-x-3 gap-y-2">
             {Object.entries(candidate.skillRatings)
               .sort(([, a], [, b]) => b - a)
@@ -364,7 +364,7 @@ export default function MatchesPage() {
                     <span className="font-medium truncate mr-2">{skill}</span>
                     <span className="text-muted-foreground shrink-0">{score}%</span>
                   </div>
-                  <div className="h-1.5 rounded-full bg-secondary print:hidden">
+                  <div className="h-1.5 rounded-full bg-secondary">
                     <div 
                       className={cn("h-full rounded-full transition-all", getSkillColor(score))}
                       style={{ width: `${score}%` }}
@@ -376,14 +376,14 @@ export default function MatchesPage() {
         </div>
 
         {/* Right section: Match score and actions */}
-        <div className="flex flex-col items-end gap-3">
+        <div className="flex flex-col items-end gap-3 print:hidden">
           <div className="flex items-center gap-3">
             <span className={cn("text-3xl font-bold match-score", getMatchScoreColor(candidate.matchScore))}>
               {candidate.matchScore}%
             </span>
-            <Badge variant={getMatchScoreVariant(candidate.matchScore)} className="match-score-label print:hidden">Match Score</Badge>
+            <Badge variant={getMatchScoreVariant(candidate.matchScore)} className="match-score-label">Match Score</Badge>
           </div>
-          <div className="flex gap-2 print:hidden">
+          <div className="flex gap-2">
             <Button variant="outline" size="sm">View Profile</Button>
             <Button size="sm">Contact</Button>
           </div>
@@ -927,42 +927,10 @@ export default function MatchesPage() {
         )}
       </div>
 
-      {/* Print-only summary footer */}
-      <div className="hidden print:block print:mt-10 print:pt-4 print:border-t print:border-gray-200">
-        <h2 className="print:text-xl print:font-bold print:mb-4">Summary</h2>
-        <div className="print:grid print:grid-cols-2 print:gap-4 print:mb-4">
-          <div className="print:flex print:flex-col">
-            <span className="print:text-sm print:text-gray-600">Total Candidates</span>
-            <span className="print:text-lg print:font-medium">{jobStats?.totalCandidates || 0}</span>
-          </div>
-          <div className="print:flex print:flex-col">
-            <span className="print:text-sm print:text-gray-600">Shortlisted Candidates</span>
-            <span className="print:text-lg print:font-medium">{jobStats?.shortlisted || 0}</span>
-          </div>
-          <div className="print:flex print:flex-col">
-            <span className="print:text-sm print:text-gray-600">Average Match Score</span>
-            <span className="print:text-lg print:font-medium">{jobStats?.averageMatchScore || 0}%</span>
-          </div>
-          <div className="print:flex print:flex-col">
-            <span className="print:text-sm print:text-gray-600">Average Experience</span>
-            <span className="print:text-lg print:font-medium">{jobStats?.averageExperience?.toFixed(1) || 0} years</span>
-          </div>
-        </div>
-        <div className="print:border-t print:pt-4">
-          <div className="print:flex print:flex-col">
-            <span className="print:text-sm print:text-gray-600">Job Title</span>
-            <span className="print:text-lg print:font-medium">{currentJob?.title || 'N/A'}</span>
-          </div>
-          <div className="print:flex print:flex-col print:mt-2">
-            <span className="print:text-sm print:text-gray-600">Generated On</span>
-            <span className="print:text-lg print:font-medium">{new Date().toLocaleString()}</span>
-          </div>
-        </div>
-      </div>
-
+      {/* Remove the redundant print-only summary footer */}
       {/* Print-only content with all candidates */}
-      <div className="hidden print:block">
-        {filteredCandidates.length > 0 && viewMode === 'grid' && (
+      <div className="hidden print:block print:w-full">
+        {filteredCandidates.length > 0 && (
           <div className="print:grid print:grid-cols-1 print:gap-6">
             {filteredCandidates.map((candidate) => (
               <Card 
@@ -972,84 +940,38 @@ export default function MatchesPage() {
                   candidate.matchScore >= 80 && "print:border-l-4 print:border-l-blue-500"
                 )}
               >
-                <CardContent className="print:p-6">
-                  {renderCandidateCard(candidate)}
+                <CardContent className="print:p-4">
+                  <div className="print:flex print:justify-between print:items-center print:mb-2">
+                    <span className="print:font-bold print:text-lg">{candidate.name}</span>
+                    <span className="print:italic print:text-gray-600">{candidate.experience}</span>
+                    {candidate.matchScore >= 80 && <span className="print:font-bold print:text-green-600 print:mx-2">Shortlisted</span>}
+                    <span className="print:font-bold print:text-lg">{candidate.matchScore}%</span>
+                  </div>
+                  <div className="print:italic print:text-gray-600 print:mb-2">
+                    {candidate.summary}
+                  </div>
+                  <div className="print:flex print:flex-wrap print:gap-1 print:mt-2">
+                    {Object.entries(candidate.skillRatings)
+                      .sort(([, a], [, b]) => b - a)
+                      .slice(0, 6)
+                      .map(([skill, score]) => (
+                        <span 
+                          key={skill}
+                          className={cn(
+                            "print:inline-block print:px-2 print:py-1 print:m-1 print:text-xs print:border print:border-gray-200",
+                            score >= 90 ? "print:border-l-4 print:border-l-green-500" : 
+                            score >= 80 ? "print:border-l-4 print:border-l-blue-500" : 
+                            score >= 70 ? "print:border-l-4 print:border-l-yellow-500" : 
+                            "print:border-l-4 print:border-l-red-500"
+                          )}
+                        >
+                          {skill}: {score}%
+                        </span>
+                      ))}
+                  </div>
                 </CardContent>
               </Card>
             ))}
-          </div>
-        )}
-        
-        {filteredCandidates.length > 0 && viewMode === 'table' && (
-          <div className="rounded-md border overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[300px]">Candidate</TableHead>
-                  <TableHead className="w-[100px]">Experience</TableHead>
-                  <TableHead>Key Skills</TableHead>
-                  <TableHead className="w-[120px] text-right">Match Score</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredCandidates.map((candidate) => {
-                  // Check if candidate is already shortlisted (match score >= 80%)
-                  const isShortlisted = candidate.matchScore >= 80;
-                  
-                  return (
-                    <TableRow 
-                      key={candidate.id}
-                      className={cn(
-                        candidate.matchScore >= 80 && "bg-blue-50",
-                        candidate.stage === "phone_screening" && "border-l-[hsl(var(--status-screening))]",
-                        candidate.stage === "interview" && "border-l-[hsl(var(--status-interview))]",
-                        candidate.stage === "offer" && "border-l-[hsl(var(--status-offer))]",
-                        candidate.stage === "hired" && "border-l-[hsl(var(--status-hired))]",
-                        "print:border print:border-gray-200"
-                      )}
-                    >
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div>
-                            <div className="font-medium">{candidate.name}</div>
-                            <div className="text-sm text-muted-foreground">{candidate.role}</div>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>{candidate.experience}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1 max-w-[300px]">
-                          {Object.entries(candidate.skillRatings)
-                            .sort(([, a], [, b]) => b - a)
-                            .slice(0, 3)
-                            .map(([skill, score]) => (
-                              <span 
-                                key={skill}
-                                className={cn(
-                                  "print:inline-block print:px-2 print:py-1 print:m-1 print:text-xs print:border print:border-gray-200",
-                                  score >= 90 ? "print:border-l-4 print:border-l-green-500" : 
-                                  score >= 80 ? "print:border-l-4 print:border-l-blue-500" : 
-                                  score >= 70 ? "print:border-l-4 print:border-l-yellow-500" : 
-                                  "print:border-l-4 print:border-l-red-500"
-                                )}
-                              >
-                                {skill} ({score}%)
-                              </span>
-                            ))}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <span className={cn("font-bold", getMatchScoreColor(candidate.matchScore))}>
-                            {candidate.matchScore}%
-                          </span>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
           </div>
         )}
       </div>
