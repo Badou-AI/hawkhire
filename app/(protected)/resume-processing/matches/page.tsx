@@ -56,7 +56,7 @@ import { getJob, type ApiJob } from "@/app/api/jobs/client"
 // Import data from shared data file
 import { transformApiResponseToUiFormat, getSkillColor } from "../data"
 
-// Add print styles
+// Update the printStyles to include the new print-specific styles
 const printStyles = `
   /* Hide print-only elements in regular view */
   .print-only {
@@ -86,6 +86,23 @@ const printStyles = `
       background: white;
     }
     
+    /* Hide app sidebar and replace with thin branding line */
+    nav, aside, .sidebar {
+      display: none !important;
+    }
+    
+    /* Create a thin branding line on the left */
+    body::before {
+      content: "";
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 0.5cm;
+      height: 100%;
+      background-color: #8b5cf6; /* Purple brand color */
+      z-index: 9999;
+    }
+    
     .print-hide {
       display: none !important;
     }
@@ -97,25 +114,17 @@ const printStyles = `
     .main-content {
       padding: 0 !important;
       margin: 0 !important;
-      width: 100% !important;
+      margin-left: 0.7cm !important; /* Add margin for the branding line */
+      width: calc(100% - 0.7cm) !important;
       max-width: 100% !important;
       overflow: visible !important;
       height: auto !important;
+      position: relative !important;
     }
     
+    /* Hide stats cards in print view */
     .stats-grid {
-      display: grid !important;
-      grid-template-columns: repeat(5, 1fr) !important;
-      gap: 0.5cm !important;
-      margin-bottom: 1cm !important;
-      page-break-inside: avoid !important;
-    }
-    
-    .stats-card {
-      border: 1px solid #ddd !important;
-      box-shadow: none !important;
-      break-inside: avoid !important;
-      padding: 0.3cm !important;
+      display: none !important;
     }
     
     .candidate-card {
@@ -136,16 +145,40 @@ const printStyles = `
       display: none !important;
     }
     
+    /* Improve skill display in print view */
     .skill-badge {
       display: inline-block !important;
       padding: 2px 6px !important;
       margin: 2px !important;
       border-radius: 4px !important;
       font-size: 9pt !important;
+      border: 1px solid #ddd !important;
+    }
+    
+    /* Add colored boxes for skills in print view */
+    .skill-high {
+      border-left: 4px solid #22c55e !important; /* Green */
+    }
+    
+    .skill-medium {
+      border-left: 4px solid #3b82f6 !important; /* Blue */
+    }
+    
+    .skill-low {
+      border-left: 4px solid #eab308 !important; /* Yellow */
+    }
+    
+    .skill-poor {
+      border-left: 4px solid #ef4444 !important; /* Red */
     }
     
     .match-score {
       font-weight: bold !important;
+    }
+    
+    /* Hide redundant match score label */
+    .match-score-label {
+      display: none !important;
     }
     
     table {
@@ -171,8 +204,9 @@ const printStyles = `
       font-weight: bold !important;
     }
     
+    /* Left-align the print header and include stats */
     .print-header {
-      text-align: center;
+      text-align: left;
       margin-bottom: 0.5cm;
       padding-bottom: 0.3cm;
       border-bottom: 1px solid #ddd;
@@ -190,11 +224,127 @@ const printStyles = `
       color: #666;
     }
     
+    .print-header-stats {
+      display: grid !important;
+      grid-template-columns: repeat(4, 1fr) !important;
+      gap: 0.5cm !important;
+      margin-top: 0.3cm !important;
+    }
+    
+    .print-header-stat {
+      font-size: 10pt !important;
+    }
+    
+    .print-header-stat-value {
+      font-weight: bold !important;
+      font-size: 12pt !important;
+    }
+    
     .print-summary {
       margin-top: 1cm;
       padding-top: 0.5cm;
       border-top: 1px solid #ddd;
       page-break-inside: avoid;
+    }
+    
+    /* Additional fixes for print view */
+    
+    /* Ensure the main content container doesn't restrict height */
+    .main-content, 
+    .main-content > div,
+    .main-content > div > div {
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+      display: block !important;
+    }
+    
+    /* Force all content to be visible */
+    .candidate-card, 
+    .candidate-card > div {
+      display: block !important;
+      visibility: visible !important;
+      overflow: visible !important;
+    }
+    
+    /* Ensure table rows break properly */
+    table, tbody, tr, td, th {
+      page-break-inside: auto !important;
+    }
+    
+    tr {
+      page-break-inside: avoid !important;
+    }
+    
+    /* Improve table view for printing */
+    .table-skill-badge {
+      display: inline-block !important;
+      padding: 2px 6px !important;
+      margin: 2px !important;
+      border-radius: 4px !important;
+      font-size: 9pt !important;
+      border: 1px solid #ddd !important;
+    }
+    
+    /* Ensure all pages are printed */
+    #__next, main, .main-content {
+      display: block !important;
+    }
+    
+    /* Show all candidates in print view, not just current page */
+    .print-all-candidates {
+      display: block !important;
+    }
+    
+    /* Ensure document structure for printing */
+    .print-document {
+      display: block !important;
+      width: 100% !important;
+      height: auto !important;
+      overflow: visible !important;
+    }
+    
+    .print-candidate-card {
+      break-inside: avoid;
+      margin-bottom: 1rem;
+      border: 1px solid #ddd;
+      padding: 1rem;
+      page-break-inside: avoid;
+    }
+    
+    .print-candidate-header {
+      margin-bottom: 0.5rem;
+    }
+    
+    .print-experience {
+      font-style: italic;
+      color: #555;
+    }
+    
+    .print-shortlisted {
+      font-weight: bold;
+      color: #22c55e;
+      margin: 0 0.5rem;
+    }
+    
+    .print-match-score {
+      font-weight: bold;
+      font-size: 1.1rem;
+    }
+    
+    .print-justification {
+      color: #555;
+      font-style: italic;
+      margin-bottom: 1rem;
+    }
+    
+    .skill-badge {
+      display: inline-block;
+      margin-right: 0.5rem;
+      margin-bottom: 0.5rem;
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.25rem;
+      font-size: 0.75rem;
     }
     
     @page {
@@ -391,6 +541,14 @@ export default function MatchesPage() {
     return "outline"
   }
 
+  // Add the missing getMatchLabel function
+  const getMatchLabel = (score: number): string => {
+    if (score >= 90) return "Excellent Match"
+    if (score >= 80) return "Good Match"
+    if (score >= 70) return "Fair Match"
+    return "Poor Match"
+  }
+
   // Filter candidates based on the showShortlisted toggle
   const filteredCandidates = useMemo(() => {
     let filtered = candidateMatches;
@@ -427,13 +585,6 @@ export default function MatchesPage() {
     setCurrentPage(1);
   }, [showShortlisted, searchQuery]);
 
-  // Function to handle page changes
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page)
-    // Scroll to top when changing pages
-    window.scrollTo(0, 0)
-  }
-
   // Add a useEffect to ensure pagination is properly initialized
   useEffect(() => {
     if (filteredCandidates.length > 0) {
@@ -461,31 +612,48 @@ export default function MatchesPage() {
     const isInPipeline = !!candidates[candidate.id];
     
     return (
-      <div className="flex items-start gap-6">
-        {/* Left section: Avatar and basic info */}
-        <div className="flex items-start gap-4 flex-[2]">
-          <Avatar className="h-12 w-12 print-hide">
-            <AvatarImage src={candidate.avatar} alt={candidate.name} />
-            <AvatarFallback>{candidate.name.charAt(0)}</AvatarFallback>
-          </Avatar>
-          <div className="space-y-1 min-w-[200px]">
+      <div key={candidate.id} className="flex flex-col rounded-lg border bg-card text-card-foreground shadow-sm mb-4 print-candidate-card">
+        <div className="p-4 grid grid-cols-[1fr_1fr_auto] gap-4 items-start">
+          {/* Left section: Candidate info */}
+          <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <h4 className="font-medium">{candidate.name}</h4>
-              <span className="text-sm text-muted-foreground">
-                {candidate.experience} experience
-              </span>
-              {isShortlisted && (
-                <Badge variant="default" className="bg-blue-500 hover:bg-blue-600">Shortlisted</Badge>
-              )}
-            </div>
-            <p className="text-sm text-muted-foreground col-span-2">
-              {candidate.summary}
-            </p>
-            {isInPipeline ? (
-              <div className="mt-2 print-hide">
-                <PipelineStatus currentStage={candidates[candidate.id].stage} />
+              <Avatar className="h-8 w-8 print-hide">
+                <AvatarImage src={candidate.avatar} alt={candidate.name} />
+                <AvatarFallback>{candidate.name.charAt(0)}</AvatarFallback>
+              </Avatar>
+              <div>
+                <div className="font-semibold">{candidate.name}</div>
+                <div className="text-sm text-muted-foreground">{candidate.role}</div>
               </div>
-            ) : (
+            </div>
+            
+            {/* Print-only header with all key info on one line */}
+            <div className="print-only print-candidate-header">
+              <div className="flex justify-between items-center">
+                <span className="font-bold text-lg">{candidate.name}</span>
+                <span className="print-experience">{candidate.experience}</span>
+                {isShortlisted && <span className="print-shortlisted">Shortlisted</span>}
+                <span className="print-match-score">{candidate.matchScore}%</span>
+              </div>
+              
+              {/* Justification on second row */}
+              <div className="print-justification mt-2">
+                {candidate.summary}
+              </div>
+            </div>
+
+            <div className="print-hide">
+              <div className="flex items-center gap-2 text-sm">
+                <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                <span>{candidate.experience}</span>
+              </div>
+              <div className="mt-2 text-sm text-muted-foreground line-clamp-2">
+                {candidate.summary}
+              </div>
+            </div>
+            
+            {/* Add to Pipeline button - only shown in screen view */}
+            {!isInPipeline && (
               <Button
                 onClick={() => handleAddCandidate(candidate)}
                 variant={isShortlisted ? "default" : "outline"}
@@ -497,50 +665,54 @@ export default function MatchesPage() {
               </Button>
             )}
           </div>
-        </div>
 
-        {/* Center section: Key skills */}
-        <div className="flex-1">
-          <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-            {Object.entries(candidate.skillRatings)
-              .sort(([, a], [, b]) => b - a)
-              .slice(0, 6)
-              .map(([skill, score]) => (
-              <div key={skill} className="space-y-1">
-                <div className="flex justify-between text-xs">
-                  <span className="font-medium truncate mr-2">{skill}</span>
-                  <span className="text-muted-foreground shrink-0">{score}%</span>
-                </div>
-                <div className="h-1.5 rounded-full bg-secondary print-hide">
-                  <div 
-                    className={cn("h-full rounded-full transition-all", getSkillColor(score))}
-                    style={{ width: `${score}%` }}
-                  />
-                </div>
-                <div className="skill-badge print-only">
-                  {skill}: {score}%
-                </div>
-              </div>
-            ))}
+          {/* Center section: Key skills */}
+          <div className="flex-1">
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+              {Object.entries(candidate.skillRatings)
+                .sort(([, a], [, b]) => b - a)
+                .slice(0, 6)
+                .map(([skill, score]) => (
+                  <div key={skill} className="space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="font-medium truncate mr-2">{skill}</span>
+                      <span className="text-muted-foreground shrink-0">{score}%</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-secondary print-hide">
+                      <div 
+                        className={cn("h-full rounded-full transition-all", getSkillColor(score))}
+                        style={{ width: `${score}%` }}
+                      />
+                    </div>
+                    <div className={cn(
+                      "skill-badge print-only",
+                      score >= 90 ? "skill-high" : 
+                      score >= 80 ? "skill-medium" : 
+                      score >= 70 ? "skill-low" : 
+                      "skill-poor"
+                    )}>
+                      {skill}: {score}%
+                    </div>
+                  </div>
+                ))}
+            </div>
           </div>
-        </div>
 
-        {/* Right section: Match score and actions */}
-        <div className="flex flex-col items-end gap-3">
-          <div className="flex items-center gap-3">
-            <span className={cn("text-3xl font-bold match-score", getMatchScoreColor(candidate.matchScore))}>
+          {/* Right section: Match score */}
+          <div className="text-center print-hide">
+            <div className="inline-flex items-center justify-center rounded-full border-4 h-16 w-16 font-bold text-lg">
               {candidate.matchScore}%
-            </span>
-            <Badge variant={getMatchScoreVariant(candidate.matchScore)}>Match Score</Badge>
-          </div>
-          <div className="flex gap-2 print-hide">
-            <Button variant="outline" size="sm">View Profile</Button>
-            <Button size="sm">Contact</Button>
+            </div>
+            <div className="mt-2">
+              <Badge variant={getMatchScoreVariant(candidate.matchScore)} className={cn("w-full justify-center", getMatchScoreColor(candidate.matchScore))}>
+                {getMatchLabel(candidate.matchScore)}
+              </Badge>
+            </div>
           </div>
         </div>
       </div>
-    )
-  }
+    );
+  };
 
   const sampleQuestions = [
     "Show me candidates with React experience above 90%",
@@ -594,8 +766,15 @@ export default function MatchesPage() {
     }, 0);
   };
 
+  // Add back the handlePageChange function
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+    // Scroll to top when changing pages
+    window.scrollTo(0, 0)
+  }
+
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="flex flex-col min-h-screen print-document">
       {/* Add print styles */}
       <style jsx global>{printStyles}</style>
       
@@ -716,6 +895,27 @@ export default function MatchesPage() {
         <h1>{currentJob?.title || 'Job Matches'}</h1>
         <p>Generated on {new Date().toLocaleDateString()}</p>
         {showShortlisted && <p>Showing shortlisted candidates only (80%+ match)</p>}
+        
+        {jobStats && (
+          <div className="print-header-stats">
+            <div className="print-header-stat">
+              <div>Posted Date</div>
+              <div className="print-header-stat-value">{formatDate(currentJob?.created_at || '')}</div>
+            </div>
+            <div className="print-header-stat">
+              <div>Last Processed</div>
+              <div className="print-header-stat-value">{formatDate(jobStats.lastProcessed || '')}</div>
+            </div>
+            <div className="print-header-stat">
+              <div>Applications</div>
+              <div className="print-header-stat-value">{jobStats.totalCandidates.toLocaleString()}</div>
+            </div>
+            <div className="print-header-stat">
+              <div>Shortlisted</div>
+              <div className="print-header-stat-value">{jobStats.shortlisted}</div>
+            </div>
+          </div>
+        )}
       </div>
       
       {/* Stats cards */}
@@ -968,11 +1168,24 @@ export default function MatchesPage() {
                                 {skill} ({score}%)
                               </Badge>
                             ))}
-                          <div className="skill-badge print-only">
+                          <div className="print-only">
                             {Object.entries(candidate.skillRatings)
                               .sort(([, a], [, b]) => b - a)
                               .slice(0, 3)
-                              .map(([skill, score]) => `${skill} (${score}%)`).join(', ')}
+                              .map(([skill, score]) => (
+                                <span 
+                                  key={skill}
+                                  className={cn(
+                                    "table-skill-badge",
+                                    score >= 90 ? "skill-high" : 
+                                    score >= 80 ? "skill-medium" : 
+                                    score >= 70 ? "skill-low" : 
+                                    "skill-poor"
+                                  )}
+                                >
+                                  {skill} ({score}%)
+                                </span>
+                              ))}
                           </div>
                         </div>
                       </TableCell>
@@ -1057,6 +1270,151 @@ export default function MatchesPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Hidden div with all candidates for print view */}
+      <div className="hidden print-all-candidates">
+        {filteredCandidates.length > 0 && viewMode === 'grid' && (
+          <div className="grid grid-cols-1 gap-6">
+            {filteredCandidates.map((candidate) => (
+              <Card 
+                key={candidate.id} 
+                className={cn(
+                  "candidate-card hover:shadow-md transition-shadow",
+                  candidate.matchScore >= 80 && "shortlisted-candidate border-l-4 border-l-blue-500",
+                  candidate.stage === "phone_screening" && "border-l-[hsl(var(--status-screening))]",
+                  candidate.stage === "interview" && "border-l-[hsl(var(--status-interview))]",
+                  candidate.stage === "offer" && "border-l-[hsl(var(--status-offer))]",
+                  candidate.stage === "hired" && "border-l-[hsl(var(--status-hired))]"
+                )}
+              >
+                <CardContent className="p-6">
+                  {renderCandidateCard(candidate)}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+        
+        {filteredCandidates.length > 0 && viewMode === 'table' && (
+          <div className="rounded-md border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[300px]">Candidate</TableHead>
+                  <TableHead className="w-[100px]">Experience</TableHead>
+                  <TableHead>Key Skills</TableHead>
+                  <TableHead className="w-[120px] text-right">Match Score</TableHead>
+                  <TableHead className="w-[150px] text-right print-hide">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredCandidates.map((candidate) => {
+                  // Check if candidate is already shortlisted (match score >= 80%)
+                  const isShortlisted = candidate.matchScore >= 80;
+                  const isInPipeline = !!candidates[candidate.id];
+                  
+                  return (
+                    <TableRow 
+                      key={candidate.id}
+                      className={cn(
+                        candidate.matchScore >= 80 && "shortlisted-candidate",
+                        candidate.stage === "phone_screening" && "border-l-[hsl(var(--status-screening))]",
+                        candidate.stage === "interview" && "border-l-[hsl(var(--status-interview))]",
+                        candidate.stage === "offer" && "border-l-[hsl(var(--status-offer))]",
+                        candidate.stage === "hired" && "border-l-[hsl(var(--status-hired))]"
+                      )}
+                    >
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-8 w-8 print-hide">
+                            <AvatarImage src={candidate.avatar} alt={candidate.name} />
+                            <AvatarFallback>{candidate.name.charAt(0)}</AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <div className="font-medium">{candidate.name}</div>
+                            <div className="text-sm text-muted-foreground">{candidate.role}</div>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>{candidate.experience}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1 max-w-[300px]">
+                          {Object.entries(candidate.skillRatings)
+                            .sort(([, a], [, b]) => b - a)
+                            .slice(0, 3)
+                            .map(([skill, score]) => (
+                              <Badge 
+                                key={skill} 
+                                variant="secondary"
+                                className={cn(
+                                  "text-xs font-normal print-hide",
+                                  score >= 90 ? "bg-green-100" : 
+                                  score >= 80 ? "bg-blue-100" : 
+                                  "bg-yellow-100"
+                                )}
+                              >
+                                {skill} ({score}%)
+                              </Badge>
+                            ))}
+                          <div className="print-only">
+                            {Object.entries(candidate.skillRatings)
+                              .sort(([, a], [, b]) => b - a)
+                              .slice(0, 3)
+                              .map(([skill, score]) => (
+                                <span 
+                                  key={skill}
+                                  className={cn(
+                                    "table-skill-badge",
+                                    score >= 90 ? "skill-high" : 
+                                    score >= 80 ? "skill-medium" : 
+                                    score >= 70 ? "skill-low" : 
+                                    "skill-poor"
+                                  )}
+                                >
+                                  {skill} ({score}%)
+                                </span>
+                              ))}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <span className={cn("font-bold match-score", getMatchScoreColor(candidate.matchScore))}>
+                            {candidate.matchScore}%
+                          </span>
+                          <div className="w-16 h-2 bg-secondary rounded-full print-hide">
+                            <div 
+                              className={cn("h-full rounded-full", getSkillColor(candidate.matchScore))}
+                              style={{ width: `${candidate.matchScore}%` }}
+                            />
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right print-hide">
+                        <div className="flex justify-end gap-2">
+                          {candidates[candidate.id] ? (
+                            <PipelineStatus currentStage={candidates[candidate.id].stage} />
+                          ) : (
+                            <Button
+                              onClick={() => handleAddCandidate(candidate)}
+                              variant={isShortlisted ? "default" : "outline"}
+                              size="sm"
+                              className="gap-1"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                              Add
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </div>
     </div>
   )
