@@ -311,7 +311,9 @@ export const transformApiResponseToUiFormat = (response: JobMatchProfile[]) => {
     });
 
     // Calculate match score
-    const matchScore = Math.round(doc.item_data.matching_score.data.score.value * 100);
+    const matchScore = doc.item_data.matching_score?.data?.score?.value 
+      ? Math.round(doc.item_data.matching_score.data.score.value * 100)
+      : 0;
     
     // Determine stage based on match score - automatically shortlist candidates with 80%+ match scores
     const stage = matchScore >= 80 ? 'shortlisted' : 'new';
@@ -330,27 +332,35 @@ export const transformApiResponseToUiFormat = (response: JobMatchProfile[]) => {
       name: `${doc.item_data.content.profile.first_name} ${doc.item_data.content.profile.last_name}`,
       avatar: "/placeholder.svg",
       matchScore,
-      role: doc.item_data.content.title,
-      experience: `${doc.item_data.content.years_of_experience} years`,
-      mainSkillScore: doc.item_data.content.skills[0] 
+      role: doc.item_data.content?.title || "No Title",
+      experience: doc.item_data.content?.years_of_experience 
+        ? `${doc.item_data.content.years_of_experience} years` 
+        : "Experience not specified",
+      mainSkillScore: doc.item_data.content?.skills?.[0] 
         ? Math.round(doc.item_data.content.skills[0].score * 100)
         : 0,
-      skillRatings: Object.fromEntries(
-        doc.item_data.content.skills.map(skill => [
-          skill.skill,
-          Math.round(skill.score * 100)
-        ])
-      ),
-      summary: doc.item_data.matching_score.data.justification.meta.description,
+      skillRatings: doc.item_data.content?.skills
+        ? Object.fromEntries(
+            doc.item_data.content.skills.map(skill => [
+              skill.skill,
+              Math.round(skill.score * 100)
+            ])
+          )
+        : {},
+      summary: doc.item_data.matching_score?.data?.justification?.meta?.description || 
+               doc.item_data.content?.summary || 
+               "No summary available",
       stage,
       otherMatches: [
         { 
           jobTitle: "Similar Role", 
-          score: Math.round(doc.item_data.matching_score.data.score.value * 85) 
+          score: doc.item_data.matching_score?.data?.score?.value
+            ? Math.round(doc.item_data.matching_score.data.score.value * 85)
+            : 0
         }
       ] as OtherMatch[],
-      email: doc.item_data.content.profile.email,
-      phone: doc.item_data.content.profile.tel_num
+      email: doc.item_data.content?.profile?.email,
+      phone: doc.item_data.content?.profile?.tel_num
     };
   });
 };
@@ -418,12 +428,14 @@ export async function getResumeData() {
         avatar: "/placeholder.svg",
         matchScore: doc.item_data.matching_score.data.score.value ? 
           Math.round(doc.item_data.matching_score.data.score.value * 100) : 0,
-        role: doc.item_data.content.title || 'No Title',
+        role: doc.item_data.content?.title || "No Title",
         status: 'pending', // Default status since it doesn't exist in the type
-        email: doc.item_data.content.profile.email,
-        phone: doc.item_data.content.profile.tel_num,
+        email: doc.item_data.content?.profile?.email,
+        phone: doc.item_data.content?.profile?.tel_num,
         location: 'Unknown', // Default location since profile doesn't have city/country
-        experience: doc.item_data.content.years_of_experience,
+        experience: doc.item_data.content?.years_of_experience 
+          ? `${doc.item_data.content.years_of_experience} years` 
+          : "Experience not specified",
         education: [], // Default empty array since education doesn't exist in the type
         skills: doc.item_data.content.skills || [],
         languages: [], // Default empty array since languages doesn't exist in the type
