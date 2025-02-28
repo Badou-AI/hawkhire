@@ -105,6 +105,34 @@
     break-before: page !important;
     page-break-before: always !important;
   }
+
+  /* Fix for multi-page printing */
+  @page {
+    size: auto;
+    margin: 0.5in;
+  }
+
+  /* Ensure all content is visible */
+  .hidden {
+    display: none !important;
+  }
+
+  /* Make sure cards don't break across pages */
+  .print\:break-inside-avoid {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Ensure proper spacing between cards */
+  .print\:mb-5 {
+    margin-bottom: 1.25rem !important;
+  }
+
+  /* Fix for scrollable containers */
+  .overflow-y-auto, .overflow-hidden {
+    overflow: visible !important;
+    height: auto !important;
+  }
 }
 
 .font-sans {

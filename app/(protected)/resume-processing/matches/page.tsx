@@ -394,8 +394,16 @@ export default function MatchesPage() {
           <div className="print:flex print:justify-between print:items-center print:mb-2">
             <span className="print:font-bold print:text-lg">{candidate.name}</span>
             <span className="print:italic print:text-gray-600">{candidate.experience}</span>
-            {isShortlisted && <span className="print:font-bold print:text-green-600 print:mx-2">Shortlisted</span>}
-            <span className="print:font-bold print:text-lg">{candidate.matchScore}%</span>
+            {isShortlisted && <span className="print:font-bold print:text-blue-600 print:mx-2">Shortlisted</span>}
+            <span className={cn(
+              "print:font-bold print:text-lg",
+              candidate.matchScore >= 90 ? "print:text-green-600" : 
+              candidate.matchScore >= 80 ? "print:text-blue-600" : 
+              candidate.matchScore >= 70 ? "print:text-yellow-600" : 
+              "print:text-red-600"
+            )}>
+              {candidate.matchScore}%
+            </span>
           </div>
           <div className="print:italic print:text-gray-600 print:mb-2">
             {candidate.summary}
@@ -944,8 +952,16 @@ export default function MatchesPage() {
                   <div className="print:flex print:justify-between print:items-center print:mb-2">
                     <span className="print:font-bold print:text-lg">{candidate.name}</span>
                     <span className="print:italic print:text-gray-600">{candidate.experience}</span>
-                    {candidate.matchScore >= 80 && <span className="print:font-bold print:text-green-600 print:mx-2">Shortlisted</span>}
-                    <span className="print:font-bold print:text-lg">{candidate.matchScore}%</span>
+                    {candidate.matchScore >= 80 && <span className="print:font-bold print:text-blue-600 print:mx-2">Shortlisted</span>}
+                    <span className={cn(
+                      "print:font-bold print:text-lg",
+                      candidate.matchScore >= 90 ? "print:text-green-600" : 
+                      candidate.matchScore >= 80 ? "print:text-blue-600" : 
+                      candidate.matchScore >= 70 ? "print:text-yellow-600" : 
+                      "print:text-red-600"
+                    )}>
+                      {candidate.matchScore}%
+                    </span>
                   </div>
                   <div className="print:italic print:text-gray-600 print:mb-2">
                     {candidate.summary}
