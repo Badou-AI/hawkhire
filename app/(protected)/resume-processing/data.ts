@@ -348,7 +348,9 @@ export const transformApiResponseToUiFormat = (response: JobMatchProfile[]) => {
           jobTitle: "Similar Role", 
           score: Math.round(doc.item_data.matching_score.data.score.value * 85) 
         }
-      ] as OtherMatch[]
+      ] as OtherMatch[],
+      email: doc.item_data.content.profile.email,
+      phone: doc.item_data.content.profile.tel_num
     };
   });
 };

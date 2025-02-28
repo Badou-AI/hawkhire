@@ -101,6 +101,8 @@ interface Candidate {
   summary: string;
   stage: string;
   otherMatches: Array<{ jobTitle: string; score: number }>;
+  email?: string;
+  phone?: string;
 }
 
 // Add TypeScript declaration for the window.testPrint property
@@ -962,6 +964,17 @@ export default function MatchesPage() {
                       {candidate.matchScore}%
                     </span>
                   </div>
+                  
+                  {/* Add contact information row */}
+                  <div className="print:flex print:items-center print:text-sm print:text-gray-600 print:mb-2">
+                    {candidate.phone && (
+                      <span className="print:mr-4">📞 {candidate.phone}</span>
+                    )}
+                    {candidate.email && (
+                      <span>✉️ {candidate.email}</span>
+                    )}
+                  </div>
+                  
                   <div className="print:italic print:text-gray-600 print:mb-2">
                     {candidate.summary}
                   </div>
