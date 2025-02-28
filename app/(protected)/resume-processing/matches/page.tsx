@@ -747,7 +747,7 @@ export default function MatchesPage() {
       </div>
 
       {/* Main content area */}
-      <div className="main-content">
+      <div className="main-content print:hidden">
         {isLoading ? (
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent" />
@@ -800,7 +800,7 @@ export default function MatchesPage() {
               <Card 
                 key={candidate.id} 
                 className={cn(
-                  "hover:shadow-md transition-shadow print:break-inside-avoid print:page-break-inside-avoid print:border print:border-gray-200 print:shadow-none print:mb-5 print:p-3",
+                  "hover:shadow-md transition-shadow",
                   candidate.matchScore >= 80 && "border-l-4 border-l-blue-500",
                   candidate.stage === "phone_screening" && "border-l-[hsl(var(--status-screening))]",
                   candidate.stage === "interview" && "border-l-[hsl(var(--status-interview))]",
@@ -823,7 +823,7 @@ export default function MatchesPage() {
                   <TableHead className="w-[100px]">Experience</TableHead>
                   <TableHead>Key Skills</TableHead>
                   <TableHead className="w-[120px] text-right">Match Score</TableHead>
-                  <TableHead className="w-[150px] text-right print:hidden">Actions</TableHead>
+                  <TableHead className="w-[150px] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -840,13 +840,12 @@ export default function MatchesPage() {
                         candidate.stage === "phone_screening" && "border-l-[hsl(var(--status-screening))]",
                         candidate.stage === "interview" && "border-l-[hsl(var(--status-interview))]",
                         candidate.stage === "offer" && "border-l-[hsl(var(--status-offer))]",
-                        candidate.stage === "hired" && "border-l-[hsl(var(--status-hired))]",
-                        "print:border print:border-gray-200"
+                        candidate.stage === "hired" && "border-l-[hsl(var(--status-hired))]"
                       )}
                     >
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <Avatar className="h-8 w-8 print:hidden">
+                          <Avatar className="h-8 w-8">
                             <AvatarImage src={candidate.avatar} alt={candidate.name} />
                             <AvatarFallback>{candidate.name.charAt(0)}</AvatarFallback>
                           </Avatar>
@@ -867,7 +866,7 @@ export default function MatchesPage() {
                                 key={skill} 
                                 variant="secondary"
                                 className={cn(
-                                  "text-xs font-normal print:hidden",
+                                  "text-xs font-normal",
                                   score >= 90 ? "bg-green-100" : 
                                   score >= 80 ? "bg-blue-100" : 
                                   "bg-yellow-100"
@@ -876,25 +875,6 @@ export default function MatchesPage() {
                                 {skill} ({score}%)
                               </Badge>
                             ))}
-                          <div className="hidden print:block">
-                            {Object.entries(candidate.skillRatings)
-                              .sort(([, a], [, b]) => b - a)
-                              .slice(0, 3)
-                              .map(([skill, score]) => (
-                                <span 
-                                  key={skill}
-                                  className={cn(
-                                    "print:inline-block print:px-2 print:py-1 print:m-1 print:text-xs print:border print:border-gray-200",
-                                    score >= 90 ? "print:border-l-4 print:border-l-green-500" : 
-                                    score >= 80 ? "print:border-l-4 print:border-l-blue-500" : 
-                                    score >= 70 ? "print:border-l-4 print:border-l-yellow-500" : 
-                                    "print:border-l-4 print:border-l-red-500"
-                                  )}
-                                >
-                                  {skill} ({score}%)
-                                </span>
-                              ))}
-                          </div>
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
@@ -902,7 +882,7 @@ export default function MatchesPage() {
                           <span className={cn("font-bold", getMatchScoreColor(candidate.matchScore))}>
                             {candidate.matchScore}%
                           </span>
-                          <div className="w-16 h-2 bg-secondary rounded-full print:hidden">
+                          <div className="w-16 h-2 bg-secondary rounded-full">
                             <div 
                               className={cn("h-full rounded-full", getSkillColor(candidate.matchScore))}
                               style={{ width: `${candidate.matchScore}%` }}
@@ -910,7 +890,7 @@ export default function MatchesPage() {
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="text-right print:hidden">
+                      <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           {candidates[candidate.id] ? (
                             <PipelineStatus currentStage={candidates[candidate.id].stage} />
@@ -937,7 +917,7 @@ export default function MatchesPage() {
 
         {/* Pagination */}
         {filteredCandidates.length > ITEMS_PER_PAGE && (
-          <div className="flex items-center justify-center mt-8 mb-8 print:hidden">
+          <div className="flex items-center justify-center mt-8 mb-8">
             <Pagination
               currentPage={currentPage}
               totalPages={totalPages}
@@ -945,42 +925,42 @@ export default function MatchesPage() {
             />
           </div>
         )}
+      </div>
 
-        {/* Print-only summary footer */}
-        <div className="hidden print:block print:mt-10 print:pt-4 print:border-t print:border-gray-200">
-          <h2 className="print:text-xl print:font-bold print:mb-4">Summary</h2>
-          <div className="print:grid print:grid-cols-2 print:gap-4 print:mb-4">
-            <div className="print:flex print:flex-col">
-              <span className="print:text-sm print:text-gray-600">Total Candidates</span>
-              <span className="print:text-lg print:font-medium">{jobStats?.totalCandidates || 0}</span>
-            </div>
-            <div className="print:flex print:flex-col">
-              <span className="print:text-sm print:text-gray-600">Shortlisted Candidates</span>
-              <span className="print:text-lg print:font-medium">{jobStats?.shortlisted || 0}</span>
-            </div>
-            <div className="print:flex print:flex-col">
-              <span className="print:text-sm print:text-gray-600">Average Match Score</span>
-              <span className="print:text-lg print:font-medium">{jobStats?.averageMatchScore || 0}%</span>
-            </div>
-            <div className="print:flex print:flex-col">
-              <span className="print:text-sm print:text-gray-600">Average Experience</span>
-              <span className="print:text-lg print:font-medium">{jobStats?.averageExperience?.toFixed(1) || 0} years</span>
-            </div>
+      {/* Print-only summary footer */}
+      <div className="hidden print:block print:mt-10 print:pt-4 print:border-t print:border-gray-200">
+        <h2 className="print:text-xl print:font-bold print:mb-4">Summary</h2>
+        <div className="print:grid print:grid-cols-2 print:gap-4 print:mb-4">
+          <div className="print:flex print:flex-col">
+            <span className="print:text-sm print:text-gray-600">Total Candidates</span>
+            <span className="print:text-lg print:font-medium">{jobStats?.totalCandidates || 0}</span>
           </div>
-          <div className="print:border-t print:pt-4">
-            <div className="print:flex print:flex-col">
-              <span className="print:text-sm print:text-gray-600">Job Title</span>
-              <span className="print:text-lg print:font-medium">{currentJob?.title || 'N/A'}</span>
-            </div>
-            <div className="print:flex print:flex-col print:mt-2">
-              <span className="print:text-sm print:text-gray-600">Generated On</span>
-              <span className="print:text-lg print:font-medium">{new Date().toLocaleString()}</span>
-            </div>
+          <div className="print:flex print:flex-col">
+            <span className="print:text-sm print:text-gray-600">Shortlisted Candidates</span>
+            <span className="print:text-lg print:font-medium">{jobStats?.shortlisted || 0}</span>
+          </div>
+          <div className="print:flex print:flex-col">
+            <span className="print:text-sm print:text-gray-600">Average Match Score</span>
+            <span className="print:text-lg print:font-medium">{jobStats?.averageMatchScore || 0}%</span>
+          </div>
+          <div className="print:flex print:flex-col">
+            <span className="print:text-sm print:text-gray-600">Average Experience</span>
+            <span className="print:text-lg print:font-medium">{jobStats?.averageExperience?.toFixed(1) || 0} years</span>
+          </div>
+        </div>
+        <div className="print:border-t print:pt-4">
+          <div className="print:flex print:flex-col">
+            <span className="print:text-sm print:text-gray-600">Job Title</span>
+            <span className="print:text-lg print:font-medium">{currentJob?.title || 'N/A'}</span>
+          </div>
+          <div className="print:flex print:flex-col print:mt-2">
+            <span className="print:text-sm print:text-gray-600">Generated On</span>
+            <span className="print:text-lg print:font-medium">{new Date().toLocaleString()}</span>
           </div>
         </div>
       </div>
 
-      {/* Hidden div with all candidates for print view */}
+      {/* Print-only content with all candidates */}
       <div className="hidden print:block">
         {filteredCandidates.length > 0 && viewMode === 'grid' && (
           <div className="print:grid print:grid-cols-1 print:gap-6">
@@ -1009,14 +989,12 @@ export default function MatchesPage() {
                   <TableHead className="w-[100px]">Experience</TableHead>
                   <TableHead>Key Skills</TableHead>
                   <TableHead className="w-[120px] text-right">Match Score</TableHead>
-                  <TableHead className="w-[150px] text-right print:hidden">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredCandidates.map((candidate) => {
                   // Check if candidate is already shortlisted (match score >= 80%)
                   const isShortlisted = candidate.matchScore >= 80;
-                  const isInPipeline = !!candidates[candidate.id];
                   
                   return (
                     <TableRow 
@@ -1032,10 +1010,6 @@ export default function MatchesPage() {
                     >
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <Avatar className="h-8 w-8 print:hidden">
-                            <AvatarImage src={candidate.avatar} alt={candidate.name} />
-                            <AvatarFallback>{candidate.name.charAt(0)}</AvatarFallback>
-                          </Avatar>
                           <div>
                             <div className="font-medium">{candidate.name}</div>
                             <div className="text-sm text-muted-foreground">{candidate.role}</div>
@@ -1049,38 +1023,19 @@ export default function MatchesPage() {
                             .sort(([, a], [, b]) => b - a)
                             .slice(0, 3)
                             .map(([skill, score]) => (
-                              <Badge 
-                                key={skill} 
-                                variant="secondary"
+                              <span 
+                                key={skill}
                                 className={cn(
-                                  "text-xs font-normal print:hidden",
-                                  score >= 90 ? "bg-green-100" : 
-                                  score >= 80 ? "bg-blue-100" : 
-                                  "bg-yellow-100"
+                                  "print:inline-block print:px-2 print:py-1 print:m-1 print:text-xs print:border print:border-gray-200",
+                                  score >= 90 ? "print:border-l-4 print:border-l-green-500" : 
+                                  score >= 80 ? "print:border-l-4 print:border-l-blue-500" : 
+                                  score >= 70 ? "print:border-l-4 print:border-l-yellow-500" : 
+                                  "print:border-l-4 print:border-l-red-500"
                                 )}
                               >
                                 {skill} ({score}%)
-                              </Badge>
+                              </span>
                             ))}
-                          <div className="hidden print:block">
-                            {Object.entries(candidate.skillRatings)
-                              .sort(([, a], [, b]) => b - a)
-                              .slice(0, 3)
-                              .map(([skill, score]) => (
-                                <span 
-                                  key={skill}
-                                  className={cn(
-                                    "print:inline-block print:px-2 print:py-1 print:m-1 print:text-xs print:border print:border-gray-200",
-                                    score >= 90 ? "print:border-l-4 print:border-l-green-500" : 
-                                    score >= 80 ? "print:border-l-4 print:border-l-blue-500" : 
-                                    score >= 70 ? "print:border-l-4 print:border-l-yellow-500" : 
-                                    "print:border-l-4 print:border-l-red-500"
-                                  )}
-                                >
-                                  {skill} ({score}%)
-                                </span>
-                              ))}
-                          </div>
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
@@ -1088,29 +1043,6 @@ export default function MatchesPage() {
                           <span className={cn("font-bold", getMatchScoreColor(candidate.matchScore))}>
                             {candidate.matchScore}%
                           </span>
-                          <div className="w-16 h-2 bg-secondary rounded-full print:hidden">
-                            <div 
-                              className={cn("h-full rounded-full", getSkillColor(candidate.matchScore))}
-                              style={{ width: `${candidate.matchScore}%` }}
-                            />
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right print:hidden">
-                        <div className="flex justify-end gap-2">
-                          {candidates[candidate.id] ? (
-                            <PipelineStatus currentStage={candidates[candidate.id].stage} />
-                          ) : (
-                            <Button
-                              onClick={() => handleAddCandidate(candidate)}
-                              variant={isShortlisted ? "default" : "outline"}
-                              size="sm"
-                              className="gap-1"
-                            >
-                              <Plus className="h-3.5 w-3.5" />
-                              Add
-                            </Button>
-                          )}
                         </div>
                       </TableCell>
                     </TableRow>
