@@ -92,6 +92,8 @@
     background-color: white !important;
     font-size: 12pt !important;
     color: black !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
   
   /* Ensure page breaks don't happen inside elements with this class */
@@ -116,6 +118,16 @@
   .hidden {
     display: none !important;
   }
+  
+  /* Make sure print:block elements are actually displayed */
+  .print\:block {
+    display: block !important;
+  }
+  
+  /* Make sure print:flex elements are actually displayed */
+  .print\:flex {
+    display: flex !important;
+  }
 
   /* Make sure cards don't break across pages */
   .print\:break-inside-avoid {
@@ -131,6 +143,12 @@
   /* Fix for scrollable containers */
   .overflow-y-auto, .overflow-hidden {
     overflow: visible !important;
+    height: auto !important;
+  }
+  
+  /* Fix for main container */
+  .min-h-screen {
+    min-height: 0 !important;
     height: auto !important;
   }
 }

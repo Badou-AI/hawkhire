@@ -492,7 +492,7 @@ export default function MatchesPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="flex flex-col min-h-screen print:min-h-0 print:h-auto">
       {/* Single unified header - only visible in regular view */}
       <div className="flex items-center justify-between mb-6 print:hidden">
         <div className="flex items-center gap-4">
@@ -935,9 +935,8 @@ export default function MatchesPage() {
         )}
       </div>
 
-      {/* Remove the redundant print-only summary footer */}
       {/* Print-only content with all candidates */}
-      <div className="hidden print:block print:w-full">
+      <div className="hidden print:block print:w-full print:overflow-visible">
         {filteredCandidates.length > 0 && (
           <div className="print:grid print:grid-cols-1 print:gap-6">
             {filteredCandidates.map((candidate) => (
