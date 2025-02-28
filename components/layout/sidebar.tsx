@@ -108,7 +108,7 @@ export function Sidebar() {
   return (
     <aside 
       className={cn(
-        "relative h-screen shrink-0 transition-all duration-300 bg-primary",
+        "relative h-screen shrink-0 transition-all duration-300 bg-primary print:hidden",
         isCollapsed ? "w-16" : "w-64"
       )}
     >
