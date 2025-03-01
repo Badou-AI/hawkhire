@@ -686,37 +686,39 @@ export default function MatchesPage() {
                   <span>Shortlisted</span>
                   <Badge variant="outline" className="ml-auto text-xs">Auto ({shortlistThreshold}%+)</Badge>
                 </div>
-                <p className="text-lg font-semibold">{jobStats.shortlisted}</p>
-                <div className="flex gap-2 mt-2">
-                  {[90, 85, 80, 75].map((threshold) => (
-                    <Button
-                      key={threshold}
-                      variant={shortlistThreshold === threshold ? "default" : "outline"}
-                      size="sm"
-                      className="h-7 text-xs px-2"
-                      onClick={() => {
-                        setShortlistThreshold(threshold)
-                        setCustomThreshold("")
+                <div className="flex items-center gap-3">
+                  <p className="text-lg font-semibold">{jobStats.shortlisted}</p>
+                  <div className="flex gap-1.5 ml-auto">
+                    {[90, 85, 80].map((threshold) => (
+                      <Button
+                        key={threshold}
+                        variant={shortlistThreshold === threshold ? "default" : "outline"}
+                        size="sm"
+                        className="h-6 text-xs px-2"
+                        onClick={() => {
+                          setShortlistThreshold(threshold)
+                          setCustomThreshold("")
+                        }}
+                      >
+                        {threshold}%
+                      </Button>
+                    ))}
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={customThreshold}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        setCustomThreshold(val)
+                        if (val && Number(val) >= 0 && Number(val) <= 100) {
+                          setShortlistThreshold(Number(val))
+                        }
                       }}
-                    >
-                      {threshold}%
-                    </Button>
-                  ))}
-                  <Input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={customThreshold}
-                    onChange={(e) => {
-                      const val = e.target.value
-                      setCustomThreshold(val)
-                      if (val && Number(val) >= 0 && Number(val) <= 100) {
-                        setShortlistThreshold(Number(val))
-                      }
-                    }}
-                    className="w-16 h-7 text-xs"
-                    placeholder="Custom"
-                  />
+                      className="w-16 h-6 text-xs px-3"
+                      placeholder="75"
+                    />
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -809,7 +811,7 @@ export default function MatchesPage() {
             </h3>
             <p className="text-muted-foreground max-w-md mb-4">
               {showShortlisted 
-                ? "There are no candidates with a match score of 80% or higher. Try viewing all candidates instead." 
+                ? `There are no candidates with a match score of ${shortlistThreshold}% or higher. Try viewing all candidates instead.`
                 : searchQuery
                 ? `No candidates match the search term "${searchQuery}". Try a different search term.`
                 : "No candidates match the current filters. Try adjusting your search criteria."}
