@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -13,7 +13,8 @@ import {
     DollarSign,
     Clock,
     MapPin,
-    Briefcase
+    Briefcase,
+    Loader2
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -36,114 +37,22 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Pagination } from "@/components/shared/pagination";
+import { createClient } from "@/lib/supabase/client";
 
-// Mock data for jobs
-const jobsData = [
-  {
-    id: "1",
-    title: "Software Developer",
-    department: "Engineering",
-    level: "Mid-level",
-    experience: "3-5 Years Experience",
-    type: "Full-time",
-    mode: "Remote",
-    salary: "$80,000 - $100,000",
-    applicants: 120,
-    status: "Active",
-    createdAt: "2023-05-15"
-  },
-  {
-    id: "2",
-    title: "HR Manager",
-    department: "Human Resources",
-    level: "Senior-level",
-    experience: "8+ Years Experience",
-    type: "Full-time",
-    mode: "Hybrid",
-    salary: "$90,000 - $110,000",
-    applicants: 30,
-    status: "Active",
-    createdAt: "2023-05-10"
-  },
-  {
-    id: "3",
-    title: "Marketing Coordinator",
-    department: "Marketing",
-    level: "Entry-level",
-    experience: "0-2 Years Experience",
-    type: "Full-time",
-    mode: "On-site",
-    salary: "$45,000 - $60,000",
-    applicants: 0,
-    status: "Draft",
-    createdAt: "2023-05-05"
-  },
-  {
-    id: "4",
-    title: "Financial Analyst",
-    department: "Finance",
-    level: "Mid-level",
-    experience: "3-5 Years Experience",
-    type: "Full-time",
-    mode: "Remote",
-    salary: "$70,000 - $85,000",
-    applicants: 60,
-    status: "Active",
-    createdAt: "2023-04-28"
-  },
-  {
-    id: "5",
-    title: "Customer Support Specialist",
-    department: "Customer Support",
-    level: "Entry-level",
-    experience: "0-1 Years Experience",
-    type: "Part-time",
-    mode: "Remote",
-    salary: "$30,000 - $40,000",
-    applicants: 50,
-    status: "Active",
-    createdAt: "2023-04-20"
-  },
-  {
-    id: "6",
-    title: "Operations Manager",
-    department: "Operations",
-    level: "Senior-level",
-    experience: "10+ Years Experience",
-    type: "Full-time",
-    mode: "On-site",
-    salary: "$95,000 - $120,000",
-    applicants: 0,
-    status: "Draft",
-    createdAt: "2023-04-15"
-  },
-  {
-    id: "7",
-    title: "Data Scientist",
-    department: "Research and Development",
-    level: "Mid-level",
-    experience: "4-6 Years Experience",
-    type: "Full-time",
-    mode: "Remote",
-    salary: "$100,000 - $120,000",
-    applicants: 40,
-    status: "Active",
-    createdAt: "2023-04-10"
-  },
-  {
-    id: "8",
-    title: "Content Writer",
-    department: "Marketing",
-    level: "Entry-level",
-    experience: "1-3 Years Experience",
-    type: "Contract",
-    mode: "Remote",
-    salary: "$35,000 - $45,000",
-    applicants: 85,
-    status: "Pending",
-    createdAt: "2023-04-05"
-  }
-];
+// Job interface based on database schema
+interface Job {
+  id: string;
+  title: string;
+  department: string;
+  level: string;
+  experience: string;
+  type: string;
+  mode: string;
+  salary: string;
+  applicants: number;
+  status: string;
+  createdAt: string;
+}
 
 // Department icons mapping
 const departmentIcons: Record<string, React.ReactNode> = {
@@ -159,15 +68,28 @@ const departmentIcons: Record<string, React.ReactNode> = {
 // Status badge variants
 const getStatusVariant = (status: string) => {
   switch (status) {
-    case "Active":
+    case "PUBLISHED":
       return "bg-green-100 text-green-800";
-    case "Draft":
+    case "DRAFT":
       return "bg-gray-100 text-gray-800";
-    case "Pending":
+    case "CLOSED":
+      return "bg-red-100 text-red-800";
+    case "ARCHIVED":
       return "bg-yellow-100 text-yellow-800";
     default:
       return "bg-gray-100 text-gray-800";
   }
+};
+
+// Format job type for display
+const formatJobType = (type: string) => {
+  return type.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+};
+
+// Format salary for display
+const formatSalary = (min?: number, max?: number, currency?: string) => {
+  if (!min || !max) return "Competitive";
+  return `$${min/1000}k - $${max/1000}k ${currency || 'USD'}`;
 };
 
 export default function OrganizationJobsPage() {
@@ -178,9 +100,107 @@ export default function OrganizationJobsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("newest");
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Fetch jobs for the organization
+  useEffect(() => {
+    async function fetchJobs() {
+      try {
+        setLoading(true);
+        const supabase = createClient();
+        
+        // Fetch jobs for the specific organization
+        const { data, error: jobsError } = await supabase
+          .from('jobs')
+          .select(`
+            id,
+            title,
+            description,
+            job_type,
+            status,
+            remote,
+            salary_min,
+            salary_max,
+            salary_currency,
+            created_at,
+            skills,
+            requirements,
+            organizations (
+              id,
+              name,
+              industry
+            ),
+            resumes (count)
+          `)
+          .eq('organization_id', organizationId)
+          .order('created_at', { ascending: false });
+        
+        if (jobsError) {
+          throw jobsError;
+        }
+        
+        // Transform the data to match our Job interface
+        const transformedJobs = data.map(job => {
+          // Determine job level and experience based on salary range
+          let level = "Entry-level";
+          let experience = "0-1 Years Experience";
+          
+          if (job.salary_min && job.salary_min >= 80000) {
+            level = "Senior-level";
+            experience = "5+ Years Experience";
+          } else if (job.salary_min && job.salary_min >= 60000) {
+            level = "Mid-level";
+            experience = "3-5 Years Experience";
+          } else if (job.salary_min && job.salary_min >= 40000) {
+            level = "Entry-level";
+            experience = "1-3 Years Experience";
+          }
+          
+          // Determine work mode based on remote status
+          const mode = job.remote ? "Remote" : "On-site";
+          
+          // Extract department from organization industry or default to a category
+          const department = job.organizations?.industry || "General";
+          
+          // Format the job title - handle localized titles
+          let title = "";
+          if (typeof job.title === 'string') {
+            title = job.title;
+          } else if (typeof job.title === 'object') {
+            title = job.title.en || Object.values(job.title)[0] || "Untitled Position";
+          }
+          
+          return {
+            id: job.id,
+            title: title,
+            department: department,
+            level: level,
+            experience: experience,
+            type: formatJobType(job.job_type),
+            mode: mode,
+            salary: formatSalary(job.salary_min, job.salary_max, job.salary_currency),
+            applicants: job.resumes?.[0]?.count || 0,
+            status: job.status,
+            createdAt: job.created_at
+          };
+        });
+        
+        setJobs(transformedJobs);
+      } catch (err) {
+        console.error("Error fetching jobs:", err);
+        setError("Failed to load jobs. Please try again later.");
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    fetchJobs();
+  }, [organizationId]);
   
   // Filter jobs based on search query
-  const filteredJobs = jobsData.filter(job => 
+  const filteredJobs = jobs.filter(job => 
     job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     job.department.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -268,8 +288,39 @@ export default function OrganizationJobsPage() {
         </p>
       </div>
 
+      {/* Loading State */}
+      {loading && (
+        <div className="flex justify-center items-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <span className="ml-2 text-lg">Loading jobs...</span>
+        </div>
+      )}
+
+      {/* Error State */}
+      {error && !loading && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md mb-6">
+          <p>{error}</p>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!loading && !error && jobs.length === 0 && (
+        <div className="text-center py-20 bg-muted/30 rounded-lg">
+          <h3 className="text-lg font-medium mb-2">No jobs found</h3>
+          <p className="text-muted-foreground mb-6">
+            Your organization doesn&apos;t have any jobs posted yet.
+          </p>
+          <Link href={`/organizations/${organizationId}/jobs/create`}>
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              Create Your First Job
+            </Button>
+          </Link>
+        </div>
+      )}
+
       {/* Card View */}
-      {viewMode === "card" && (
+      {!loading && !error && viewMode === "card" && jobs.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
           {paginatedJobs.map((job) => (
             <Link href={`/organizations/${organizationId}/jobs/${job.id}`} key={job.id}>
@@ -286,7 +337,10 @@ export default function OrganizationJobsPage() {
                       </div>
                     </div>
                     <Badge className={getStatusVariant(job.status)}>
-                      {job.status}
+                      {job.status === "PUBLISHED" ? "Active" : 
+                       job.status === "DRAFT" ? "Draft" : 
+                       job.status === "CLOSED" ? "Closed" : 
+                       job.status === "ARCHIVED" ? "Archived" : job.status}
                     </Badge>
                   </div>
                   
@@ -321,7 +375,7 @@ export default function OrganizationJobsPage() {
       )}
 
       {/* List View */}
-      {viewMode === "list" && (
+      {!loading && !error && viewMode === "list" && jobs.length > 0 && (
         <div className="mb-8">
           <Card>
             <Table>
@@ -349,7 +403,10 @@ export default function OrganizationJobsPage() {
                     <TableCell>{job.applicants}</TableCell>
                     <TableCell>
                       <Badge className={getStatusVariant(job.status)}>
-                        {job.status}
+                        {job.status === "PUBLISHED" ? "Active" : 
+                         job.status === "DRAFT" ? "Draft" : 
+                         job.status === "CLOSED" ? "Closed" : 
+                         job.status === "ARCHIVED" ? "Archived" : job.status}
                       </Badge>
                     </TableCell>
                   </TableRow>
@@ -361,7 +418,7 @@ export default function OrganizationJobsPage() {
       )}
 
       {/* Pagination */}
-      {totalPages > 1 && (
+      {!loading && !error && totalPages > 1 && (
         <Pagination
           currentPage={currentPage}
           totalPages={totalPages}
