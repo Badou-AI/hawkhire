@@ -1,11 +1,11 @@
 "use client"
 
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Label } from "@/components/ui/label"
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import {
   Sheet,
   SheetContent,
@@ -13,19 +13,16 @@ import {
   SheetTitle,
   SheetDescription,
   SheetTrigger,
-} from "@/components/ui/sheet"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Input } from "@/components/ui/input"
+} from "@/components/ui/sheet";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Input } from "@/components/ui/input";
 import {
   ChevronLeft,
   Calendar,
   Clock,
   Users,
-  Briefcase,
   Star,
-  CheckCircle2, LayoutList,
-  Table as TableIcon,
-  LayoutGrid,
+  CheckCircle2,
   Send,
   Bot,
   Plus,
@@ -33,9 +30,8 @@ import {
   Grid,
   List,
   Search,
-  Filter,
-  X
-} from 'lucide-react'
+  X,
+} from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -43,18 +39,18 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
-import { cn } from "@/lib/utils"
-import Link from "next/link"
-import { useState, useEffect, useMemo, useRef } from "react"
-import { usePipelineStore } from '@/lib/store/pipeline-store'
-import { PipelineStatus } from '@/components/pipeline-status'
-import { useSearchParams } from "next/navigation"
-import { Pagination } from '@/components/shared/pagination'
-import { getJob, type ApiJob } from "@/app/api/jobs/client"
+} from "@/components/ui/table";
+import { cn } from "@/lib/utils";
+import Link from "next/link";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { usePipelineStore } from '@/lib/store/pipeline-store';
+import { PipelineStatus } from '@/components/pipeline-status';
+import { useSearchParams } from "next/navigation";
+import { Pagination } from '@/components/shared/pagination';
+import { getJob, type ApiJob } from "@/app/api/jobs/client";
 
 // Import data from shared data file
-import { transformApiResponseToUiFormat, getSkillColor } from "../data"
+import { transformApiResponseToUiFormat, getSkillColor } from "../data";
 
 interface JobStats {
   totalCandidates: number;
@@ -125,6 +121,8 @@ export default function MatchesPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [jobStats, setJobStats] = useState<JobStats | null>(null)
   const [showShortlisted, setShowShortlisted] = useState(true)
+  const [shortlistThreshold, setShortlistThreshold] = useState(80)
+  const [customThreshold, setCustomThreshold] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
 
   // Add a ref for the print button
@@ -177,10 +175,10 @@ export default function MatchesPage() {
         const sortedData = transformedData.sort((a, b) => b.matchScore - a.matchScore)
         setCandidateMatches(sortedData)
 
-        // Count shortlisted candidates (those with match score >= 80%)
-        const shortlistedCandidates = sortedData.filter(c => c.matchScore >= 80);
+        // Count shortlisted candidates (those with match score >= shortlistThreshold)
+        const shortlistedCandidates = sortedData.filter(c => c.matchScore >= shortlistThreshold);
         const shortlistedCount = shortlistedCandidates.length;
-        console.log(`Auto-shortlisted ${shortlistedCount} candidates with match scores >= 80%`);
+        console.log(`Auto-shortlisted ${shortlistedCount} candidates with match scores >= ${shortlistThreshold}%`);
         
         // Automatically add shortlisted candidates to the pipeline
         shortlistedCandidates.forEach(candidate => {
@@ -211,7 +209,7 @@ export default function MatchesPage() {
     }
 
     fetchCandidatesAndStats()
-  }, [currentJob, addCandidate])
+  }, [currentJob, addCandidate, shortlistThreshold])
 
   const calculateAverageExperience = (candidates: Candidate[]): number => {
     const experienceValues = candidates
@@ -259,7 +257,7 @@ export default function MatchesPage() {
     
     // Filter by shortlisted status if enabled
     if (showShortlisted) {
-      filtered = filtered.filter(candidate => candidate.matchScore >= 80);
+      filtered = filtered.filter(candidate => candidate.matchScore >= shortlistThreshold);
     }
     
     // Filter by search query if present
@@ -276,7 +274,7 @@ export default function MatchesPage() {
     }
     
     return filtered;
-  }, [candidateMatches, showShortlisted, searchQuery]);
+  }, [candidateMatches, showShortlisted, searchQuery, shortlistThreshold]);
 
   // Calculate pagination values based on filtered candidates
   const totalPages = Math.ceil(filteredCandidates.length / ITEMS_PER_PAGE)
@@ -311,8 +309,8 @@ export default function MatchesPage() {
   }
 
   const renderCandidateCard = (candidate: typeof candidateMatches[0]) => {
-    // Check if candidate is already shortlisted (match score >= 80%)
-    const isShortlisted = candidate.matchScore >= 80;
+    // Check if candidate is already shortlisted
+    const isShortlisted = candidate.matchScore >= shortlistThreshold;
     const isInPipeline = !!candidates[candidate.id];
     
     return (
@@ -451,10 +449,8 @@ export default function MatchesPage() {
         return sum + exp
       }, 0)
       
-      // Count shortlisted candidates (80% or higher match score)
-      // This implements the automatic shortlisting feature - candidates with match scores of 80% or higher
-      // are automatically added to the shortlist and can be filtered using the toggle
-      const shortlistedCount = candidateMatches.filter(candidate => candidate.matchScore >= 80).length
+      // Count shortlisted candidates (match score >= shortlistThreshold)
+      const shortlistedCount = candidateMatches.filter(candidate => candidate.matchScore >= shortlistThreshold).length
       
       setJobStats({
         totalCandidates: candidateMatches.length,
@@ -464,7 +460,7 @@ export default function MatchesPage() {
         lastProcessed: new Date().toISOString()
       })
     }
-  }, [candidateMatches])
+  }, [candidateMatches, shortlistThreshold])
 
   // Function to handle print button click
   const handlePrint = (event: React.MouseEvent) => {
@@ -611,7 +607,7 @@ export default function MatchesPage() {
       <div className="hidden print:block print:text-left print:mb-5 print:pb-3 print:border-b print:border-gray-200">
         <h1 className="print:text-2xl print:font-bold print:mb-1">{currentJob?.title || 'Job Matches'}</h1>
         <p className="print:text-sm print:text-gray-600">Generated on {new Date().toLocaleDateString()}</p>
-        {showShortlisted && <p className="print:text-sm print:text-gray-600">Showing shortlisted candidates only (80%+ match)</p>}
+        {showShortlisted && <p className="print:text-sm print:text-gray-600">Showing shortlisted candidates only ({shortlistThreshold}%+ match)</p>}
         
         {jobStats && (
           <div className="print:grid print:grid-cols-4 print:gap-5 print:mt-3">
@@ -688,9 +684,40 @@ export default function MatchesPage() {
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <CheckCircle2 className="h-4 w-4 text-blue-500" />
                   <span>Shortlisted</span>
-                  <Badge variant="outline" className="ml-auto text-xs">Auto (80%+)</Badge>
+                  <Badge variant="outline" className="ml-auto text-xs">Auto ({shortlistThreshold}%+)</Badge>
                 </div>
                 <p className="text-lg font-semibold">{jobStats.shortlisted}</p>
+                <div className="flex gap-2 mt-2">
+                  {[90, 85, 80, 75].map((threshold) => (
+                    <Button
+                      key={threshold}
+                      variant={shortlistThreshold === threshold ? "default" : "outline"}
+                      size="sm"
+                      className="h-7 text-xs px-2"
+                      onClick={() => {
+                        setShortlistThreshold(threshold)
+                        setCustomThreshold("")
+                      }}
+                    >
+                      {threshold}%
+                    </Button>
+                  ))}
+                  <Input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={customThreshold}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      setCustomThreshold(val)
+                      if (val && Number(val) >= 0 && Number(val) <= 100) {
+                        setShortlistThreshold(Number(val))
+                      }
+                    }}
+                    className="w-16 h-7 text-xs"
+                    placeholder="Custom"
+                  />
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -811,7 +838,7 @@ export default function MatchesPage() {
                 key={candidate.id} 
                 className={cn(
                   "hover:shadow-md transition-shadow",
-                  candidate.matchScore >= 80 && "border-l-4 border-l-blue-500",
+                  candidate.matchScore >= shortlistThreshold && "border-l-4 border-l-blue-500",
                   candidate.stage === "phone_screening" && "border-l-[hsl(var(--status-screening))]",
                   candidate.stage === "interview" && "border-l-[hsl(var(--status-interview))]",
                   candidate.stage === "offer" && "border-l-[hsl(var(--status-offer))]",
@@ -838,15 +865,15 @@ export default function MatchesPage() {
               </TableHeader>
               <TableBody>
                 {currentCandidates.map((candidate) => {
-                  // Check if candidate is already shortlisted (match score >= 80%)
-                  const isShortlisted = candidate.matchScore >= 80;
+                  // Check if candidate is already shortlisted
+                  const isShortlisted = candidate.matchScore >= shortlistThreshold;
                   const isInPipeline = !!candidates[candidate.id];
                   
                   return (
                     <TableRow 
                       key={candidate.id}
                       className={cn(
-                        candidate.matchScore >= 80 && "bg-blue-50",
+                        candidate.matchScore >= shortlistThreshold && "bg-blue-50",
                         candidate.stage === "phone_screening" && "border-l-[hsl(var(--status-screening))]",
                         candidate.stage === "interview" && "border-l-[hsl(var(--status-interview))]",
                         candidate.stage === "offer" && "border-l-[hsl(var(--status-offer))]",
@@ -946,14 +973,14 @@ export default function MatchesPage() {
                 key={candidate.id} 
                 className={cn(
                   "print:break-inside-avoid print:page-break-inside-avoid print:border print:border-gray-200 print:shadow-none print:mb-5 print:p-3",
-                  candidate.matchScore >= 80 && "print:border-l-4 print:border-l-blue-500"
+                  candidate.matchScore >= shortlistThreshold && "print:border-l-4 print:border-l-blue-500"
                 )}
               >
                 <CardContent className="print:p-4">
                   <div className="print:flex print:justify-between print:items-center print:mb-2">
                     <span className="print:font-bold print:text-lg">{candidate.name}</span>
                     <span className="print:italic print:text-gray-600">{candidate.experience}</span>
-                    {candidate.matchScore >= 80 && <span className="print:font-bold print:text-blue-600 print:mx-2">Shortlisted</span>}
+                    {candidate.matchScore >= shortlistThreshold && <span className="print:font-bold print:text-blue-600 print:mx-2">Shortlisted</span>}
                     <span className={cn(
                       "print:font-bold print:text-lg",
                       candidate.matchScore >= 90 ? "print:text-green-600" : 

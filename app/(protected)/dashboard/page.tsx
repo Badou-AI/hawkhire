@@ -289,7 +289,7 @@ const chartConfig = {
     color: "hsl(var(--primary)/.3)",
   },
   shortlisted: {
-    label: "Shortlisted",
+    label: "Shortlisted!",
     color: "hsl(var(--primary))",
   },
 } satisfies ChartConfig
