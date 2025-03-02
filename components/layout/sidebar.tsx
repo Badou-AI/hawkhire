@@ -15,8 +15,7 @@ import {
     BarChart,
     Settings,
     LogOut,
-    ChartNoAxesCombined,
-    BriefcaseBusinessIcon
+    ChartNoAxesCombined, Briefcase
 } from 'lucide-react';
 import {
     DropdownMenu,
@@ -26,40 +25,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-
-const navItems = [
-    {
-        href: '/jobs',
-        icon: BriefcaseBusinessIcon,
-        label: 'Jobs'
-    },
-
-    {
-        href: '/dashboard',
-        icon: ChartNoAxesCombined,
-        label: 'Dashboard'
-    },
-    {
-        href: '/candidates',
-        icon: Users,
-        label: 'Candidates'
-    },
-    {
-        href: '/resume-processing',
-        icon: FileText,
-        label: 'Resume Processing'
-    },
-    {
-        href: '/analytics',
-        icon: BarChart,
-        label: 'Analytics'
-    },
-    {
-        href: '/settings',
-        icon: Settings,
-        label: 'Settings'
-    }
-];
+import { useOrganization } from '@/lib/hooks/useOrganization';
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -67,6 +33,7 @@ export function Sidebar() {
   const { isCollapsed, setIsCollapsed } = useSidebarStore();
   const router = useRouter();
   const supabase = createClient();
+  const { organizationId } = useOrganization();
 
   useEffect(() => {
     setIsMounted(true);
@@ -96,6 +63,45 @@ export function Sidebar() {
       toast.error('Failed to sign out')
     }
   }
+
+  const navItems = [
+    {
+      title: 'Dashboard',
+      href: '/dashboard',
+      icon: ChartNoAxesCombined,
+    },
+    {
+      title: 'Jobs',
+      href: organizationId ? `/organizations/${organizationId}/jobs` : '#',
+      icon: Briefcase,
+    },
+    {
+      title: 'Job Board',
+      href: '/job-board',
+      icon: null,
+      hidden: true,
+    },
+    {
+      title: 'Candidates',
+      href: '/candidates',
+      icon: Users,
+    },
+    {
+      title: 'Resume Processing',
+      href: '/resume-processing',
+      icon: FileText,
+    },
+    {
+      title: 'Analytics',
+      href: '/analytics',
+      icon: BarChart,
+    },
+    {
+      title: 'Settings',
+      href: '/settings',
+      icon: Settings,
+    }
+  ];
 
   if (!isMounted) {
     return (
@@ -139,7 +145,7 @@ export function Sidebar() {
 
         {/* Navigation */}
         <nav className="flex-1 space-y-2">
-          {navItems.map((item) => (
+          {navItems.filter(item => !item.hidden).map((item) => (
             <Link
               key={item.href}
               href={item.href}
@@ -150,8 +156,8 @@ export function Sidebar() {
                 pathname === item.href && "bg-primary-foreground/20 text-white font-medium"
               )}
             >
-              <item.icon className="h-5 w-5 shrink-0" />
-              {!isCollapsed && <span>{item.label}</span>}
+              {item.icon && <item.icon className="h-5 w-5 shrink-0" />}
+              {!isCollapsed && <span>{item.title}</span>}
             </Link>
           ))}
         </nav>
