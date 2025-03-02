@@ -1,0 +1,500 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
+import {
+    ArrowLeft,
+    Briefcase,
+    Clock,
+    MapPin,
+    DollarSign,
+    Users,
+    Share2,
+    Bookmark,
+    Building,
+    Calendar,
+    CheckCircle,
+    Loader2
+} from "lucide-react";
+import Link from "next/link";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { createClient } from "@/lib/supabase/client";
+
+interface JobDetail {
+  id: string;
+  title: string;
+  description: string;
+  requirements: string[];
+  department: string;
+  level: string;
+  experience: string;
+  type: string;
+  mode: string;
+  salary: string;
+  location: string;
+  applicants: number;
+  status: string;
+  createdAt: string;
+  organization: {
+    id: string;
+    name: string;
+    industry: string;
+    size: string;
+    logo?: string;
+  };
+}
+
+// Helper function to safely extract text from potentially localized objects
+const getLocalizedText = (value: unknown): string => {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  
+  if (typeof value === 'string') {
+    return value;
+  }
+  
+  if (typeof value === 'object') {
+    // Try to extract English text first, then any other language
+    const obj = value as Record<string, unknown>;
+    if (obj.en && typeof obj.en === 'string') return obj.en;
+    if (obj.en_US && typeof obj.en_US === 'string') return obj.en_US;
+    
+    // If no English version, take the first available text
+    const firstValue = Object.values(obj)[0];
+    if (typeof firstValue === 'string') {
+      return firstValue;
+    }
+  }
+  
+  // Fallback: convert to string or return empty
+  try {
+    return String(value);
+  } catch {
+    return "";
+  }
+};
+
+// Status badge variants
+const getStatusVariant = (status: string) => {
+  switch (status) {
+    case "PUBLISHED":
+      return "bg-green-100 text-green-800";
+    case "DRAFT":
+      return "bg-gray-100 text-gray-800";
+    case "CLOSED":
+      return "bg-red-100 text-red-800";
+    case "ARCHIVED":
+      return "bg-yellow-100 text-yellow-800";
+    default:
+      return "bg-gray-100 text-gray-800";
+  }
+};
+
+// Format date for display
+const formatDate = (dateString: string) => {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+};
+
+export default function JobDetailPage() {
+  const params = useParams();
+  const router = useRouter();
+  const organizationId = params.id as string;
+  const jobId = params.jobId as string;
+  
+  const [job, setJob] = useState<JobDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  useEffect(() => {
+    async function fetchJobDetail() {
+      try {
+        setLoading(true);
+        const supabase = createClient();
+        
+        // Fetch the job with organization details
+        const { data: jobData, error: jobError } = await supabase
+          .from('jobs')
+          .select(`
+            id,
+            title,
+            description,
+            requirements,
+            job_type,
+            status,
+            remote,
+            location,
+            salary_min,
+            salary_max,
+            salary_currency,
+            created_at,
+            organization_id,
+            organizations (
+              id,
+              name,
+              industry,
+              size_range,
+              logo_url
+            ),
+            resumes (count)
+          `)
+          .eq('id', jobId)
+          .eq('organization_id', organizationId)
+          .single();
+        
+        if (jobError) {
+          throw jobError;
+        }
+        
+        if (!jobData) {
+          setError("Job not found");
+          setLoading(false);
+          return;
+        }
+        
+        console.log("Raw job data:", JSON.stringify(jobData, null, 2));
+        
+        // Determine job level and experience based on salary range
+        let level = "Entry-level";
+        let experience = "0-1 Years Experience";
+        
+        if (jobData.salary_min && jobData.salary_min >= 80000) {
+          level = "Senior-level";
+          experience = "5+ Years Experience";
+        } else if (jobData.salary_min && jobData.salary_min >= 60000) {
+          level = "Mid-level";
+          experience = "3-5 Years Experience";
+        } else if (jobData.salary_min && jobData.salary_min >= 40000) {
+          level = "Entry-level";
+          experience = "1-3 Years Experience";
+        }
+        
+        // Determine work mode based on remote status
+        const mode = jobData.remote ? "Remote" : "On-site";
+        
+        // Format the job title - handle localized titles
+        const title = getLocalizedText(jobData.title);
+        
+        // Format salary
+        const salary = jobData.salary_min && jobData.salary_max
+          ? `$${jobData.salary_min/1000}k - $${jobData.salary_max/1000}k ${jobData.salary_currency || 'USD'}`
+          : "Competitive";
+        
+        // Format requirements
+        let requirements: string[] = [];
+        try {
+          if (typeof jobData.requirements === 'string') {
+            try {
+              const parsed = JSON.parse(jobData.requirements);
+              requirements = Array.isArray(parsed) 
+                ? parsed.map(req => getLocalizedText(req)) 
+                : parsed.en && Array.isArray(parsed.en) 
+                  ? parsed.en 
+                  : [getLocalizedText(jobData.requirements)];
+            } catch {
+              requirements = [jobData.requirements];
+            }
+          } else if (Array.isArray(jobData.requirements)) {
+            requirements = jobData.requirements.map(req => getLocalizedText(req));
+          } else if (jobData.requirements && typeof jobData.requirements === 'object') {
+            const reqEn = jobData.requirements.en;
+            requirements = Array.isArray(reqEn) ? reqEn : [];
+          }
+        } catch (err) {
+          console.error("Error parsing requirements:", err);
+          requirements = [];
+        }
+        
+        // Extract organization details
+        const orgArray = jobData.organizations || [];
+        const orgData = Array.isArray(orgArray) && orgArray.length > 0 ? orgArray[0] : {} as {
+          id?: string;
+          name?: unknown;
+          industry?: unknown;
+          size_range?: unknown;
+          logo_url?: string;
+        };
+        const orgName = getLocalizedText(orgData.name);
+        const orgIndustry = getLocalizedText(orgData.industry);
+        
+        const organization = {
+          id: orgData.id || organizationId,
+          name: orgName || "Organization",
+          industry: orgIndustry || "Technology",
+          size: getLocalizedText(orgData.size_range) || "1-50 employees",
+          logo: orgData.logo_url
+        };
+        
+        // Format location
+        let location = "Remote";
+        if (jobData.location) {
+          if (typeof jobData.location === 'string') {
+            location = jobData.location;
+          } else if (typeof jobData.location === 'object') {
+            const city = getLocalizedText(jobData.location.city);
+            const state = getLocalizedText(jobData.location.state);
+            location = [city, state].filter(Boolean).join(', ') || "Remote";
+          }
+        }
+        
+        // Format description
+        const description = getLocalizedText(jobData.description);
+        
+        // Format job type
+        const jobType = typeof jobData.job_type === 'string'
+          ? jobData.job_type.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())
+          : "Full-time";
+        
+        // Create the job detail object
+        const jobDetail: JobDetail = {
+          id: jobData.id,
+          title: title || "Untitled Position",
+          description: description || "No description provided.",
+          requirements: requirements,
+          department: orgIndustry || "General",
+          level: level,
+          experience: experience,
+          type: jobType,
+          mode: mode,
+          salary: salary,
+          location: location,
+          applicants: jobData.resumes?.[0]?.count || 0,
+          status: jobData.status || "DRAFT",
+          createdAt: jobData.created_at,
+          organization: organization
+        };
+        
+        setJob(jobDetail);
+      } catch (err) {
+        console.error("Error fetching job details:", err);
+        setError("Failed to load job details. Please try again later.");
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    if (jobId && organizationId) {
+      fetchJobDetail();
+    }
+  }, [jobId, organizationId]);
+  
+  // Handle back button click
+  const handleBack = () => {
+    router.back();
+  };
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      {/* Back button */}
+      <Button 
+        variant="ghost" 
+        className="mb-6 flex items-center gap-2"
+        onClick={handleBack}
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back to Jobs
+      </Button>
+      
+      {/* Loading State */}
+      {loading && (
+        <div className="flex justify-center items-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <span className="ml-2 text-lg">Loading job details...</span>
+        </div>
+      )}
+      
+      {/* Error State */}
+      {error && !loading && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md mb-6">
+          <p>{error}</p>
+          <Button 
+            variant="outline" 
+            className="mt-4"
+            onClick={handleBack}
+          >
+            Go Back
+          </Button>
+        </div>
+      )}
+      
+      {/* Job Detail Content */}
+      {!loading && !error && job && (
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+          {/* Main Content */}
+          <div className="lg:col-span-2">
+            <Card>
+              <CardContent className="p-6">
+                {/* Job Header */}
+                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <h1 className="text-2xl font-bold">{job.title}</h1>
+                      <Badge className={getStatusVariant(job.status)}>
+                        {job.status === "PUBLISHED" ? "Active" : 
+                         job.status === "DRAFT" ? "Draft" : 
+                         job.status === "CLOSED" ? "Closed" : 
+                         job.status === "ARCHIVED" ? "Archived" : job.status}
+                      </Badge>
+                    </div>
+                    <p className="text-muted-foreground">
+                      {job.department} • Posted on {formatDate(job.createdAt)}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="icon">
+                      <Share2 className="h-4 w-4" />
+                    </Button>
+                    <Button variant="outline" size="icon">
+                      <Bookmark className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+                
+                <Separator className="my-6" />
+                
+                {/* Job Details */}
+                <div className="grid grid-cols-2 gap-6 md:grid-cols-4 mb-8">
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Briefcase className="h-4 w-4" />
+                      <span className="text-sm">Job Level</span>
+                    </div>
+                    <p className="font-medium">{job.level}</p>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Clock className="h-4 w-4" />
+                      <span className="text-sm">Experience</span>
+                    </div>
+                    <p className="font-medium">{job.experience}</p>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <MapPin className="h-4 w-4" />
+                      <span className="text-sm">Location</span>
+                    </div>
+                    <p className="font-medium">{job.location}</p>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <DollarSign className="h-4 w-4" />
+                      <span className="text-sm">Salary</span>
+                    </div>
+                    <p className="font-medium">{job.salary}</p>
+                  </div>
+                </div>
+                
+                {/* Job Description */}
+                <div className="mb-8">
+                  <h2 className="text-xl font-semibold mb-4">Job Description</h2>
+                  <div className="prose max-w-none">
+                    <p className="whitespace-pre-line">{job.description}</p>
+                  </div>
+                </div>
+                
+                {/* Requirements */}
+                {job.requirements && job.requirements.length > 0 && (
+                  <div className="mb-8">
+                    <h2 className="text-xl font-semibold mb-4">Requirements</h2>
+                    <ul className="list-disc pl-5 space-y-2">
+                      {job.requirements.map((requirement, index) => (
+                        <li key={index}>{requirement}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                
+                {/* Application Stats */}
+                <div className="bg-muted/30 rounded-lg p-4">
+                  <h3 className="font-medium mb-2">Application Statistics</h3>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4 text-muted-foreground" />
+                      <span>{job.applicants} Applicants</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      <span>Posted {formatDate(job.createdAt)}</span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+          
+          {/* Sidebar */}
+          <div>
+            {/* Organization Card */}
+            <Card className="mb-6">
+              <CardContent className="p-6">
+                <h2 className="text-lg font-semibold mb-4">About the Organization</h2>
+                <div className="flex items-center gap-3 mb-4">
+                  {job.organization.logo ? (
+                    <img 
+                      src={job.organization.logo} 
+                      alt={`${job.organization.name} logo`}
+                      className="w-12 h-12 rounded-lg object-contain"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Building className="h-6 w-6 text-primary" />
+                    </div>
+                  )}
+                  <div>
+                    <h3 className="font-medium">{job.organization.name}</h3>
+                    <p className="text-sm text-muted-foreground">{job.organization.industry}</p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground">Company Size</h4>
+                    <p>{job.organization.size}</p>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground">Location</h4>
+                    <p>{job.location}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            {/* Quick Actions */}
+            <Card>
+              <CardContent className="p-6">
+                <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
+                <div className="space-y-4">
+                  <Link href={`/resume-processing/matches?jobId=${job.id}`}>
+                    <Button className="w-full">View Applicants</Button>
+                  </Link>
+                  <Button variant="outline" className="w-full">Edit Job</Button>
+                  {job.status === "PUBLISHED" ? (
+                    <Button variant="destructive" className="w-full">Close Job</Button>
+                  ) : job.status === "CLOSED" || job.status === "ARCHIVED" ? (
+                    <Button variant="outline" className="w-full flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4" />
+                      Reopen Job
+                    </Button>
+                  ) : (
+                    <Button variant="outline" className="w-full flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4" />
+                      Publish Job
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+} 
