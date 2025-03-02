@@ -51,9 +51,35 @@ interface JobProcessingResult {
   error?: string;
 }
 
+// Helper function to get title as string
+const getJobTitle = (title: string | { en: string; fr?: string } | Record<string, string>): string => {
+  if (typeof title === 'string') {
+    return title;
+  }
+  
+  // Handle localized text object
+  if (title && typeof title === 'object') {
+    if ('en' in title && typeof title.en === 'string') {
+      return title.en;
+    }
+    
+    // Try to find any string value in the object
+    const record = title as Record<string, unknown>;
+    for (const key in record) {
+      if (typeof record[key] === 'string') {
+        return record[key] as string;
+      }
+    }
+  }
+  
+  // Fallback
+  return 'untitled-job';
+};
+
 // Helper function to generate index name from job title and ID
-const generateIndexName = (jobId: string, jobTitle: string): string => {
-  const slug = jobTitle.toLowerCase()
+const generateIndexName = (jobId: string, jobTitle: string | { en: string; fr?: string } | Record<string, string>): string => {
+  const titleStr = getJobTitle(jobTitle);
+  const slug = titleStr.toLowerCase()
     .replace(/[^a-z0-9]+/g, '-') // Replace non-alphanumeric chars with hyphens
     .replace(/^-+|-+$/g, ''); // Remove leading/trailing hyphens
   return `job-${slug}-${jobId}`;
@@ -211,6 +237,15 @@ export async function GET() {
     }
     
     console.log(`Processing ${jobs.length} jobs`);
+    
+    // Log the first job to see its structure
+    if (jobs.length > 0) {
+      console.log('First job structure:', JSON.stringify({
+        id: jobs[0].id,
+        title: jobs[0].title,
+        titleType: typeof jobs[0].title
+      }));
+    }
     
     const results = {
       total: jobs.length,
