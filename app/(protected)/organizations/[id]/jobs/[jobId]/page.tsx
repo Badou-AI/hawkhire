@@ -292,14 +292,20 @@ export default function JobDetailPage() {
         if (!jobData.processed?.total_applicants) {
           // Fetch matches count from API
           try {
-            const response = await fetch(`/api/jobs/${jobData.id}/matches?size=1`);
+            const response = await fetch(`/api/jobs/${jobData.id}/matches?size=1&update_stats=true`);
             if (response.ok) {
               const matchData = await response.json();
               if (matchData && typeof matchData.total === 'number') {
                 // Update the job detail with the matches count
                 setJob(prev => prev ? {
                   ...prev,
-                  applicants: matchData.total
+                  applicants: matchData.total,
+                  processed: {
+                    ...prev?.processed,
+                    total_applicants: matchData.total,
+                    last_processed_at: new Date().toISOString(),
+                    processing_status: 'completed'
+                  }
                 } : prev);
               }
             }

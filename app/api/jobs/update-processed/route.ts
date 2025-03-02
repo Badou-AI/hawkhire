@@ -6,11 +6,11 @@ const REMOTE_API_URL = process.env.REMOTE_API_URL || 'http://147.93.44.131:8000'
 
 // Define types for the API responses
 interface IndexExistResponse {
-  exists: boolean;
+  was_found: boolean;
 }
 
 interface IndexCountResponse {
-  count: number;
+  index_size: number;
 }
 
 interface DocumentItem {
@@ -99,7 +99,7 @@ async function checkIndexExists(indexName: string): Promise<boolean> {
     }
     
     const data = await response.json() as IndexExistResponse;
-    return data.exists === true;
+    return data.was_found === true;
   } catch (error) {
     console.error(`Error checking if index ${indexName} exists:`, error);
     return false;
@@ -120,7 +120,7 @@ async function getDocumentCount(indexName: string): Promise<number> {
     }
     
     const data = await response.json() as IndexCountResponse;
-    return data.count || 0;
+    return data.index_size || 0;
   } catch (error) {
     console.error(`Error getting document count for index ${indexName}:`, error);
     return 0;
@@ -238,24 +238,12 @@ export async function GET() {
     
     console.log(`Processing ${jobs.length} jobs`);
     
-    // Log the first job to see its structure
-    if (jobs.length > 0) {
-      console.log('First job structure:', JSON.stringify({
-        id: jobs[0].id,
-        title: jobs[0].title,
-        titleType: typeof jobs[0].title
-      }));
-    }
-    
-    const results = {
-      total: jobs.length,
-      processed: 0,
-      skipped: 0,
-      errors: 0,
-      details: [] as JobProcessingResult[]
-    };
-    
     // Process each job
+    const results: JobProcessingResult[] = [];
+    let processedCount = 0;
+    let skippedCount = 0;
+    let errorCount = 0;
+    
     for (const job of jobs) {
       try {
         // Generate index name
@@ -263,66 +251,77 @@ export async function GET() {
         
         // Check if index exists
         const indexExists = await checkIndexExists(indexName);
-        
         if (!indexExists) {
-          console.log(`Index ${indexName} does not exist, skipping job ${job.id}`);
-          results.skipped++;
-          results.details.push({
+          results.push({
             jobId: job.id,
             indexName,
             status: 'skipped',
             reason: 'Index does not exist'
           });
+          skippedCount++;
           continue;
         }
         
         // Get document count
         const documentCount = await getDocumentCount(indexName);
-        
         if (documentCount === 0) {
-          console.log(`Index ${indexName} has no documents, skipping job ${job.id}`);
-          results.skipped++;
-          results.details.push({
+          results.push({
             jobId: job.id,
             indexName,
             status: 'skipped',
-            reason: 'No documents in index'
+            reason: 'No documents in index',
+            documentCount: 0
           });
+          skippedCount++;
           continue;
         }
         
         // Get documents
-        const { documents = [] } = await getDocuments(indexName);
+        const { documents } = await getDocuments(indexName);
+        if (!documents || documents.length === 0) {
+          results.push({
+            jobId: job.id,
+            indexName,
+            status: 'skipped',
+            reason: 'No documents returned',
+            documentCount: 0
+          });
+          skippedCount++;
+          continue;
+        }
         
         // Update job processed data
-        await updateJobProcessedData(job.id, indexName, documentCount, documents);
+        await updateJobProcessedData(job.id, indexName, documents.length, documents);
         
-        results.processed++;
-        results.details.push({
+        results.push({
           jobId: job.id,
           indexName,
           status: 'processed',
-          documentCount
+          documentCount: documents.length
         });
+        processedCount++;
       } catch (error) {
         console.error(`Error processing job ${job.id}:`, error);
-        results.errors++;
-        results.details.push({
+        results.push({
           jobId: job.id,
           status: 'error',
-          error: (error as Error).message
+          error: error instanceof Error ? error.message : String(error)
         });
+        errorCount++;
       }
     }
     
     return NextResponse.json({
-      message: 'Job processed data update completed',
+      total: jobs.length,
+      processed: processedCount,
+      skipped: skippedCount,
+      errors: errorCount,
       results
     });
   } catch (error) {
-    console.error('Error updating job processed data:', error);
+    console.error('Error updating processed data:', error);
     return NextResponse.json(
-      { error: 'Failed to update job processed data' },
+      { error: 'Failed to update processed data' },
       { status: 500 }
     );
   }

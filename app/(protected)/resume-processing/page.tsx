@@ -3,20 +3,20 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+    CardDescription,
 } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from "@/components/ui/select"
 import { AlertCircle, CheckCircle2, XCircle, Timer, Database, Settings2, Plus } from 'lucide-react'
 import { cn } from "@/lib/utils"
@@ -243,8 +243,16 @@ export default function ResumeProcessingPage() {
                     setMatches(transformApiResponseToUiFormat(event.matches))
                   }
                   
-                  // After successful processing, redirect to matches page
+                  // After successful processing, update job processed data and redirect to matches page
                   if (selectedJob) {
+                    // Update the job processed data
+                    try {
+                      await fetch(`/api/jobs/${selectedJob.id}/matches?update_stats=true&size=1`);
+                    } catch (error) {
+                      console.error('Error updating job processed data:', error);
+                    }
+                    
+                    // Redirect to matches page
                     router.push(`/resume-processing/matches?jobId=${selectedJob.id}`)
                   }
                   break

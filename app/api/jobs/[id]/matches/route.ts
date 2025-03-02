@@ -69,7 +69,7 @@ export async function GET(
       // If the index doesn't exist, return empty results instead of an error
       if (response.status === 404) {
         return NextResponse.json({
-          matches: [],
+          documents: [],
           total: 0
         })
       }
@@ -187,6 +187,10 @@ export async function GET(
           // Continue with the response even if updating stats fails
         }
       }
+    } else {
+      // If no documents, return empty array
+      data.documents = [];
+      data.total = 0;
     }
     
     return NextResponse.json(data)

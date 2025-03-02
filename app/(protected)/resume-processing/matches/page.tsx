@@ -161,16 +161,18 @@ export default function MatchesPage() {
       try {
         setIsLoading(true);
         
-        // Use the new endpoint to fetch matches
-        const response = await fetch(`/api/jobs/${currentJob.id}/matches?exclude_fields=embedding`);
+        // Use the correct endpoint to fetch matches
+        const response = await fetch(`/api/jobs/${currentJob.id}/matches?exclude_fields=embedding&update_stats=true`);
         if (!response.ok) {
           throw new Error('Failed to fetch candidates');
         }
 
         const { documents, total } = await response.json()
-        console.log(documents)
-        // The data comes in the format { matches: [], total: number }
+        console.log('Fetched candidate documents:', documents?.length || 0);
+        
+        // Transform the data for UI display
         const transformedData = documents ? transformApiResponseToUiFormat(documents) : []
+        
         // Sort candidates by match score in descending order
         const sortedData = transformedData.sort((a, b) => b.matchScore - a.matchScore)
         setCandidateMatches(sortedData)
