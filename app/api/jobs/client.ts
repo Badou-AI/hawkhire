@@ -58,6 +58,20 @@ export interface ApiJob {
     en: string[]
     fr: string[]
   }
+  processed?: {
+    index_name: string
+    total_applicants: number
+    last_processed_at: string
+    processing_status: string
+    average_match_score?: number
+    top_skills?: Array<{
+      skill: string
+      count: number
+      average_score: number
+    }>
+    error_message?: string
+    processing_duration?: number
+  }
 }
 
 export interface JobsResponse {
@@ -86,6 +100,20 @@ export interface Job {
     founded_year: number;
     company_type: string;
   };
+  processed?: {
+    index_name: string
+    total_applicants: number
+    last_processed_at: string
+    processing_status: string
+    average_match_score?: number
+    top_skills?: Array<{
+      skill: string
+      count: number
+      average_score: number
+    }>
+    error_message?: string
+    processing_duration?: number
+  }
 }
 
 // Helper function to map backend job response to frontend Job type
@@ -108,21 +136,58 @@ export function mapBackendJobToFrontend(backendJob: ApiJob): Job {
         return field
       }
     }
-    if (typeof field === 'object' && (field.en || field['en'])) {
-      return field.en || field['en']
+    if (typeof field === 'object') {
+      // Check if it has an 'en' property
+      if ('en' in field && typeof field.en === 'string') {
+        return field.en
+      }
+      // Otherwise try to get the first value
+      const values = Object.values(field)
+      if (values.length > 0 && typeof values[0] === 'string') {
+        return values[0]
+      }
     }
     return String(field)
   }
 
+  // Extract title from potentially complex structure
+  let title = ''
+  if (typeof backendJob.title === 'string') {
+    title = backendJob.title
+  } else if (typeof backendJob.title === 'object' && backendJob.title !== null) {
+    // @ts-expect-error - We're handling the potential structure variations
+    title = backendJob.title.en || Object.values(backendJob.title)[0] || ''
+  }
+
+  // Extract company name
+  let company = 'Company Name!'
+  if (backendJob.organizations) {
+    if (typeof backendJob.organizations.name === 'string') {
+      company = backendJob.organizations.name
+    } else if (typeof backendJob.organizations.name === 'object' && backendJob.organizations.name !== null) {
+      // @ts-expect-error - We're handling the potential structure variations
+      company = backendJob.organizations.name.en || Object.values(backendJob.organizations.name)[0] || 'Company Name!'
+    }
+  }
+
+  // Extract description
+  let description = ''
+  if (typeof backendJob.description === 'string') {
+    description = backendJob.description
+  } else if (typeof backendJob.description === 'object' && backendJob.description !== null) {
+    // @ts-expect-error - We're handling the potential structure variations
+    description = backendJob.description.en || Object.values(backendJob.description)[0] || ''
+  }
+
   return {
     id: backendJob.id,
-    title: backendJob.title.en,
-    company: backendJob.organizations?.name.en || 'Company Name!',
+    title,
+    company,
     location: locationString,
     type: backendJob.job_type.replace('_', ' ').toLowerCase(),
     rating: backendJob.rating || 4.5,
     logo: backendJob.organizations?.logo_url || '/company-logos/placeholder.png',
-    description: backendJob.description.en,
+    description,
     salary: salaryString,
     postedAt: backendJob.created_at,
     skills: backendJob.skills || [],
@@ -132,6 +197,16 @@ export function mapBackendJobToFrontend(backendJob: ApiJob): Job {
       size_range: parseLocalizedField(backendJob.organizations.size_range),
       founded_year: backendJob.organizations.founded_year,
       company_type: parseLocalizedField(backendJob.organizations.company_type)
+    } : undefined,
+    processed: backendJob.processed ? {
+      index_name: backendJob.processed.index_name,
+      total_applicants: backendJob.processed.total_applicants,
+      last_processed_at: backendJob.processed.last_processed_at,
+      processing_status: backendJob.processed.processing_status as 'pending' | 'processing' | 'completed' | 'failed',
+      average_match_score: backendJob.processed.average_match_score,
+      top_skills: backendJob.processed.top_skills,
+      error_message: backendJob.processed.error_message,
+      processing_duration: backendJob.processed.processing_duration
     } : undefined
   }
 }

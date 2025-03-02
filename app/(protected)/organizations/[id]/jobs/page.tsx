@@ -52,6 +52,12 @@ interface Job {
   applicants: number;
   status: string;
   createdAt: string;
+  processed?: {
+    total_applicants: number;
+    average_match_score?: number;
+    processing_status: string;
+    last_processed_at: string;
+  };
 }
 
 // Department icons mapping
@@ -111,6 +117,10 @@ export default function OrganizationJobsPage() {
         setLoading(true);
         const supabase = createClient();
         
+        if (!supabase) {
+          throw new Error("Supabase client not available");
+        }
+        
         // Fetch jobs for the specific organization
         const { data, error: jobsError } = await supabase
           .from('jobs')
@@ -127,6 +137,7 @@ export default function OrganizationJobsPage() {
             created_at,
             skills,
             requirements,
+            processed,
             organizations (
               id,
               name,
@@ -162,7 +173,17 @@ export default function OrganizationJobsPage() {
           const mode = job.remote ? "Remote" : "On-site";
           
           // Extract department from organization industry or default to a category
-          const department = job.organizations?.industry || "General";
+          let department = "General";
+          if (job.organizations && typeof job.organizations === 'object') {
+            // Handle both single object and array cases
+            if (Array.isArray(job.organizations) && job.organizations.length > 0) {
+              const org = job.organizations[0];
+              department = typeof org.industry === 'string' ? org.industry : "General";
+            } else if ('industry' in job.organizations) {
+              const industry = job.organizations.industry;
+              department = typeof industry === 'string' ? industry : "General";
+            }
+          }
           
           // Format the job title - handle localized titles
           let title = "";
@@ -171,6 +192,9 @@ export default function OrganizationJobsPage() {
           } else if (typeof job.title === 'object') {
             title = job.title.en || Object.values(job.title)[0] || "Untitled Position";
           }
+          
+          // Get applicant count from processed data if available, otherwise use resumes count
+          const applicantCount = job.processed?.total_applicants || job.resumes?.[0]?.count || 0;
           
           return {
             id: job.id,
@@ -181,9 +205,10 @@ export default function OrganizationJobsPage() {
             type: formatJobType(job.job_type),
             mode: mode,
             salary: formatSalary(job.salary_min, job.salary_max, job.salary_currency),
-            applicants: job.resumes?.[0]?.count || 0,
+            applicants: applicantCount,
             status: job.status,
-            createdAt: job.created_at
+            createdAt: job.created_at,
+            processed: job.processed
           };
         });
         

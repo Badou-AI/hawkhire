@@ -1,7 +1,33 @@
-import { NextResponse } from 'next/server'
-import { getJob } from '../../client'
+import { NextResponse } from 'next/server';
+import { getJob } from '../../client';
+import { createClient } from '@/lib/supabase/server';
 
 const REMOTE_API_URL = process.env.NEXT_PUBLIC_REMOTE_API_URL || 'http://147.93.44.131:8000'
+
+// Define types for the document structure
+interface DocumentItem {
+  id: string;
+  item_data?: {
+    content?: {
+      profile?: {
+        first_name?: string;
+        last_name?: string;
+      };
+      skills?: Array<{
+        skill: string;
+        score: number;
+      }>;
+    };
+    matching_score?: {
+      data?: {
+        score?: {
+          value: number;
+        };
+      };
+    };
+    timestamp?: string;
+  };
+}
 
 export async function GET(
   request: Request,
@@ -14,6 +40,7 @@ export async function GET(
     const excludeFields = searchParams.get('exclude_fields')
     const offset = searchParams.get('offset') || '0'
     const size = searchParams.get('size') || '5000'
+    const updateStats = searchParams.get('update_stats') !== 'false' // Default to true
 
     // Get the job first to generate the correct index name
     const job = await getJob(id)
@@ -58,22 +85,22 @@ export async function GET(
       const originalCount = data.documents.length;
       
       // Filter out John Doe entries
-      data.documents = data.documents.filter((doc: any) => {
+      data.documents = data.documents.filter((doc: DocumentItem) => {
         // Check if document has valid profile data
         const hasValidProfile = doc.item_data?.content?.profile?.first_name && 
                                doc.item_data?.content?.profile?.last_name;
         
         // Check if name is "John Doe" (case insensitive)
         const isJohnDoe = hasValidProfile && 
-                         doc.item_data.content.profile.first_name.toLowerCase() === "john" && 
-                         doc.item_data.content.profile.last_name.toLowerCase() === "doe";
+                         doc.item_data?.content?.profile?.first_name?.toLowerCase() === "john" && 
+                         doc.item_data?.content?.profile?.last_name?.toLowerCase() === "doe";
         
         // Log any John Doe entries we're filtering out
         if (isJohnDoe) {
           console.log('API route: Filtering out John Doe entry:', {
             id: doc.id,
-            name: `${doc.item_data.content.profile.first_name} ${doc.item_data.content.profile.last_name}`,
-            timestamp: doc.item_data.timestamp
+            name: `${doc.item_data?.content?.profile?.first_name} ${doc.item_data?.content?.profile?.last_name}`,
+            timestamp: doc.item_data?.timestamp
           });
         }
         
@@ -88,6 +115,76 @@ export async function GET(
         // Update total count if it exists
         if (data.total) {
           data.total = data.documents.length;
+        }
+      }
+      
+      // Update job processed data in the database if requested
+      if (updateStats && data.documents.length > 0) {
+        try {
+          const supabase = createClient();
+          
+          // Calculate average match score
+          let totalScore = 0;
+          const skillsCount: Record<string, { count: number, totalScore: number }> = {};
+          
+          // Process documents to extract statistics
+          data.documents.forEach((doc: DocumentItem) => {
+            // Add to total score if available
+            if (doc.item_data?.matching_score?.data?.score?.value) {
+              totalScore += doc.item_data.matching_score.data.score.value;
+            }
+            
+            // Count skills and their scores
+            if (doc.item_data?.content?.skills && Array.isArray(doc.item_data.content.skills)) {
+              doc.item_data.content.skills.forEach((skillObj: { skill: string; score: number }) => {
+                if (skillObj.skill && typeof skillObj.score === 'number') {
+                  if (!skillsCount[skillObj.skill]) {
+                    skillsCount[skillObj.skill] = { count: 0, totalScore: 0 };
+                  }
+                  skillsCount[skillObj.skill].count += 1;
+                  skillsCount[skillObj.skill].totalScore += skillObj.score;
+                }
+              });
+            }
+          });
+          
+          // Calculate average score
+          const averageScore = data.documents.length > 0 ? totalScore / data.documents.length : 0;
+          
+          // Get top skills
+          const topSkills = Object.entries(skillsCount)
+            .map(([skill, { count, totalScore }]) => ({
+              skill,
+              count,
+              average_score: totalScore / count
+            }))
+            .sort((a, b) => b.count - a.count || b.average_score - a.average_score)
+            .slice(0, 10);
+          
+          // Update the job's processed data
+          const { error } = await supabase
+            .from('jobs')
+            .update({
+              processed: {
+                index_name: indexName,
+                total_applicants: data.documents.length,
+                last_processed_at: new Date().toISOString(),
+                processing_status: 'completed',
+                average_match_score: averageScore,
+                top_skills: topSkills,
+                processing_duration: 0 // We don't have this info from the API
+              }
+            })
+            .eq('id', id);
+          
+          if (error) {
+            console.error('Error updating job processed data:', error);
+          } else {
+            console.log(`Updated processed data for job ${id} with ${data.documents.length} applicants`);
+          }
+        } catch (error) {
+          console.error('Error updating job processed data:', error);
+          // Continue with the response even if updating stats fails
         }
       }
     }
