@@ -555,9 +555,15 @@ export default function JobDetailPage() {
               <CardContent className="p-6">
                 <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
                 <div className="space-y-4">
-                  <Link href={`/resume-processing/matches?jobId=${job.id}`}>
-                    <Button className="w-full">View Applicants</Button>
-                  </Link>
+                  {(job.processed && job.processed.total_applicants && job.processed.total_applicants > 0) ? (
+                    <Link href={`/resume-processing/matches?jobId=${job.id}`}>
+                      <Button className="w-full">View Applicants</Button>
+                    </Link>
+                  ) : (
+                    <Link href={`/resume-processing?jobId=${job.id}`}>
+                      <Button className="w-full">Process Resumes</Button>
+                    </Link>
+                  )}
                   <Button variant="outline" className="w-full">Edit Job</Button>
                   {job.status === "PUBLISHED" ? (
                     <Button variant="destructive" className="w-full">Close Job</Button>
