@@ -136,7 +136,7 @@ class BatchProcessor:
         
         # Configure HTTP clients
         remote_url = os.getenv("REMOTE_API_URL")
-        local_url = os.getenv("LOCAL_API_URL", "http://localhost:8080")
+        local_url = os.getenv("LOCAL_API_URL", f"http://{os.getenv('HOST', '127.0.0.1')}:8080")
         
         if not remote_url:
             raise ValueError("REMOTE_API_URL environment variable is not set")

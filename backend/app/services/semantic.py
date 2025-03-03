@@ -68,7 +68,7 @@ class SemanticService:
         
         self.client = httpx.AsyncClient(
             timeout=30.0,
-            base_url=self.base_url if self.base_url else "http://localhost:8000"
+            base_url=self.base_url if self.base_url else f"http://{os.getenv('HOST', '127.0.0.1')}:8000"
         )
         self.mock_service = MockSemanticService()
         self.use_mock = self.base_url is None

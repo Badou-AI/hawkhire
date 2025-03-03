@@ -105,6 +105,11 @@ export interface Job {
   processed?: ProcessedJob;
 }
 
+// Get API URL from environment variable or use default
+const API_URL = typeof window !== 'undefined' 
+  ? process.env.NEXT_PUBLIC_API_URL || 'https://api.hawkhire.ai'
+  : process.env.PYTHON_API_URL || 'https://api.hawkhire.ai'
+
 // Helper function to map backend job response to frontend Job type
 export function mapBackendJobToFrontend(backendJob: ApiJob): Job {
   const locationString = `${backendJob.location.city.en}, ${backendJob.location.state.en}`
@@ -207,7 +212,7 @@ export function mapBackendJobToFrontend(backendJob: ApiJob): Job {
 export async function getJobs(page: number = 0, pageSize: number = 15): Promise<JobsResponse> {
   try {
     const response = await fetch(
-      `http://127.0.0.1:8080/v1/jobs/with/organizations?page=${page}&page_size=${pageSize}`,
+      `${API_URL}/v1/jobs/with/organizations?page=${page}&page_size=${pageSize}`,
       {
         method: 'GET',
         headers: {
@@ -231,7 +236,7 @@ export async function getJob(id: string): Promise<Job | null> {
   if (!id) throw new Error('Job ID is required')
   
   try {
-    const response = await fetch(`http://127.0.0.1:8080/v1/jobs/with/organizations/${encodeURIComponent(id)}`, {
+    const response = await fetch(`${API_URL}/v1/jobs/with/organizations/${encodeURIComponent(id)}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'
@@ -299,7 +304,7 @@ export async function getSimilarJobs(jobId: string, limit = 4): Promise<Job[]> {
     console.log('Searching for similar jobs with params:', searchParams.toString())
     
     const response = await fetch(
-      `http://127.0.0.1:8080/v1/jobs/with/organizations?${searchParams.toString()}`,
+      `${API_URL}/v1/jobs/with/organizations?${searchParams.toString()}`,
       {
         method: 'GET',
         headers: {

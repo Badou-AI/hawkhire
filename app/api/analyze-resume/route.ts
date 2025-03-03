@@ -1,5 +1,8 @@
 import { NextRequest } from 'next/server';
 
+// Use environment variable for API URL with fallback to local address
+const API_URL = process.env.PYTHON_API_URL || 'https://api.hawkhire.ai';
+
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
@@ -29,7 +32,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Call backend API
-    const response = await fetch('http://127.0.0.1:8000/v1/analyze-resume', {
+    const response = await fetch(`${API_URL}/v1/analyze-resume`, {
       method: 'POST',
       body: apiFormData,
     });

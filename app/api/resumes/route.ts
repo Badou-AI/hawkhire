@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Get API URL from environment variable or use default
+const API_URL = process.env.PYTHON_API_URL || 'https://api.hawkhire.ai'
+
 interface DocumentItem {
   id: string;
   item_data?: {
@@ -17,7 +20,7 @@ interface DocumentItem {
 export async function GET() {
   try {
     // Call the backend API to get resumes
-    const response = await fetch('http://127.0.0.1:8080/resumes', {
+    const response = await fetch(`${API_URL}/resumes`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'
@@ -105,7 +108,7 @@ export async function POST(request: NextRequest) {
       apiFormData.append('job_title', jobTitle)
     }
 
-    const response = await fetch('http://127.0.0.1:8080/process-zip', {
+    const response = await fetch(`${API_URL}/process-zip`, {
       method: 'POST',
       body: apiFormData
     })
