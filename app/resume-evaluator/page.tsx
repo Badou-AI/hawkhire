@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, Suspense } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -266,22 +266,29 @@ const mockAnalysisDataFr: ResumeAnalysis = {
 }
 
 export default function ResumeEvaluatorPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ResumeEvaluatorContent />
+    </Suspense>
+  );
+}
+
+function ResumeEvaluatorContent() {
   const searchParams = useSearchParams()
+  const useMockData = searchParams.get('mock') === 'true'
+  
+  const [file, setFile] = useState<File | null>(null)
   const [jobDescription, setJobDescription] = useState("")
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysis, setAnalysis] = useState<ResumeAnalysis | null>(null)
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const useMockData = searchParams.get('mock') === 'true'
 
   const handleFileUpload = async (file: File) => {
-    setSelectedFile(file)
+    setFile(file)
   }
 
   const handleAnalyzeClick = async () => {
-    if (!selectedFile || !jobDescription) {
-      return
-    }
-
+    if (!file || !jobDescription.trim()) return
+    
     setIsAnalyzing(true)
     
     try {
@@ -290,27 +297,26 @@ export default function ResumeEvaluatorPage() {
         await new Promise(resolve => setTimeout(resolve, 2000))
         
         // Use mock data based on detected language
-        const language = detectLanguage(jobDescription)
-        setAnalysis(language === 'fr' ? mockAnalysisDataFr : mockAnalysisData)
+        const detectedLanguage = detectLanguage(jobDescription)
+        setAnalysis(detectedLanguage === 'fr' ? mockAnalysisDataFr : mockAnalysisData)
       } else {
-        // Use the existing working API endpoint
+        // Create form data
         const formData = new FormData()
-        formData.append('resume', selectedFile)
-        formData.append('job_description', jobDescription)
-        formData.append('existing_job_id', '')
-        formData.append('exclude_fields', 'embedding')
-
-        const response = await fetch('/api/analyze-resume', {
+        formData.append('resume', file)
+        formData.append('jobDescription', jobDescription)
+        
+        // Send to API
+        const response = await fetch('/api/resume-evaluator', {
           method: 'POST',
-          body: formData
+          body: formData,
         })
-
+        
         if (!response.ok) {
           throw new Error('Failed to analyze resume')
         }
-
-        const result = await response.json()
-        setAnalysis(result)
+        
+        const data = await response.json()
+        setAnalysis(data)
       }
     } catch (error) {
       console.error('Error analyzing resume:', error)
@@ -321,21 +327,21 @@ export default function ResumeEvaluatorPage() {
 
   const getSkillLevelColor = (level: string): string => {
     switch (level) {
-      case 'Expert':
-        return 'bg-green-500'
-      case 'Proficient':
-        return 'bg-blue-500'
-      case 'Basic':
-        return 'bg-orange-500'
+      case "Expert":
+        return "bg-green-100 text-green-800 border-green-300"
+      case "Proficient":
+        return "bg-blue-100 text-blue-800 border-blue-300"
+      case "Basic":
+        return "bg-yellow-100 text-yellow-800 border-yellow-300"
       default:
-        return 'bg-gray-500'
+        return "bg-gray-100 text-gray-800 border-gray-300"
     }
   }
 
   const resetAnalysis = () => {
     setAnalysis(null)
+    setFile(null)
     setJobDescription("")
-    setSelectedFile(null)
   }
 
   return (
@@ -363,9 +369,9 @@ export default function ResumeEvaluatorPage() {
               <Card>
                 <CardHeader>
                   <CardTitle>Upload Resume</CardTitle>
-                  {selectedFile && (
+                  {file && (
                     <CardDescription>
-                      Selected file: {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
+                      Selected file: {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
                     </CardDescription>
                   )}
                 </CardHeader>
@@ -374,7 +380,7 @@ export default function ResumeEvaluatorPage() {
                     onFileSelect={handleFileUpload}
                     disabled={isAnalyzing}
                     acceptedTypes={['.pdf', '.doc', '.docx']}
-                    description={selectedFile ? "Click to change file" : "Upload your resume"}
+                    description={file ? "Click to change file" : "Upload your resume"}
                     fileTypeDescription="PDF, DOC, or DOCX"
                   />
                 </CardContent>
@@ -393,7 +399,7 @@ export default function ResumeEvaluatorPage() {
                   />
                   <Button 
                     className="w-full mt-4" 
-                    disabled={!jobDescription || !selectedFile || isAnalyzing}
+                    disabled={!jobDescription || !file || isAnalyzing}
                     onClick={handleAnalyzeClick}
                   >
                     {isAnalyzing ? "Analyzing..." : "Analyze Resume"}

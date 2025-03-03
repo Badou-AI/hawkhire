@@ -42,7 +42,7 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { usePipelineStore } from '@/lib/store/pipeline-store';
 import { PipelineStatus } from '@/components/pipeline-status';
 import { useSearchParams } from "next/navigation";
@@ -116,7 +116,6 @@ export default function MatchesPage() {
   const [viewMode, setViewMode] = useState<'simple' | 'detailed' | 'table' | 'grid'>('grid')
   const [chatOpen, setChatOpen] = useState(false)
   const [chatInput, setChatInput] = useState("")
-  const [showDetails, setShowDetails] = useState(false)
   const [candidateMatches, setCandidateMatches] = useState<Candidate[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [jobStats, setJobStats] = useState<JobStats | null>(null)
@@ -124,9 +123,6 @@ export default function MatchesPage() {
   const [shortlistThreshold, setShortlistThreshold] = useState(80)
   const [customThreshold, setCustomThreshold] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
-
-  // Add a ref for the print button
-  const printButtonRef = useRef<HTMLButtonElement>(null);
 
   // Fetch job data
   useEffect(() => {
@@ -240,17 +236,9 @@ export default function MatchesPage() {
 
   // Helper function for match score variant
   const getMatchScoreVariant = (score: number): "default" | "outline" | "secondary" => {
-    if (score >= 80) return "default"
-    if (score >= 70) return "secondary"
+    if (score >= 90) return "default"
+    if (score >= 80) return "secondary"
     return "outline"
-  }
-
-  // Add the missing getMatchLabel function
-  const getMatchLabel = (score: number): string => {
-    if (score >= 90) return "Excellent Match"
-    if (score >= 80) return "Good Match"
-    if (score >= 70) return "Fair Match"
-    return "Poor Match"
   }
 
   // Filter candidates based on the showShortlisted toggle
@@ -871,7 +859,6 @@ export default function MatchesPage() {
                 {currentCandidates.map((candidate) => {
                   // Check if candidate is already shortlisted
                   const isShortlisted = candidate.matchScore >= shortlistThreshold;
-                  const isInPipeline = !!candidates[candidate.id];
                   
                   return (
                     <TableRow 

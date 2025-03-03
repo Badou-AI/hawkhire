@@ -1,5 +1,6 @@
 import { createBrowserClient } from '@supabase/ssr';
 import { Database } from '@/types/supabase';
+import { AuthError, Session, SupabaseClient } from '@supabase/supabase-js';
 
 // Singleton instance
 let browserClient: ReturnType<typeof createBrowserClient<Database>> | null = null;
@@ -22,7 +23,7 @@ const clearAuthState = () => {
     supabaseKeys.forEach(key => {
       try {
         localStorage.removeItem(key);
-      } catch (e) {
+      } catch {
         console.warn(`Failed to remove ${key}`);
       }
     });
@@ -104,7 +105,7 @@ export const createClient = () => {
         getSession: () => Promise.resolve({ data: { session: null }, error: null }),
         signInWithPassword: () => Promise.resolve({ data: { session: null }, error: null }),
       },
-    } as ReturnType<typeof createBrowserClient<Database>>;
+    } as unknown as SupabaseClient<Database>;
   }
 
   // Validate stored tokens before creating/returning client
@@ -152,15 +153,26 @@ export const createClient = () => {
         detectSessionInUrl: true,
         persistSession: true,
         autoRefreshToken: true,
-        onAuthStateChange: (event, session) => {
-          if (event === 'SIGNED_OUT') {
-            clearAuthState();
-          } else if (event === 'TOKEN_REFRESHED' && session) {
-            // Validate the new token
-            const accessToken = session.access_token;
-            if (accessToken && !isValidJWT(accessToken)) {
-              console.warn('[Supabase] Invalid refreshed token detected, signing out');
-              browserClient?.auth.signOut().catch(console.error);
+        storage: {
+          getItem: (key) => {
+            try {
+              return localStorage.getItem(key);
+            } catch {
+              return null;
+            }
+          },
+          setItem: (key, value) => {
+            try {
+              localStorage.setItem(key, value);
+            } catch {
+              console.error('[Supabase] Error setting storage item');
+            }
+          },
+          removeItem: (key) => {
+            try {
+              localStorage.removeItem(key);
+            } catch {
+              console.error('[Supabase] Error removing storage item');
             }
           }
         }
@@ -168,22 +180,39 @@ export const createClient = () => {
     }
   );
 
+  // Add event listeners after client creation
+  browserClient.auth.onAuthStateChange((event: string, session: Session | null) => {
+    if (event === 'SIGNED_OUT') {
+      clearAuthState();
+    } else if (event === 'TOKEN_REFRESHED' && session) {
+      // Validate the new token
+      const accessToken = session.access_token;
+      if (accessToken && !isValidJWT(accessToken)) {
+        console.warn('[Supabase] Invalid refreshed token detected, signing out');
+        browserClient?.auth.signOut().catch(console.error);
+      }
+    }
+  });
+
   // Add signOut override to properly clean up state
   if (browserClient) {
     const originalSignOut = browserClient.auth.signOut;
     browserClient.auth.signOut = async (...args) => {
       try {
+        if (!browserClient) {
+          return { error: new Error('Browser client is null') as AuthError };
+        }
         const result = await originalSignOut.apply(browserClient.auth, args);
         clearAuthState();
         return result;
       } catch (error) {
         console.error('[Supabase] Sign out error:', error);
         clearAuthState(); // Still clear state even if the API call fails
-        return { error };
+        return { error: error as AuthError };
       }
     };
     
-    // Override getSession to handle invalid tokens
+    // Add getSession override to validate tokens
     const originalGetSession = browserClient.auth.getSession;
     browserClient.auth.getSession = async () => {
       try {
@@ -191,6 +220,10 @@ export const createClient = () => {
         if (!validateStoredTokens()) {
           console.warn('[Supabase] Invalid tokens detected, returning null session');
           return { data: { session: null }, error: null };
+        }
+        
+        if (!browserClient) {
+          return { data: { session: null }, error: new Error('Browser client is null') as AuthError };
         }
         
         const result = await originalGetSession.apply(browserClient.auth);

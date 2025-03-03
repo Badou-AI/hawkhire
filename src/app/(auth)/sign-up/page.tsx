@@ -7,11 +7,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
-import { AuthError } from "@supabase/supabase-js"
-import AuthLayout from './layout'
+import AuthLayout from '../layout'
 
 export default function SignUpPage() {
   const [showPassword, setShowPassword] = useState(false)
@@ -19,22 +18,28 @@ export default function SignUpPage() {
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
-  const searchParams = useSearchParams()
   const supabase = createClient()
 
   useEffect(() => {
     const checkSession = async () => {
+      if (!supabase) return;
       const { data: { session } } = await supabase.auth.getSession()
       if (session) {
         router.push('/dashboard')
       }
     }
     checkSession()
-  }, [router, supabase.auth])
+  }, [router, supabase])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
+    
+    if (!supabase) {
+      toast.error('Authentication service unavailable');
+      setIsLoading(false);
+      return;
+    }
 
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -51,12 +56,8 @@ export default function SignUpPage() {
         toast.success('Please check your email to verify your account')
         router.push('/sign-in')
       }
-    } catch (error) {
-      if (error instanceof AuthError) {
-        toast.error(error.message)
-      } else {
-        toast.error('Failed to sign up')
-      }
+    } catch {
+      toast.error('Failed to sign up')
     } finally {
       setIsLoading(false)
     }

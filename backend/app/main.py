@@ -38,6 +38,9 @@ REMOTE_API_URL = os.getenv("REMOTE_API_URL")
 if not REMOTE_API_URL:
     print("Warning: REMOTE_API_URL not set, services will use mock mode")
 
+# Get frontend URL for CORS
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
 # Initialize Supabase client
 supabase: Client = create_client(
     os.getenv("SUPABASE_URL"),
@@ -54,7 +57,14 @@ app = FastAPI(
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "https://hawkhire.com", "https://beta.hawkhire.com"],  # Next.js development server
+    allow_origins=[
+        "http://localhost:3000", 
+        "http://127.0.0.1:3000", 
+        "https://hawkhire.com", 
+        "https://beta.hawkhire.ai",
+        "https://beta.hawkhire.com",
+        FRONTEND_URL
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -141,7 +151,7 @@ class MockSemanticService:
     async def extract_knowledge(self, text: str, schema: Dict) -> Dict:
         return {"data": schema}  # Return empty schema structure
 
-    async def analyze_document(self, text: str, job_description: str, schema: Dict) -> Dict:
+    async def analyze_document(self, text: str, schema: Dict) -> Dict:
         """Mock implementation of document analysis"""
         return {
             "justification": "This is a mock analysis of the document.",

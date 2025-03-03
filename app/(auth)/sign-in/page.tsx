@@ -102,7 +102,7 @@ export default function SignInPage() {
     }
     
     checkSession();
-  }, [router, supabase, toast]);
+  }, [router, supabase]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

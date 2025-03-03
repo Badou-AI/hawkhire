@@ -1,7 +1,7 @@
 export async function getSimilarJobs(jobId: string) {
   try {
     // Use absolute URL with IPv4 address
-    const response = await fetch(`http://127.0.0.1:${process.env.PORT || 3000}/api/jobs`, {
+    const response = await fetch(`http://127.0.0.1:${process.env.PORT || 3000}/api/jobs/similar?jobId=${jobId}`, {
       headers: {
         'Host': '127.0.0.1'
       }

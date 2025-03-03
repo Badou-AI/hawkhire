@@ -11,13 +11,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Upload, CheckCircle2, XCircle, Timer, AlertCircle } from "lucide-react"
+import { Upload, AlertCircle } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Progress } from "@/components/ui/progress"
-import { Card, CardContent } from "@/components/ui/card"
 import { FileDropzone } from "@/components/resume-evaluator/FileDropzone"
-import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/useAuth"
 import { toast } from "sonner"
 import { BulkJobProgress } from "@/components/jobs/BulkJobProgress"
@@ -175,46 +172,6 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
     }
   }
 
-  const getStatusColor = (status: ProcessingStatus) => {
-    switch (status) {
-      case 'uploading':
-      case 'processing':
-        return 'text-blue-500'
-      case 'completed':
-        return 'text-green-500'
-      case 'error':
-        return 'text-red-500'
-      default:
-        return 'text-gray-500'
-    }
-  }
-
-  const getStatusMessage = (status: ProcessingStatus) => {
-    switch (status) {
-      case 'uploading':
-        return 'Uploading files...'
-      case 'processing':
-        return `Processing files (${stats.processedCount + stats.failedCount} of ${stats.totalFiles})`
-      case 'completed':
-        return `Completed processing ${stats.totalFiles} files`
-      case 'error':
-        return 'Error processing files'
-      default:
-        return 'Ready to process'
-    }
-  }
-
-  const getProgressValue = () => {
-    if (processingStatus === 'idle' || processingStatus === 'error') return 0
-    if (processingStatus === 'completed') return 100
-    if (stats.totalFiles === 0) return 0
-    
-    // Include all processed files (successful, failed, and unsupported) in progress
-    const totalProcessed = stats.processedCount + stats.failedCount + (stats.unsupportedCount || 0)
-    // Ensure we never exceed 100%
-    return Math.min((totalProcessed / stats.totalFiles) * 100, 100)
-  }
-
   return (
     <Dialog>
       <DialogTrigger asChild>
@@ -265,7 +222,6 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
 
           {processingStatus !== 'idle' && (
             <div className="space-y-4">
-              {/* <Progress value={getProgressValue()} /> */}
               <BulkJobProgress
                 stats={stats}
                 processingStatus={processingStatus}
@@ -273,64 +229,6 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
                 error={error}
                 unsupportedFiles={unsupportedFiles}
               />
-              
-              {/* <div className="grid grid-cols-2 gap-4">
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-2">
-                        <Timer className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm font-medium">Processing Time</span>
-                      </div>
-                      <span className="text-sm">
-                        {stats.processingTime.toFixed(1)}s
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-2">
-                        <AlertCircle className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm font-medium">Status</span>
-                      </div>
-                      <span className={cn("text-sm", getStatusColor(processingStatus))}>
-                        {getStatusMessage(processingStatus)}
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-green-500" />
-                        <span className="text-sm font-medium">Processed</span>
-                      </div>
-                      <span className="text-sm">
-                        {stats.processedCount} / {stats.totalFiles}
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-2">
-                        <XCircle className="h-4 w-4 text-red-500" />
-                        <span className="text-sm font-medium">Failed</span>
-                      </div>
-                      <span className="text-sm">
-                        {stats.failedCount}
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div> */}
             </div>
           )}
 

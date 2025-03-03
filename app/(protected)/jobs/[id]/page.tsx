@@ -6,13 +6,15 @@ import { getJob, getSimilarJobs } from '@/app/api/jobs/client'
 import { type Job } from '@/types/job'
 import Link from 'next/link'
 
-interface PageProps {
-  params: {
-    id: string;
-  };
-}
+type PageParams = {
+  id: string;
+};
 
-export default async function JobPage({ params }: PageProps) {
+export default async function JobPage({ 
+  params 
+}: { 
+  params: PageParams;
+}) {
   try {
     // Ensure params.id exists before using it
     const jobId = params?.id

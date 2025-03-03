@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 import { AuthError } from "@supabase/supabase-js"
@@ -19,22 +19,24 @@ export default function SignUpPage() {
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
-  const searchParams = useSearchParams()
   const supabase = createClient()
 
   useEffect(() => {
     // Check if user is already signed in
     const checkSession = async () => {
+      if (!supabase) return;
       const { data: { session } } = await supabase.auth.getSession()
       if (session) {
         router.push('/dashboard')
       }
     }
+    
     checkSession()
-  }, [router, supabase.auth])
+  }, [router, supabase])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isLoading || !supabase) return
     setIsLoading(true)
 
     try {
@@ -64,6 +66,9 @@ export default function SignUpPage() {
   }
 
   const handleGoogleSignUp = async () => {
+    if (isLoading || !supabase) return
+    setIsLoading(true)
+
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',

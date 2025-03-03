@@ -1,4 +1,17 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server';
+
+interface DocumentItem {
+  id: string;
+  item_data?: {
+    content?: {
+      profile?: {
+        first_name?: string;
+        last_name?: string;
+      };
+    };
+    timestamp?: string;
+  };
+}
 
 // Add GET method to fetch resumes with John Doe filtering
 export async function GET() {
@@ -24,22 +37,22 @@ export async function GET() {
       const originalCount = data.documents.length;
       
       // Filter out John Doe entries
-      data.documents = data.documents.filter((doc: any) => {
+      data.documents = data.documents.filter((doc: DocumentItem) => {
         // Check if document has valid profile data
-        const hasValidProfile = doc.item_data?.content?.profile?.first_name && 
-                               doc.item_data?.content?.profile?.last_name;
+        const hasValidProfile = doc?.item_data?.content?.profile?.first_name && 
+                               doc?.item_data?.content?.profile?.last_name;
         
         // Check if name is "John Doe" (case insensitive)
         const isJohnDoe = hasValidProfile && 
-                         doc.item_data.content.profile.first_name.toLowerCase() === "john" && 
-                         doc.item_data.content.profile.last_name.toLowerCase() === "doe";
+                         doc?.item_data?.content?.profile?.first_name?.toLowerCase() === "john" && 
+                         doc?.item_data?.content?.profile?.last_name?.toLowerCase() === "doe";
         
         // Log any John Doe entries we're filtering out
         if (isJohnDoe) {
           console.log('Resumes API route: Filtering out John Doe entry:', {
             id: doc.id,
-            name: `${doc.item_data.content.profile.first_name} ${doc.item_data.content.profile.last_name}`,
-            timestamp: doc.item_data.timestamp
+            name: `${doc?.item_data?.content?.profile?.first_name} ${doc?.item_data?.content?.profile?.last_name}`,
+            timestamp: doc?.item_data?.timestamp
           });
         }
         

@@ -1,3 +1,6 @@
+import { CheckCircle2, XCircle, AlertTriangle } from "lucide-react"
+import { cn } from "@/lib/utils"
+
 interface ProgressCardProps {
   icon: React.ReactNode
   label: string
@@ -5,6 +8,19 @@ interface ProgressCardProps {
   total?: number
   color: string
   explanation?: string[]
+}
+
+interface BulkJobProgressProps {
+  stats: {
+    totalFiles: number;
+    processedCount: number;
+    failedCount: number;
+    processingTime: number;
+    unsupportedCount?: number;
+  };
+  processingStatus?: 'idle' | 'uploading' | 'processing' | 'completed' | 'error';
+  error?: string;
+  unsupportedFiles?: string[];
 }
 
 const ProgressCard = ({ icon, label, value, total, color, explanation }: ProgressCardProps) => (
@@ -32,7 +48,7 @@ const ProgressCard = ({ icon, label, value, total, color, explanation }: Progres
 )
 
 // Update the main component to use these cards consistently
-export const BulkJobProgress = ({ stats, processingStatus, error, unsupportedFiles }) => {
+export const BulkJobProgress = ({ stats }: BulkJobProgressProps) => {
   const getFailureExplanations = () => {
     if (stats.failedCount === 0) return ["No failed files"]
     return [

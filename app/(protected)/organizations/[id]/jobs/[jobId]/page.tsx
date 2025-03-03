@@ -17,6 +17,7 @@ import {
     Loader2
 } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -522,10 +523,12 @@ export default function JobDetailPage() {
                 <h2 className="text-lg font-semibold mb-4">About the Organization</h2>
                 <div className="flex items-center gap-3 mb-4">
                   {job.organization.logo ? (
-                    <img 
+                    <Image 
                       src={job.organization.logo} 
                       alt={`${job.organization.name} logo`}
                       className="w-12 h-12 rounded-lg object-contain"
+                      width={48}
+                      height={48}
                     />
                   ) : (
                     <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">

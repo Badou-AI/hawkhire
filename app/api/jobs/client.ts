@@ -81,6 +81,8 @@ export interface JobsResponse {
   total: number
 }
 
+import { ProcessedJob } from '@/types/job'
+
 export interface Job {
   id: string;
   title: string;
@@ -100,20 +102,7 @@ export interface Job {
     founded_year: number;
     company_type: string;
   };
-  processed?: {
-    index_name: string
-    total_applicants: number
-    last_processed_at: string
-    processing_status: string
-    average_match_score?: number
-    top_skills?: Array<{
-      skill: string
-      count: number
-      average_score: number
-    }>
-    error_message?: string
-    processing_duration?: number
-  }
+  processed?: ProcessedJob;
 }
 
 // Helper function to map backend job response to frontend Job type
@@ -155,8 +144,9 @@ export function mapBackendJobToFrontend(backendJob: ApiJob): Job {
   if (typeof backendJob.title === 'string') {
     title = backendJob.title
   } else if (typeof backendJob.title === 'object' && backendJob.title !== null) {
-    // @ts-expect-error - We're handling the potential structure variations
-    title = backendJob.title.en || Object.values(backendJob.title)[0] || ''
+    // Handle the potential structure variations
+    const titleObj = backendJob.title as unknown as { en?: string };
+    title = titleObj.en || '';
   }
 
   // Extract company name
@@ -165,8 +155,9 @@ export function mapBackendJobToFrontend(backendJob: ApiJob): Job {
     if (typeof backendJob.organizations.name === 'string') {
       company = backendJob.organizations.name
     } else if (typeof backendJob.organizations.name === 'object' && backendJob.organizations.name !== null) {
-      // @ts-expect-error - We're handling the potential structure variations
-      company = backendJob.organizations.name.en || Object.values(backendJob.organizations.name)[0] || 'Company Name!'
+      // Handle the potential structure variations
+      const nameObj = backendJob.organizations.name as unknown as { en?: string };
+      company = nameObj.en || 'Company Name!';
     }
   }
 
@@ -175,8 +166,9 @@ export function mapBackendJobToFrontend(backendJob: ApiJob): Job {
   if (typeof backendJob.description === 'string') {
     description = backendJob.description
   } else if (typeof backendJob.description === 'object' && backendJob.description !== null) {
-    // @ts-expect-error - We're handling the potential structure variations
-    description = backendJob.description.en || Object.values(backendJob.description)[0] || ''
+    // Handle the potential structure variations
+    const descObj = backendJob.description as unknown as { en?: string };
+    description = descObj.en || '';
   }
 
   return {
@@ -357,7 +349,8 @@ export async function getSimilarJobs(jobId: string, limit = 4): Promise<Job[]> {
       total: scoredJobs.length,
       scores: scoredJobs.map(({ job, score }) => ({
         id: job.id,
-        title: job.title.en,
+        title: typeof job.title === 'string' ? job.title : 
+               ((job.title as unknown as { en?: string }).en || 'Unknown'),
         score: Math.round(score * 100) / 100
       }))
     })

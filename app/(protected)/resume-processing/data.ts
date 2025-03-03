@@ -391,7 +391,7 @@ export async function getResumeData() {
     }
 
     // Filter out John Doe entries
-    const filteredDocuments = documents.filter((doc: any) => {
+    const filteredDocuments = documents.filter((doc: JobMatchProfile) => {
       const hasValidProfile = doc.item_data?.content?.profile?.first_name && 
                              doc.item_data?.content?.profile?.last_name;
       

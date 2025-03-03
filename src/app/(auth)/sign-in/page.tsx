@@ -9,8 +9,7 @@ import { Label } from "@/components/ui/label"
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient, clearAuthState } from "@/lib/supabase/client"
 import { toast } from "sonner"
-import { AuthError } from "@supabase/supabase-js"
-import AuthLayout from './layout'
+import AuthLayout from '../layout'
 
 export default function SignInPage() {
   const [showPassword, setShowPassword] = useState(false)
@@ -143,7 +142,7 @@ export default function SignInPage() {
         </form>
 
         <p className="mt-2 text-center text-sm text-gray-600">
-          Don't have an account?{" "}
+          Don&apos;t have an account?{" "}
           <Link href="/sign-up" className="font-medium text-violet-600 hover:text-violet-500">Sign up</Link>
         </p>
       </div>
