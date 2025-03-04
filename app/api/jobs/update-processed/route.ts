@@ -59,8 +59,8 @@ const getJobTitle = (title: string | { en: string; fr?: string } | Record<string
   
   // Handle localized text object
   if (title && typeof title === 'object') {
-    if ('en' in title && typeof title.en === 'string') {
-      return title.en;
+    if ('fr' in title && typeof title.fr === 'string') {
+      return title.fr;
     }
     
     // Try to find any string value in the object

@@ -40,7 +40,7 @@ export default async function CreateJobPage({ params }: PageProps) {
         <div>
           <h1 className="text-2xl font-semibold">Create Vacancy</h1>
           <p className="text-sm text-muted-foreground">
-            Create a new job posting for {organization.name.en}
+            Create a new job posting for {organization.name.fr}
           </p>
         </div>
         <BulkCreateDialog organizationId={organizationId} />

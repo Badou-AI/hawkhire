@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -48,10 +48,22 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
   })
   const [error, setError] = useState<string>("")
   const [unsupportedFiles, setUnsupportedFiles] = useState<Array<{name: string, type: string, reason: string}>>([])
+  const [currentFile, setCurrentFile] = useState<string>("")
+
+  // Add useEffect for debugging
+  useEffect(() => {
+    console.log('Current state:', {
+      processingStatus,
+      stats,
+      currentFile,
+      error
+    })
+  }, [processingStatus, stats, currentFile, error])
 
   const handleFileSelect = (selectedFile: File) => {
     setFile(selectedFile)
     setError("")
+    setCurrentFile("")
     setProcessingStatus('idle')
     setStats({
       totalFiles: 0,
@@ -63,7 +75,10 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
   }
 
   const handleUpload = async () => {
-    if (!file) return
+    if (!file) {
+      toast.error("Please select a file to upload")
+      return
+    }
 
     if (!session) {
       toast.error("You must be logged in to upload files")
@@ -79,14 +94,31 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
       formData.append('is_mock', String(isMock))
       formData.append('status', isPublished ? 'PUBLISHED' : 'DRAFT')
 
+      console.log('Sending request to /api/jobs/process-zip with form data:', {
+        organizationId,
+        isMock,
+        status: isPublished ? 'PUBLISHED' : 'DRAFT',
+        fileSize: file.size,
+        fileName: file.name
+      })
+
       const response = await fetch("/api/jobs/process-zip", {
         method: "POST",
         body: formData,
       })
 
       if (!response.ok) {
-        throw new Error("Failed to process jobs")
+        const errorText = await response.text()
+        console.error('Error response:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        })
+        throw new Error(`Failed to process jobs: ${response.status} ${response.statusText}`)
       }
+
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()))
+      console.log('Response status:', response.status)
 
       // Handle streaming response
       const reader = response.body?.getReader()
@@ -98,19 +130,33 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
       let buffer = ''
       const startTime = Date.now()
 
+      console.log('Starting to read stream...')
       while (true) {
         const { done, value } = await reader.read()
-        if (done) break
+        if (done) {
+          console.log('Stream complete')
+          break
+        }
 
-        buffer += decoder.decode(value, { stream: true })
+        const chunk = decoder.decode(value, { stream: true })
+        console.log('Received chunk:', chunk)
+        buffer += chunk
         const lines = buffer.split('\n\n')
         
         for (let i = 0; i < lines.length - 1; i++) {
           const line = lines[i].trim()
           if (line.startsWith('data: ')) {
             try {
-              const event = JSON.parse(line.slice(6))
-              console.log('Received event:', event)
+              const eventData = line.slice(6)
+              console.log('Raw event data:', eventData)
+              const event = JSON.parse(eventData)
+              console.log('Parsed event:', event)
+
+              // Always update the file name if present
+              if (event.file_name && event.file_name !== 'null') {
+                console.log('Processing file:', event.file_name)
+                setCurrentFile(event.file_name)
+              }
 
               switch (event.event) {
                 case 'processing_started':
@@ -123,6 +169,15 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
                   if (event.unsupported_files?.length) {
                     setUnsupportedFiles(event.unsupported_files)
                   }
+                  break
+
+                case 'file_processed':
+                  setStats(prev => ({
+                    ...prev,
+                    processedCount: event.processed_count,
+                    failedCount: event.failed_count,
+                    processingTime: (Date.now() - startTime) / 1000
+                  }))
                   break
 
                 case 'file_processing_complete':
@@ -143,8 +198,8 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
                     ...prev,
                     processedCount: event.processed_count,
                     failedCount: event.failed_count,
-                    processingTime: event.processing_details.total_time,
-                    unsupportedCount: event.unsupported_files?.length || 0
+                    processingTime: event.processing_details?.total_time || (Date.now() - startTime) / 1000,
+                    unsupportedCount: event.unsupported_files?.length || prev.unsupportedCount || 0
                   }))
                   
                   if (event.processed_count > 0) {
@@ -153,6 +208,10 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
                   if (event.failed_count > 0) {
                     toast.error(`Failed to process ${event.failed_count} jobs`)
                   }
+                  break
+
+                default:
+                  console.log('Unhandled event type:', event.event)
                   break
               }
             } catch (e) {
@@ -165,10 +224,8 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
       console.log('Upload process completed.')
     } catch (error) {
       console.error("Error uploading jobs:", error)
-      const message = error instanceof Error ? error.message : "Failed to process jobs"
-      setError(message)
       setProcessingStatus('error')
-      toast.error(message)
+      setError(error instanceof Error ? error.message : String(error))
     }
   }
 
@@ -226,7 +283,7 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
               <BulkJobProgress
                 stats={stats}
                 processingStatus={processingStatus}
-                currentFile={file?.name}
+                currentFile={currentFile || file?.name}
                 error={error}
                 unsupportedFiles={unsupportedFiles}
               />

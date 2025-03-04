@@ -3,20 +3,20 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import {
-    Card,
-    CardContent,
-    CardHeader,
-    CardTitle,
-    CardDescription,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
 } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select"
 import { AlertCircle, CheckCircle2, XCircle, Timer, Database, Settings2, Plus } from 'lucide-react'
 import { cn } from "@/lib/utils"
@@ -187,11 +187,11 @@ export default function ResumeProcessingPage() {
     // Handle title and description which could be strings or LocalizedText objects
     const jobTitle = typeof selectedJob.title === 'string' 
       ? selectedJob.title 
-      : (selectedJob.title as unknown as LocalizedText)?.en || '';
+      : (selectedJob.title as unknown as LocalizedText)?.fr || '';
     
     const jobDescription = typeof selectedJob.description === 'string'
       ? selectedJob.description
-      : (selectedJob.description as unknown as LocalizedText)?.en || '';
+      : (selectedJob.description as unknown as LocalizedText)?.fr || '';
     
     formData.append('jobTitle', jobTitle)
     formData.append('jobDescription', jobDescription)
@@ -363,7 +363,7 @@ export default function ResumeProcessingPage() {
       // Handle title which could be a string or LocalizedText object
       const jobTitle = typeof selectedJob.title === 'string' 
         ? selectedJob.title 
-        : (selectedJob.title as unknown as LocalizedText)?.en || '';
+        : (selectedJob.title as unknown as LocalizedText)?.fr || '';
       
       fetchIndexStatus(generateIndexName(selectedJob.id, jobTitle));
     }
@@ -419,7 +419,7 @@ export default function ResumeProcessingPage() {
                       {jobs.map(job => {
                         const jobTitle = typeof job.title === 'string' 
                           ? job.title 
-                          : (job.title as unknown as LocalizedText)?.en || '';
+                          : (job.title as unknown as LocalizedText)?.fr || '';
                         return (
                           <SelectItem key={job.id} value={job.id}>
                             {jobTitle}

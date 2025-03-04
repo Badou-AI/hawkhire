@@ -112,7 +112,7 @@ const API_URL = typeof window !== 'undefined'
 
 // Helper function to map backend job response to frontend Job type
 export function mapBackendJobToFrontend(backendJob: ApiJob): Job {
-  const locationString = `${backendJob.location.city.en}, ${backendJob.location.state.en}`
+  const locationString = `${backendJob.location.city.fr}, ${backendJob.location.state.fr}`
 
   const salaryString = backendJob.salary_min && backendJob.salary_max
     ? `$${backendJob.salary_min/1000}k - $${backendJob.salary_max/1000}k ${backendJob.salary_currency}`
@@ -125,15 +125,15 @@ export function mapBackendJobToFrontend(backendJob: ApiJob): Job {
       try {
         // Try to parse if it's a stringified JSON
         const parsed = JSON.parse(field)
-        return parsed.en || parsed['en'] || field
+        return parsed.fr || parsed['fr'] || field
       } catch {
         return field
       }
     }
     if (typeof field === 'object') {
       // Check if it has an 'en' property
-      if ('en' in field && typeof field.en === 'string') {
-        return field.en
+      if ('fr' in field && typeof field.fr === 'string') {
+        return field.fr
       }
       // Otherwise try to get the first value
       const values = Object.values(field)
@@ -150,8 +150,8 @@ export function mapBackendJobToFrontend(backendJob: ApiJob): Job {
     title = backendJob.title
   } else if (typeof backendJob.title === 'object' && backendJob.title !== null) {
     // Handle the potential structure variations
-    const titleObj = backendJob.title as unknown as { en?: string };
-    title = titleObj.en || '';
+    const titleObj = backendJob.title as unknown as { fr?: string };
+    title = titleObj?.fr || '';
   }
 
   // Extract company name
@@ -161,8 +161,8 @@ export function mapBackendJobToFrontend(backendJob: ApiJob): Job {
       company = backendJob.organizations.name
     } else if (typeof backendJob.organizations.name === 'object' && backendJob.organizations.name !== null) {
       // Handle the potential structure variations
-      const nameObj = backendJob.organizations.name as unknown as { en?: string };
-      company = nameObj.en || 'Company Name!';
+      const nameObj = backendJob.organizations.name as unknown as { fr?: string };
+      company = nameObj?.fr || 'Company Name!';
     }
   }
 
@@ -172,8 +172,8 @@ export function mapBackendJobToFrontend(backendJob: ApiJob): Job {
     description = backendJob.description
   } else if (typeof backendJob.description === 'object' && backendJob.description !== null) {
     // Handle the potential structure variations
-    const descObj = backendJob.description as unknown as { en?: string };
-    description = descObj.en || '';
+    const descObj = backendJob.description as unknown as { fr?: string };
+    description = descObj?.fr || '';
   }
 
   return {
@@ -355,7 +355,7 @@ export async function getSimilarJobs(jobId: string, limit = 4): Promise<Job[]> {
       scores: scoredJobs.map(({ job, score }) => ({
         id: job.id,
         title: typeof job.title === 'string' ? job.title : 
-               ((job.title as unknown as { en?: string }).en || 'Unknown'),
+               ((job.title as unknown as { fr?: string }).fr || 'Unknown'),
         score: Math.round(score * 100) / 100
       }))
     })

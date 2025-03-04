@@ -4,17 +4,17 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
-    Search, Grid,
-    List as ListIcon,
-    Plus,
-    Code,
-    Users,
-    BarChart4,
-    DollarSign,
-    Clock,
-    MapPin,
-    Briefcase,
-    Loader2
+  Search, Grid,
+  List as ListIcon,
+  Plus,
+  Code,
+  Users,
+  BarChart4,
+  DollarSign,
+  Clock,
+  MapPin,
+  Briefcase,
+  Loader2
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -22,19 +22,19 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
 } from "@/components/ui/select";
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import { Pagination } from "@/components/shared/pagination";
 import { createClient } from "@/lib/supabase/client";
@@ -190,7 +190,7 @@ export default function OrganizationJobsPage() {
           if (typeof job.title === 'string') {
             title = job.title;
           } else if (typeof job.title === 'object') {
-            title = job.title.en || Object.values(job.title)[0] || "Untitled Position";
+            title = job.title.fr || Object.values(job.title)[0] || "Untitled Position";
           }
           
           // Get applicant count from processed data if available, otherwise use resumes count

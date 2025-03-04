@@ -9,6 +9,8 @@ export async function POST(request: NextRequest) {
       throw new Error('PYTHON_API_URL environment variable is not configured');
     }
 
+    console.log(`Using Python API URL: ${pythonApiUrl}`);
+
     // Log the incoming request details
     const formData = await request.formData();
     console.log('Incoming request form data fields:', Array.from(formData.keys()));
@@ -24,7 +26,11 @@ export async function POST(request: NextRequest) {
     } : 'No file found');
 
     // Forward the request to our Python backend
-    const pythonResponse = await fetch(`${pythonApiUrl}/v2/jobs/process-zip`, {
+    // Use the v2 endpoint for the batch processor
+    const endpoint = '/v2/jobs/process-zip';
+    console.log(`Forwarding request to: ${pythonApiUrl}${endpoint}`);
+    
+    const pythonResponse = await fetch(`${pythonApiUrl}${endpoint}`, {
       method: 'POST',
       body: formData,
       headers: {
@@ -45,12 +51,15 @@ export async function POST(request: NextRequest) {
       throw new Error(`Python API returned ${pythonResponse.status}: ${errorText}`);
     }
 
+    console.log('Python API response headers:', Object.fromEntries(pythonResponse.headers.entries()));
+
     // Return streaming response
     return new NextResponse(pythonResponse.body, {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive'
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no' // Disable buffering for Nginx
       }
     });
   } catch (error) {

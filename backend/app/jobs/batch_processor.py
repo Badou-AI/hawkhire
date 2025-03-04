@@ -117,42 +117,38 @@ class BatchProcessor:
     """Process batch uploads of job files"""
     
     def __init__(self):
-        """Initialize the batch processor"""
-        # Configure clients
+        """Initialize the batch processor with default settings"""
+        self._cache = {}  # Initialize the cache dictionary
+        self.max_retries = 3
+        self.batch_size = 10
+        self.chunk_size = 8192
+        self.max_workers = min(32, (os.cpu_count() or 4) * 4)
+        self.timeout = 60
+        self.rate_limiter = RateLimiter()
+        
+        # Configure clients for API access
         self.remote_client = httpx.AsyncClient(
             base_url=REMOTE_API_URL,
-            timeout=60.0,
-            verify=False  # Disable SSL verification for demo purposes
+            timeout=self.timeout,
+            verify=False  # Disable SSL verification for development
         )
-        self.remote_url = REMOTE_API_URL
         
-        # Local client for job creation and data extraction
+        # Use the same URL for local client as defined in LOCAL_API_URL
         self.local_client = httpx.AsyncClient(
             base_url=LOCAL_API_URL,
-            timeout=30.0,
-            verify=False
+            timeout=self.timeout,
+            verify=False  # Disable SSL verification for development
         )
         
-        # Initialize the cache dictionary
-        self._cache = {}
-        
-        # Log the base URL for debugging
-        logger.debug(f"Using semantic service with base URL: {REMOTE_API_URL}")
-        
-        # Cache for processed jobs
-        self._job_cache = {}
-        
-        # Batch size for database operations
-        self.db_batch_size = 10
-        
-        # Batch size for processing files
-        self.batch_size = 5
-        
-        # Chunk size for file streaming
-        self.chunk_size = 8192
+        # Log the API URLs being used
+        logger.debug(f"Using local API URL: {LOCAL_API_URL}")
+        logger.debug(f"Using remote API URL: {REMOTE_API_URL}")
         
         # Test connection to remote API
         self._test_remote_connection()
+        
+        # Initialize metrics
+        self._update_metrics('init', None)
 
     def _test_remote_connection(self):
         """Test connection to remote API and log diagnostics"""
@@ -908,164 +904,144 @@ class BatchProcessor:
         start_time: float
     ) -> ProcessedJobData:
         """Create processed job data from text content"""
-        # Log the length of the text content for debugging
-        logger.info(f"Creating processed job data for {file.name}, text content length: {len(text_content)}")
-        
-        # Check if text content is too short
-        if not text_content or len(text_content) < 50:
-            logger.warning(f"Text content for {file.name} is too short: {len(text_content)} chars")
-            
-            # If mock data is requested, generate a placeholder
-            if is_mock:
-                logger.info(f"Generating mock data for {file.name}")
-                mock_data = {
-                    "title": {"en": f"Mock Job from {file.name}", "fr": f"Emploi simulé de {file.name}"},
-                    "description": {
-                        "en": f"This is a mock job description generated from {file.name}.",
-                        "fr": f"Ceci est une description d'emploi simulée générée à partir de {file.name}."
-                    },
-                    "location": {
-                        "city": {"en": "Sample City", "fr": "Ville Exemple"},
-                        "state": {"en": "Sample State", "fr": "État Exemple"},
-                        "country": {"en": "Sample Country", "fr": "Pays Exemple"},
-                        "postal_code": {"en": "12345", "fr": "12345"}
-                    },
-                    "requirements": {
-                        "en": ["Sample requirement 1", "Sample requirement 2"],
-                        "fr": ["Exigence exemple 1", "Exigence exemple 2"]
-                    },
-                    "job_type": "FULL_TIME",
-                    "organization_id": organization_id,
-                    "status": status,
-                    "remote": False,
-                    "skills": ["SKILL_1", "SKILL_2"],
-                    "is_mock": True
-                }
-                return ProcessedJobData(
-                    original_file=str(file),
-                    extracted_data=mock_data,
-                    processing_time=time.time() - start_time
-                )
-        
-        # Cache key based on content hash and organization
-        cache_key = f"{hashlib.md5(text_content.encode()).hexdigest()}_{organization_id}"
-        cached_result = self._get_cache(cache_key)
-        
-        if cached_result:
-            logger.info(f"Using cached result for {file.name}")
-            return ProcessedJobData(
-                original_file=str(file),
-                extracted_data=cached_result,
-                processing_time=time.time() - start_time
-            )
-        
         try:
-            # Define the function to make the extract request
-            def make_extract_request():
+            # Log the length of the text content for debugging
+            logger.info(f"Creating job data for {file.name}, text length: {len(text_content)}")
+            
+            # Check if text content is too short
+            if len(text_content) < 50 and not is_mock:
+                logger.warning(f"Text content for {file.name} is too short: {len(text_content)} chars")
+                if is_mock:
+                    logger.info(f"Generating mock data for {file.name}")
+                    # Return mock data
+                    return ProcessedJobData(
+                        original_file=file.name,
+                        extracted_data=self._generate_mock_job_data(organization_id, status),
+                        processing_time=time.time() - start_time
+                    )
+                else:
+                    return ProcessedJobData(
+                        original_file=file.name,
+                        extracted_data={},
+                        validation_errors=["Text content is too short to process"],
+                        processing_time=time.time() - start_time
+                    )
+            
+            # Create a cache key based on content hash and organization ID
+            content_hash = hashlib.md5(text_content.encode()).hexdigest()
+            cache_key = f"job_data:{content_hash}:{organization_id}"
+            
+            # Check cache
+            cached_result = self._get_cache(cache_key)
+            if cached_result:
+                logger.info(f"Using cached job data for {file.name}")
+                return cached_result
+            
+            # Try to extract job data from the API
+            try:
                 # Create a payload with the required fields
                 payload = {
                     "text": text_content,
                     "organization_id": organization_id,
                     "is_mock": is_mock,
-                    "status": status,
-                    "source_file": file.name
+                    "status": status
                 }
                 
-                logger.debug(f"Sending payload to extract endpoint, length: {len(text_content)}")
-                
-                # Create a session with SSL verification disabled for development
-                session = requests.Session()
-                session.verify = False
-                
-                # Make the request to the local API endpoint
-                return session.post(
-                    f"{LOCAL_API_URL}/v1/jobs/extract-data",
-                    json=payload,
-                    timeout=30
-                )
-            
-            # Run the synchronous request in a thread pool to avoid blocking
-            loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(None, make_extract_request)
-            
-            # Check for HTTP errors
-            response.raise_for_status()
-            
-            # Parse the response JSON
-            result = response.json()
-            
-            # Extract the job data from the response
-            if "data" in result:
-                job_data = result["data"]
-            else:
-                job_data = result
-                
-            # Add organization_id and status if not present
-            if "organization_id" not in job_data:
-                job_data["organization_id"] = organization_id
-            if "status" not in job_data:
-                job_data["status"] = status
-            if "is_mock" not in job_data:
-                job_data["is_mock"] = is_mock
-                
-            # Normalize the job data to ensure it matches the expected format
-            job_data = self._normalize_job_data(job_data)
-                
-            # Cache the result
-            try:
-                self._set_cache(cache_key, job_data)
-            except Exception as cache_error:
-                logger.warning(f"Failed to cache result: {str(cache_error)}")
-            
-            return ProcessedJobData(
-                original_file=str(file),
-                extracted_data=job_data,
-                processing_time=time.time() - start_time
-            )
-            
-        except requests.exceptions.HTTPError as e:
-            error_detail = "No error details"
-            validation_errors = []
-            
-            # Handle 422 Unprocessable Entity errors (validation errors)
-            if e.response.status_code == 422:
+                # First try the local API
                 try:
-                    error_response = e.response.json()
-                    logger.error(f"Validation error for {file.name}: {json.dumps(error_response, indent=2)}")
+                    logger.info(f"Sending request to local API: {LOCAL_API_URL}/v1/jobs/extract-data")
+                    response = await self.local_client.post(
+                        "/v1/jobs/extract-data",
+                        json=payload,
+                        timeout=30
+                    )
+                    logger.info(f"Response status: {response.status_code}")
                     
-                    # Extract validation error details
-                    if "detail" in error_response:
-                        if isinstance(error_response["detail"], list):
-                            for error in error_response["detail"]:
-                                if "msg" in error:
-                                    validation_errors.append(error["msg"])
-                        elif isinstance(error_response["detail"], str):
-                            validation_errors.append(error_response["detail"])
+                    if response.status_code == 422:
+                        # Handle validation errors
+                        error_data = response.json()
+                        validation_errors = []
+                        if "detail" in error_data:
+                            for error in error_data["detail"]:
+                                validation_errors.append(f"{error.get('loc', ['unknown'])[0]}: {error.get('msg', 'Unknown error')}")
+                        
+                        logger.warning(f"Validation errors for {file.name}: {validation_errors}")
+                        return ProcessedJobData(
+                            original_file=file.name,
+                            extracted_data={},
+                            validation_errors=validation_errors,
+                            processing_time=time.time() - start_time
+                        )
                     
-                    error_detail = error_response
-                except Exception as json_error:
-                    logger.error(f"Error parsing validation error response: {str(json_error)}")
-                    error_detail = e.response.text if e.response.text else "No error details"
-                    validation_errors.append(f"Validation error: {str(e)}")
-            else:
-                validation_errors.append(f"HTTP error: {e.response.status_code} - {str(e)}")
+                    response.raise_for_status()
+                    job_data = response.json()
+                    
+                except (httpx.ConnectError, httpx.TimeoutException) as e:
+                    # If local API fails, try the remote API
+                    logger.warning(f"Local API connection failed, trying remote API: {str(e)}")
+                    try:
+                        response = await self.remote_client.post(
+                            "/v1/jobs/extract-data",
+                            json=payload,
+                            timeout=30
+                        )
+                        response.raise_for_status()
+                        job_data = response.json()
+                    except Exception as remote_e:
+                        logger.error(f"Remote API also failed: {str(remote_e)}")
+                        # If both APIs fail, generate mock data if requested
+                        if is_mock:
+                            logger.info(f"Generating mock data for {file.name} after API failures")
+                            return ProcessedJobData(
+                                original_file=file.name,
+                                extracted_data=self._generate_mock_job_data(organization_id, status),
+                                processing_time=time.time() - start_time
+                            )
+                        else:
+                            raise
                 
-            logger.error(f"Error extracting job data from {file.name}: {e.__class__.__name__}: {str(e)}, Details: {error_detail}")
-            
-            return ProcessedJobData(
-                original_file=str(file),
-                extracted_data={},
-                validation_errors=validation_errors,
-                processing_time=time.time() - start_time
-            )
-            
+                # Normalize the job data
+                job_data = self._normalize_job_data(job_data)
+                
+                # Validate the job data
+                is_valid, errors = await self._validate_job_data(job_data)
+                
+                # Create the processed job data
+                result = ProcessedJobData(
+                    original_file=file.name,
+                    extracted_data=job_data,
+                    validation_errors=errors,
+                    processing_time=time.time() - start_time
+                )
+                
+                # Cache the result
+                self._set_cache(cache_key, result)
+                
+                return result
+                
+            except Exception as e:
+                logger.error(f"Error creating job data for {file.name}: {str(e)}", exc_info=True)
+                if is_mock:
+                    logger.info(f"Generating mock data for {file.name} after error")
+                    return ProcessedJobData(
+                        original_file=file.name,
+                        extracted_data=self._generate_mock_job_data(organization_id, status),
+                        processing_time=time.time() - start_time
+                    )
+                else:
+                    return ProcessedJobData(
+                        original_file=file.name,
+                        extracted_data={},
+                        validation_errors=[f"Error extracting job data: {str(e)}"],
+                        processing_time=time.time() - start_time
+                    )
+                
         except Exception as e:
-            logger.error(f"Error extracting job data from {file.name}: {str(e)}", exc_info=True)
-            
+            logger.error(f"Unexpected error processing {file.name}: {str(e)}", exc_info=True)
             return ProcessedJobData(
-                original_file=str(file),
+                original_file=file.name,
                 extracted_data={},
-                validation_errors=[f"Processing error: {str(e)}"],
+                validation_errors=[f"Unexpected error: {str(e)}"],
                 processing_time=time.time() - start_time
             )
 
@@ -1168,3 +1144,37 @@ class BatchProcessor:
             normalized_data["skills"] = []
             
         return normalized_data 
+
+    def _generate_mock_job_data(self, organization_id: str, status: str) -> Dict[str, Any]:
+        """Generate mock job data for testing"""
+        return {
+            "title": {"en": "Mock Software Engineer Position", "fr": "Poste d'ingénieur logiciel simulé"},
+            "description": {
+                "en": "This is a mock job description for a software engineer position.",
+                "fr": "Ceci est une description d'emploi simulée pour un poste d'ingénieur logiciel."
+            },
+            "location": {
+                "city": {"en": "San Francisco", "fr": "San Francisco"},
+                "state": {"en": "California", "fr": "Californie"},
+                "country": {"en": "United States", "fr": "États-Unis"},
+                "postal_code": {"en": "94105", "fr": "94105"}
+            },
+            "requirements": {
+                "en": [
+                    "5+ years of experience with Python",
+                    "Strong knowledge of cloud services",
+                    "Experience with machine learning frameworks"
+                ],
+                "fr": [
+                    "5+ ans d'expérience en Python",
+                    "Solide connaissance des services cloud",
+                    "Expérience avec les frameworks d'apprentissage automatique"
+                ]
+            },
+            "job_type": "FULL_TIME",
+            "organization_id": organization_id,
+            "status": status,
+            "remote": False,
+            "skills": ["PYTHON", "AWS", "MACHINE_LEARNING"],
+            "is_mock": True
+        } 

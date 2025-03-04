@@ -51,7 +51,7 @@ export function LocalizedLocationInput({
           <div className="space-y-2">
             <label className="text-sm font-medium">City</label>
             <Input
-              value={value.city.en}
+              value={value.city.fr}
               onChange={(e) => handleFieldChange("city", "en", e.target.value)}
               placeholder="Enter city name"
             />
@@ -59,7 +59,7 @@ export function LocalizedLocationInput({
           <div className="space-y-2">
             <label className="text-sm font-medium">State/Province</label>
             <Input
-              value={value.state.en}
+              value={value.state.fr}
               onChange={(e) => handleFieldChange("state", "en", e.target.value)}
               placeholder="Enter state or province"
             />
@@ -67,7 +67,7 @@ export function LocalizedLocationInput({
           <div className="space-y-2">
             <label className="text-sm font-medium">Country</label>
             <Input
-              value={value.country.en}
+              value={value.country.fr}
               onChange={(e) => handleFieldChange("country", "en", e.target.value)}
               placeholder="Enter country"
             />
@@ -75,7 +75,7 @@ export function LocalizedLocationInput({
           <div className="space-y-2">
             <label className="text-sm font-medium">Postal Code</label>
             <Input
-              value={value.postal_code.en}
+              value={value.postal_code.fr}
               onChange={(e) => handleFieldChange("postal_code", "en", e.target.value)}
               placeholder="Enter postal code"
             />

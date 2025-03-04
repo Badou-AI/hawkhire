@@ -3,18 +3,18 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
-    ArrowLeft,
-    Briefcase,
-    Clock,
-    MapPin,
-    DollarSign,
-    Users,
-    Share2,
-    Bookmark,
-    Building,
-    Calendar,
-    CheckCircle,
-    Loader2
+  ArrowLeft,
+  Briefcase,
+  Clock,
+  MapPin,
+  DollarSign,
+  Users,
+  Share2,
+  Bookmark,
+  Building,
+  Calendar,
+  CheckCircle,
+  Loader2
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -74,8 +74,8 @@ const getLocalizedText = (value: unknown): string => {
   if (typeof value === 'object') {
     // Try to extract English text first, then any other language
     const obj = value as Record<string, unknown>;
-    if (obj.en && typeof obj.en === 'string') return obj.en;
-    if (obj.en_US && typeof obj.en_US === 'string') return obj.en_US;
+    if (obj.fr && typeof obj.fr === 'string') return obj.fr;
+    //if (obj.en_US && typeof obj.en_US === 'string') return obj.en_US;
     
     // If no English version, take the first available text
     const firstValue = Object.values(obj)[0];
@@ -216,7 +216,7 @@ export default function JobDetailPage() {
         } else if (jobData.requirements && typeof jobData.requirements === 'object') {
           // Handle localized requirements
           const reqObj = jobData.requirements as Record<string, string[]>;
-          requirementsArray = reqObj.en || Object.values(reqObj)[0] || [];
+          requirementsArray = reqObj.fr || Object.values(reqObj)[0] || [];
         }
         
         // Get applicant count from processed data or resumes count
@@ -239,7 +239,7 @@ export default function JobDetailPage() {
               id: org.id || "",
               name: typeof org.name === 'string' ? org.name : 
                     org.name && typeof org.name === 'object' ? 
-                    (org.name.en || Object.values(org.name)[0] || "Company") : "Company",
+                    (org.name.fr || Object.values(org.name)[0] || "Company") : "Company",
               industry: org.industry || "Technology",
               size_range: org.size_range || "Unknown",
               logo_url: org.logo_url
@@ -250,7 +250,7 @@ export default function JobDetailPage() {
               id: org.id || "",
               name: typeof org.name === 'string' ? org.name : 
                     org.name && typeof org.name === 'object' ? 
-                    (org.name.en || Object.values(org.name)[0] || "Company") : "Company",
+                    (org.name.fr || Object.values(org.name)[0] || "Company") : "Company",
               industry: org.industry || "Technology",
               size_range: org.size_range || "Unknown",
               logo_url: org.logo_url

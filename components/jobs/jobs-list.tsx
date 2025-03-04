@@ -35,13 +35,13 @@ export function JobsList() {
         const response: JobsResponse = await getJobs(currentPage - 1, pageSize)
         setJobs(response.data.map((job: ApiJob) => ({
           id: job.id,
-          title: job.title.en,
-          company: job.organizations?.name.en || 'Company Name?',
-          location: `${job.location.city.en}, ${job.location.state.en}`,
+          title: job.title,
+          company: job.organizations?.name.fr || 'Company Name?',
+          location: `${job.location.city.fr}, ${job.location.state.fr}`,
           type: job.job_type.replace('_', ' ').toLowerCase(),
           rating: job.rating || 4.5,
           logo: job.organizations?.logo_url || '/company-logos/placeholder.png',
-          description: job.description.en,
+          description: job.description,
           salary: job.salary_min && job.salary_max 
             ? `$${job.salary_min/1000}k - $${job.salary_max/1000}k ${job.salary_currency}`
             : 'Competitive',

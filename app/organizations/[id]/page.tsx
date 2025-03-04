@@ -81,7 +81,7 @@ export default async function OrganizationPage({ params }: PageProps) {
           <div className="space-y-6">
             <div className="prose max-w-none">
               <h3>About Us</h3>
-              <p>{organization.description?.en || 'No description available.'}</p>
+              <p>{organization.description?.fr || 'No description available.'}</p>
             </div>
 
             {organization.jobs?.length > 0 && (
