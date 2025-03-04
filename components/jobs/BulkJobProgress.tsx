@@ -48,7 +48,7 @@ export function BulkJobProgress({ stats, processingStatus, currentFile, error, u
           </div>
         </div>
 
-        {stats.unsupportedCount > 0 && (
+        {(stats.unsupportedCount ?? 0) > 0 && (
           <div className="flex items-center gap-2 p-4 bg-yellow-50 rounded-lg">
             <AlertTriangleIcon className="w-5 h-5 text-yellow-500" />
             <div>
@@ -71,6 +71,9 @@ export function BulkJobProgress({ stats, processingStatus, currentFile, error, u
               </li>
             ))}
           </ul>
+          <p className="text-xs text-gray-500 mt-2">
+            Note: Only PDF and TXT files are supported.
+          </p>
         </div>
       )}
 
@@ -91,6 +94,16 @@ export function BulkJobProgress({ stats, processingStatus, currentFile, error, u
           {error}
         </Alert>
       )}
+
+      <div className="mt-4 space-y-4">
+        <div className="text-sm text-gray-500">
+          <p>
+            Uploading and processing your job descriptions. This may take a few
+            minutes depending on the number of files.
+          </p>
+          <p className="mt-2">Note: Only PDF and TXT files are supported.</p>
+        </div>
+      </div>
     </div>
   );
 } 

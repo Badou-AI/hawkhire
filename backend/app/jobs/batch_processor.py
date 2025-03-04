@@ -8,6 +8,7 @@ import time
 import os
 import sys
 import uuid
+import io
 print("Python executable path:")
 print(sys.executable)
 print("\nPython path:")
@@ -22,10 +23,10 @@ import aiofiles
 import zipfile
 from fastapi import UploadFile, HTTPException, status
 from pydantic import BaseModel, ValidationError
-import httpx
+import requests
 from uuid import UUID
 from functools import lru_cache
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 import logging
 from ..services.metrics import metrics_service
@@ -34,11 +35,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware import Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from collections import defaultdict
+import httpx
+import socket
+import shutil
+import json
+import concurrent.futures
+import hashlib
 
 
 # Configure logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+
+# Constants
+LOCAL_API_URL = os.environ.get("LOCAL_API_URL", "https://api.hawkhire.ai")
+REMOTE_API_URL = os.environ.get("REMOTE_API_URL", "http://147.93.44.131:8000")
 
 @dataclass
 class CacheEntry:
@@ -59,25 +70,24 @@ class BatchCreationResult(BaseModel):
     total_time: float
     stats: Dict[str, int]
 
+@dataclass
+class ProcessedJobData:
+    """Data structure for processed job data"""
+    original_file: str
+    extracted_data: Dict[str, Any]
+    validation_errors: List[str] = field(default_factory=list)
+    processing_time: float = 0.0
+
 class JobProcessingEvent(BaseModel):
-    """Enhanced event model for job processing status updates"""
+    """Event emitted during job processing"""
     event: str
     total_files: int
     processed_count: int
     failed_count: int
     file_name: Optional[str] = None
     error: Optional[str] = None
-    batch_number: Optional[int] = None
-    batch_total: Optional[int] = None
-    unsupported_files: Optional[List[Dict[str, str]]] = None
+    unsupported_files: Optional[List[Dict[str, Any]]] = None
     processing_details: Optional[Dict[str, Any]] = None
-
-class ProcessedJobData(BaseModel):
-    """Model for processed job data"""
-    original_file: str
-    extracted_data: Dict[str, Any]
-    validation_errors: Optional[List[str]] = None
-    processing_time: float
 
 class RateLimiter:
     def __init__(self, requests_per_minute=30):
@@ -104,54 +114,84 @@ class RateLimiter:
 rate_limiter = RateLimiter()
 
 class BatchProcessor:
-    """Handles batch processing of job files with optimized performance"""
+    """Process batch uploads of job files"""
     
-    def __init__(
-        self,
-        pdf_concurrency: int = 10,
-        llm_concurrency: int = 5,
-        batch_size: int = 10,
-        max_retries: int = 3,
-        retry_delay: float = 1.0,
-        db_batch_size: int = 50,
-        cache_ttl: int = 3600,  # Cache TTL in seconds
-        max_memory_percent: float = 80.0,  # Maximum memory usage percentage
-        chunk_size: int = 8192  # Chunk size for file streaming
-    ):
-        self.pdf_semaphore = asyncio.Semaphore(pdf_concurrency)
-        self.llm_semaphore = asyncio.Semaphore(llm_concurrency)
-        self.batch_size = batch_size
-        self.max_retries = max_retries
-        self.retry_delay = retry_delay
-        self.db_batch_size = db_batch_size
-        self.cache_ttl = cache_ttl
-        self.max_memory_percent = max_memory_percent
-        self.chunk_size = chunk_size
-        self._progress: Dict[str, Any] = {}
-        self._cache: Dict[str, CacheEntry] = {}
-        
-        # Use the existing semantic service
-        self.semantic_service = semantic_service
-        logger.debug(f"Using semantic service with base URL: {self.semantic_service.base_url}")
-        
-        # Configure HTTP clients
-        remote_url = os.getenv("REMOTE_API_URL")
-        local_url = os.getenv("LOCAL_API_URL", f"http://{os.getenv('HOST', '127.0.0.1')}:8080")
-        
-        if not remote_url:
-            raise ValueError("REMOTE_API_URL environment variable is not set")
-        
-        # Client for remote services (PDF conversion)
+    def __init__(self):
+        """Initialize the batch processor"""
+        # Configure clients
         self.remote_client = httpx.AsyncClient(
-            base_url=remote_url,
-            timeout=30.0
+            base_url=REMOTE_API_URL,
+            timeout=60.0,
+            verify=False  # Disable SSL verification for demo purposes
+        )
+        self.remote_url = REMOTE_API_URL
+        
+        # Local client for job creation and data extraction
+        self.local_client = httpx.AsyncClient(
+            base_url=LOCAL_API_URL,
+            timeout=30.0,
+            verify=False
         )
         
-        # Client for local services (job data extraction)
-        self.local_client = httpx.AsyncClient(
-            base_url=local_url,
-            timeout=30.0
-        )
+        # Initialize the cache dictionary
+        self._cache = {}
+        
+        # Log the base URL for debugging
+        logger.debug(f"Using semantic service with base URL: {REMOTE_API_URL}")
+        
+        # Cache for processed jobs
+        self._job_cache = {}
+        
+        # Batch size for database operations
+        self.db_batch_size = 10
+        
+        # Batch size for processing files
+        self.batch_size = 5
+        
+        # Chunk size for file streaming
+        self.chunk_size = 8192
+        
+        # Test connection to remote API
+        self._test_remote_connection()
+
+    def _test_remote_connection(self):
+        """Test connection to remote API and log diagnostics"""
+        try:
+            # Use requests for synchronous testing
+            session = requests.Session()
+            session.verify = False  # Disable SSL verification
+            
+            # Test base URL connection
+            logger.info(f"Testing connection to base URL: {self.remote_url}")
+            base_response = session.get(self.remote_url, timeout=10)
+            logger.info(f"Base URL connection successful: {base_response.status_code}")
+            
+            # Test specific endpoint
+            endpoint = f"{self.remote_url}/v1/tools/convert_pdf2text"
+            logger.info(f"Testing connection to endpoint: {endpoint}")
+            endpoint_response = session.head(endpoint, timeout=10)
+            logger.info(f"Endpoint connection successful: {endpoint_response.status_code}")
+            
+            # Network diagnostics
+            logger.info("Network diagnostics: ")
+            hostname = socket.gethostname()
+            ip_address = socket.gethostbyname(hostname)
+            logger.info(f"Hostname: {hostname}, IP: {ip_address}")
+            
+            # Test direct socket connection
+            logger.info(f"Testing direct socket connection to {self.remote_url.split('//')[1]}")
+            host, port = self.remote_url.split('//')[1].split(':')
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)
+            result = sock.connect_ex((host, int(port)))
+            if result == 0:
+                logger.info(f"Socket connection successful to {host}:{port}")
+            else:
+                logger.error(f"Socket connection failed to {host}:{port} with error code {result}")
+            sock.close()
+            
+        except Exception as e:
+            logger.error(f"Error testing remote connection: {str(e)}", exc_info=True)
 
     def _get_system_metrics(self) -> Dict[str, float]:
         """Get current system metrics"""
@@ -196,110 +236,135 @@ class BatchProcessor:
         is_mock: bool = False,
         status: str = "DRAFT"
     ) -> AsyncGenerator[JobProcessingEvent, None]:
-        """Process a ZIP file containing job descriptions"""
-        logger.debug(f"Processing ZIP file: {file.filename}")  # Note: filename not name
-        start_time = time.time()
-        current_file = None
-        processed_count = 0
-        failed_count = 0
-        pdf_files = []
-        unsupported_files = []
-        processed_jobs = []
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir)
-            extract_path = temp_path / "extracted"
-            extract_path.mkdir()
+        """Process a ZIP file containing job files"""
+        logger.debug(f"Processing ZIP file: {file.filename}")
+        logger.info(f"Organization ID: {organization_id}, Is Mock: {is_mock}, Status: {status}")
+        
+        # Create a temporary directory to extract the ZIP file
+        temp_dir = tempfile.mkdtemp()
+        logger.info(f"Saving ZIP file to temporary directory: {temp_dir}")
+        
+        try:
+            # Save the ZIP file to the temporary directory
+            zip_path = Path(temp_dir) / "upload.zip"
+            with open(zip_path, "wb") as f:
+                while chunk := await file.read(self.chunk_size):
+                    f.write(chunk)
             
-            try:
-                # Save and extract ZIP
-                zip_path = temp_path / "upload.zip"
-                async with aiofiles.open(zip_path, 'wb') as f:
-                    while chunk := await file.read(self.chunk_size):
-                        await f.write(chunk)
+            # Extract the ZIP file
+            with zipfile.ZipFile(zip_path, "r") as zip_ref:
+                zip_ref.extractall(temp_dir)
+            
+            # Find all files in the extracted directory
+            all_files = list(Path(temp_dir).glob("**/*"))
+            files = [f for f in all_files if f.is_file() and f.name != "upload.zip"]
+            logger.info(f"Found {len(files)} total files in ZIP")
+            
+            # Filter for supported file types
+            supported_files = []
+            unsupported_files = []
+            
+            for file_path in files:
+                file_type = file_path.suffix.lower()
+                logger.debug(f"Checking file: {file_path.name}, type: {file_type}")
                 
-                with zipfile.ZipFile(zip_path) as zip_ref:
-                    zip_ref.extractall(extract_path)
-                
-                # Get list of all files and categorize them
-                all_files = list(extract_path.rglob("*"))
-                for file_path in all_files:
-                    if file_path.is_file():
-                        if file_path.suffix.lower() == '.pdf':
-                            pdf_files.append(file_path)
-                        else:
-                            unsupported_files.append({
-                                "name": file_path.name,
-                                "type": file_path.suffix,
-                                "reason": "Unsupported file format - only PDF files are accepted"
-                            })
-                
-                total_files = len(pdf_files)
-                logger.info(f"Found {total_files} PDF files and {len(unsupported_files)} unsupported files")
-                
-                # Initial event with file counts
+                if file_type in ['.pdf', '.txt']:
+                    logger.debug(f"Added supported file: {file_path.name}")
+                    supported_files.append(file_path)
+                else:
+                    logger.debug(f"Added unsupported file: {file_path.name}")
+                    unsupported_files.append(file_path)
+            
+            logger.info(f"Found {len(supported_files)} supported files and {len(unsupported_files)} unsupported files")
+            
+            if not supported_files:
                 yield JobProcessingEvent(
-                    event="processing_started",
-                    total_files=total_files,
+                    event="no_supported_files",
+                    total_files=len(files),
                     processed_count=0,
-                    failed_count=0,
-                    unsupported_files=unsupported_files,
-                    processing_details={
-                        "stage": "starting",
-                        "total_pdf_files": total_files,
-                        "unsupported_count": len(unsupported_files)
-                    }
+                    failed_count=len(files),
+                    error="No supported files found in the ZIP archive"
                 )
-
-                # Update all events to include unsupported_files
-                async def include_unsupported_files(event: JobProcessingEvent) -> JobProcessingEvent:
-                    event.unsupported_files = unsupported_files
-                    return event
-
-                # Process files in batches
-                for batch_start in range(0, len(pdf_files), self.batch_size):
-                    batch = pdf_files[batch_start:batch_start + self.batch_size]
-                    
-                    # Process the batch
-                    async for event in self._process_files_in_parallel(batch, organization_id, is_mock, status):
-                        if event.event == "file_processing_complete" and event.processing_details.get("job_data"):
-                            processed_jobs.append(ProcessedJobData(
-                                original_file=event.file_name,
-                                extracted_data=event.processing_details["job_data"],
-                                processing_time=time.time() - start_time
-                            ))
-                            processed_count += 1
-                        elif event.event == "file_processing_failed":
-                            failed_count += 1
-                        yield await include_unsupported_files(event)
-
-                # After all files are processed, create jobs in bulk
-                if processed_jobs:
-                    async for event in self.create_jobs_bulk(processed_jobs):
-                        yield await include_unsupported_files(event)
-
-                # Final completion event
-                yield JobProcessingEvent(
-                    event="processing_complete",
-                    total_files=total_files,
-                    processed_count=processed_count,
-                    failed_count=failed_count,
-                    processing_details={
-                        "total_time": time.time() - start_time,
-                        "successful_jobs": len(processed_jobs),
-                        "failed_jobs": failed_count
-                    }
-                )
-
-            except Exception as e:
-                logger.error(f"Error in process_zip: {str(e)}", exc_info=True)
-                yield JobProcessingEvent(
-                    event="processing_failed",
-                    total_files=len(pdf_files),
-                    processed_count=processed_count,
-                    failed_count=failed_count,
-                    error=str(e)
-                )
+                return
+            
+            # Process files in batches
+            processed_jobs = []
+            
+            # Yield initial event
+            yield JobProcessingEvent(
+                event="processing_started",
+                total_files=len(supported_files),
+                processed_count=0,
+                failed_count=0
+            )
+            
+            # Process files in batches
+            for batch_start in range(0, len(supported_files), self.batch_size):
+                batch_end = min(batch_start + self.batch_size, len(supported_files))
+                batch = supported_files[batch_start:batch_end]
+                
+                # Process each file in the batch
+                for file_path in batch:
+                    try:
+                        start_time = time.time()
+                        file_type = file_path.suffix.lower()
+                        
+                        # Extract text based on file type
+                        if file_type == '.pdf':
+                            text_content = await self._extract_text_from_pdf(file_path)
+                        elif file_type == '.txt':
+                            text_content = await self._extract_text_from_txt(file_path)
+                        else:
+                            # This shouldn't happen due to our filtering above
+                            logger.warning(f"Unsupported file type: {file_type} for file: {file_path.name}")
+                            continue
+                        
+                        # Create processed job data
+                        job_data = await self._create_processed_job_data(
+                            file_path, text_content, organization_id, is_mock, status, start_time
+                        )
+                        processed_jobs.append(job_data)
+                        
+                        # Yield progress event
+                        yield JobProcessingEvent(
+                            event="file_processed",
+                            total_files=len(supported_files),
+                            processed_count=len(processed_jobs),
+                            failed_count=0,
+                            file_name=file_path.name,
+                            processing_details={
+                                "processing_time": job_data.processing_time,
+                                "validation_errors": job_data.validation_errors
+                            }
+                        )
+                        
+                    except Exception as e:
+                        logger.error(f"Error processing file {file_path.name}: {str(e)}", exc_info=True)
+                        yield JobProcessingEvent(
+                            event="file_processing_failed",
+                            total_files=len(supported_files),
+                            processed_count=len(processed_jobs),
+                            failed_count=1,
+                            file_name=file_path.name,
+                            error=str(e)
+                        )
+            
+            # Create jobs in bulk
+            async for event in self.create_jobs_bulk(processed_jobs):
+                yield event
+                
+        except Exception as e:
+            logger.error(f"Error in process_zip: {str(e)}", exc_info=True)
+            yield JobProcessingEvent(
+                event="processing_failed",
+                total_files=0,
+                processed_count=0,
+                failed_count=0,
+                error=str(e)
+            )
+        finally:
+            # Clean up temporary directory
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
     async def _process_file(
         self,
@@ -313,13 +378,19 @@ class BatchProcessor:
         errors = []
         last_error = None
         
+        # Log file details
+        logger.info(f"Processing file: {file.name}, type: {file.suffix.lower()}")
+        logger.debug(f"File path: {file}, exists: {file.exists()}, size: {file.stat().st_size if file.exists() else 'N/A'}")
+        
         # Check cache
         cache_key = f"file:{file.name}:{organization_id}"
         cached_result = self._get_cache(cache_key)
         if cached_result:
+            logger.info(f"Using cached result for {file.name}")
             return cached_result
 
         try:
+            text_content = ""  # Initialize outside the loop
             for attempt in range(self.max_retries):
                 try:
                     # Check for auth errors before proceeding
@@ -329,39 +400,103 @@ class BatchProcessor:
                     # Add exponential backoff for retries
                     if attempt > 0:
                         retry_delay = self.retry_delay * (2 ** (attempt - 1))
+                        logger.info(f"Retry attempt {attempt} for {file.name}, waiting {retry_delay}s")
                         await asyncio.sleep(retry_delay)
 
                     async with self.pdf_semaphore:
-                        # First convert PDF to text
-                        async with aiofiles.open(file, 'rb') as f:
-                            content = await f.read()
-                            files = {'file': (file.name, content, 'application/pdf')}
-                            
-                            response = await self.remote_client.post(
-                                "/v1/tools/convert_pdf2text", 
-                                files=files,
-                                timeout=30.0
-                            )
-                            
-                            # Check for specific error types
-                            if response.status_code == 429:
-                                raise Exception("Rate limit exceeded")
-                            elif response.status_code == 401:
-                                raise Exception("InvalidJWTToken")
+                        # Extract text based on file type
+                        file_extension = file.suffix.lower()
+                        logger.info(f"Processing file with extension: {file_extension}")
+                        
+                        if file_extension == '.pdf':
+                            # Convert PDF to text
+                            logger.info(f"Processing PDF file: {file.name}")
+                            try:
+                                # Read the file into memory first
+                                file_content = await self._stream_to_bytes(file)
+                                logger.info(f"Read PDF file into memory: {file.name}, size: {len(file_content)} bytes")
                                 
-                            response.raise_for_status()
-                            text_result = response.json()
-                            text_content = "\n".join(text_result.get('pages', []))
+                                # Use synchronous requests library which might be more reliable
+                                endpoint = f"{self.remote_url}/v1/tools/convert_pdf2text"
+                                logger.info(f"Sending request to {endpoint}")
+                                
+                                # Run the synchronous request in a thread pool to avoid blocking
+                                def make_request():
+                                    # Create a requests session with SSL verification disabled
+                                    session = requests.Session()
+                                    session.verify = False
+                                    
+                                    # Make the request
+                                    files = {'file': (file.name, file_content, 'application/pdf')}
+                                    return session.post(
+                                        endpoint,
+                                        files=files,
+                                        timeout=60.0
+                                    )
+                                
+                                # Run the synchronous request in a thread pool
+                                loop = asyncio.get_event_loop()
+                                response = await loop.run_in_executor(None, make_request)
+                                
+                                # Check for specific error types
+                                if response.status_code == 429:
+                                    raise Exception("Rate limit exceeded")
+                                elif response.status_code == 401:
+                                    raise Exception("InvalidJWTToken")
+                                
+                                # Log response status
+                                logger.info(f"Response status: {response.status_code}")
+                                
+                                response.raise_for_status()
+                                text_result = response.json()
+                                text_content = "\n".join(text_result.get('pages', []))
+                                logger.info(f"Successfully extracted text from PDF: {file.name}, content length: {len(text_content)}")
+                            except requests.exceptions.ConnectionError as conn_error:
+                                logger.error(f"Connection error to remote service: {str(conn_error)}", exc_info=True)
+                                raise ValueError(f"Cannot connect to PDF processing service at {self.remote_url}: {str(conn_error)}")
+                            except requests.exceptions.Timeout as timeout_error:
+                                logger.error(f"Timeout error processing PDF file {file.name}: {str(timeout_error)}", exc_info=True)
+                                raise ValueError(f"Timeout while processing PDF file: {str(timeout_error)}")
+                            except Exception as pdf_error:
+                                logger.error(f"Error processing PDF file {file.name}: {str(pdf_error)}", exc_info=True)
+                                raise ValueError(f"Failed to process PDF file: {str(pdf_error)}")
+                        
+                        elif file_extension == '.txt':
+                            # Read text file directly with better error handling
+                            try:
+                                logger.info(f"Processing TXT file: {file.name}")
+                                if not file.exists():
+                                    raise FileNotFoundError(f"TXT file not found: {file}")
+                                    
+                                async with aiofiles.open(file, 'r', encoding='utf-8', errors='replace') as f:
+                                    text_content = await f.read()
+                                logger.info(f"Successfully read TXT file: {file.name}, content length: {len(text_content)}")
+                                
+                                # Ensure we have meaningful content
+                                if not text_content or len(text_content.strip()) < 50:
+                                    logger.warning(f"TXT file content too short: {file.name}")
+                                    raise ValueError("Extracted text is too short or empty")
+                            except Exception as txt_error:
+                                logger.error(f"Error processing TXT file {file.name}: {str(txt_error)}", exc_info=True)
+                                raise ValueError(f"Failed to process TXT file: {str(txt_error)}")
+                        
+                        else:
+                            # This should not happen as we filter files earlier
+                            logger.error(f"Unsupported file format: {file_extension}")
+                            raise ValueError(f"Unsupported file format: {file_extension}")
 
                     if not text_content or len(text_content.strip()) < 50:
+                        logger.warning(f"Extracted text is too short or empty for {file.name}")
                         raise ValueError("Extracted text is too short or empty")
 
                     # Break early if we hit auth errors
+                    logger.info(f"Successfully processed file: {file.name}")
                     break
 
                 except Exception as e:
                     last_error = str(e)
                     errors.append(last_error)
+                    logger.error(f"Error processing file {file.name} (attempt {attempt+1}/{self.max_retries}): {last_error}")
                     
                     # Don't retry on auth errors or rate limits
                     if "InvalidJWTToken" in last_error or "Rate limit exceeded" in last_error:
@@ -370,6 +505,7 @@ class BatchProcessor:
                     if attempt < self.max_retries - 1:
                         continue
                     
+                    logger.error(f"All retries failed for {file.name}. Last error: {last_error}")
                     raise Exception(f"All retries failed. Last error: {last_error}")
 
             # Process successful result
@@ -414,6 +550,10 @@ class BatchProcessor:
 
     def _get_cache(self, key: str) -> Optional[Any]:
         """Get value from cache if not expired"""
+        if not hasattr(self, '_cache'):
+            self._cache = {}
+            return None
+            
         if key in self._cache:
             entry = self._cache[key]
             if entry.expires_at > datetime.now():
@@ -421,11 +561,14 @@ class BatchProcessor:
             del self._cache[key]
         return None
 
-    def _set_cache(self, key: str, value: Any):
+    def _set_cache(self, key: str, value: Any, ttl: int = 3600) -> None:
         """Set value in cache with expiration"""
+        if not hasattr(self, '_cache'):
+            self._cache = {}
+        
         self._cache[key] = CacheEntry(
             data=value,
-            expires_at=datetime.now() + timedelta(seconds=self.cache_ttl)
+            expires_at=datetime.now() + timedelta(seconds=ttl)
         )
 
     @lru_cache(maxsize=100)
@@ -496,7 +639,7 @@ class BatchProcessor:
             errors.append(f"Invalid job type: {job_data['job_type']}")
 
         # Validate required fields
-        required_fields = ["title", "description", "location", "requirements"]
+        required_fields = ["title", "description", "location"]
         for field in required_fields:
             if field not in job_data:
                 errors.append(f"Missing {field}")
@@ -512,7 +655,7 @@ class BatchProcessor:
 
         # Validate location fields
         if "location" in job_data:
-            required_loc_fields = ["city", "country"]  # Remove state from default required fields
+            required_loc_fields = ["city", "country"]  # State is not always required
             
             # Check if state is required (only for US)
             is_us = False
@@ -533,6 +676,24 @@ class BatchProcessor:
                     if lang not in job_data["location"][loc_field] or not job_data["location"][loc_field][lang]:
                         errors.append(f"Missing {lang} translation for location.{loc_field}")
 
+        # Validate requirements
+        if "requirements" in job_data:
+            if isinstance(job_data["requirements"], dict):
+                # Check if requirements has language keys
+                for lang in langs:
+                    if lang not in job_data["requirements"]:
+                        errors.append(f"Missing {lang} translation for requirements")
+                    elif not isinstance(job_data["requirements"][lang], list):
+                        errors.append(f"Requirements.{lang} must be a list")
+            elif isinstance(job_data["requirements"], list):
+                # If requirements is a list, it's probably the old format
+                # We'll convert it later, so no error here
+                pass
+            else:
+                errors.append("Requirements must be a dictionary with language keys or a list")
+        else:
+            errors.append("Missing requirements")
+
         # Validate organization_id
         try:
             if "organization_id" not in job_data:
@@ -545,125 +706,188 @@ class BatchProcessor:
         return len(errors) == 0, errors
 
     async def create_jobs_bulk(self, processed_jobs: List[ProcessedJobData]) -> AsyncGenerator[JobProcessingEvent, None]:
-        """Create jobs in bulk with validation and error handling"""
-        logger.info(f"Attempting to create {len(processed_jobs)} jobs in bulk")
-        start_time = time.time()
-        successful_jobs = []
-        failed_jobs = []
-
-        # Group jobs into batches for database transactions
-        job_batches = [
-            processed_jobs[i:i + self.db_batch_size]
-            for i in range(0, len(processed_jobs), self.db_batch_size)
-        ]
-
-        for batch in job_batches:
-            valid_jobs = []
-            
-            # Validate all jobs in batch
-            for job in batch:
-                logger.debug(f"Validating job from file: {job.original_file}")
-                is_valid, validation_errors = await self._validate_job_data(job.extracted_data)
-                logger.debug(f"Validation result for {job.original_file}: valid={is_valid}, errors={validation_errors}")
-                
-                if is_valid:
-                    valid_jobs.append(job.extracted_data)
-                else:
-                    failed_jobs.append({
-                        "file": job.original_file,
-                        "errors": validation_errors,
-                        "data": job.extracted_data
-                    })
-                    yield JobProcessingEvent(
-                        event="job_creation_failed",
-                        total_files=len(processed_jobs),
-                        processed_count=len(successful_jobs),
-                        failed_count=len(failed_jobs),
-                        file_name=job.original_file,
-                        error=str(validation_errors)
-                    )
-
-            if valid_jobs:
-                try:
-                    logger.info(f"Sending {len(valid_jobs)} valid jobs to bulk creation endpoint")
-                    response = await self.local_client.post(
-                        "/v1/jobs/bulk",
-                        json=valid_jobs
-                    )
-                    logger.info(f"Bulk creation response status: {response.status_code}")
-                    response.raise_for_status()
-                    response_data = response.json()
-                    created_jobs = response_data.get('data', [])  # Extract jobs from response data
-                    logger.info(f"Successfully created {len(created_jobs)} jobs")
-                    successful_jobs.extend(created_jobs)
-
-                    # Yield success events for each created job
-                    for job in created_jobs:
-                        yield JobProcessingEvent(
-                            event="job_created",
-                            total_files=len(processed_jobs),
-                            processed_count=len(successful_jobs),
-                            failed_count=len(failed_jobs),
-                            file_name=job.get("original_file", "unknown"),
-                            processing_details={
-                                "job_id": job.get("id"),
-                                "status": "success"
-                            }
-                        )
-                except Exception as e:
-                    logger.error(f"Error during bulk job creation: {str(e)}", exc_info=True)
-                    # If bulk creation fails, try individual creation
-                    for job_data in valid_jobs:
-                        try:
-                            response = await self.local_client.post(
-                                "/v1/jobs",
-                                json=job_data
-                            )
-                            response.raise_for_status()
-                            created_job = response.json()
-                            successful_jobs.append(created_job)
-                            yield JobProcessingEvent(
-                                event="job_created",
-                                total_files=len(processed_jobs),
-                                processed_count=len(successful_jobs),
-                                failed_count=len(failed_jobs),
-                                file_name=job_data.get("original_file", "unknown"),
-                                processing_details={
-                                    "job_id": created_job.get("id"),
-                                    "status": "success"
-                                }
-                            )
-                        except Exception as job_error:
-                            failed_jobs.append({
-                                "file": job_data.get("original_file", "unknown"),
-                                "errors": [str(job_error)],
-                                "data": job_data
-                            })
-                            yield JobProcessingEvent(
-                                event="job_creation_failed",
-                                total_files=len(processed_jobs),
-                                processed_count=len(successful_jobs),
-                                failed_count=len(failed_jobs),
-                                file_name=job_data.get("original_file", "unknown"),
-                                error=str(job_error)
-                            )
-
-        # Yield final completion event
-        total_time = time.time() - start_time
-        yield JobProcessingEvent(
-            event="batch_completed",
-            total_files=len(processed_jobs),
-            processed_count=len(successful_jobs),
-            failed_count=len(failed_jobs),
-            processing_details={
-                "total_time": total_time,
-                "stats": {
-                    "total": len(processed_jobs),
-                    "successful": len(successful_jobs),
-                    "failed": len(failed_jobs)
+        """Create jobs in bulk from processed data"""
+        valid_jobs = []
+        invalid_jobs = []
+        
+        # Filter out jobs with validation errors
+        for job_data in processed_jobs:
+            if not job_data.validation_errors:
+                valid_jobs.append(job_data.extracted_data)
+            else:
+                invalid_jobs.append(job_data)
+        
+        if not valid_jobs:
+            yield JobProcessingEvent(
+                event="batch_completed",
+                total_files=len(processed_jobs),
+                processed_count=0,
+                failed_count=len(processed_jobs),
+                processing_details={
+                    "stage": "job_creation",
+                    "total_time": 0,
+                    "successful_jobs": 0,
+                    "failed_jobs": len(processed_jobs),
+                    "error": "No valid jobs to create"
                 }
-            }
-        )
+            )
+            return
+        
+        try:
+            logger.info(f"Sending {len(valid_jobs)} valid jobs to bulk creation endpoint")
+            
+            # Log the first job data for debugging
+            if valid_jobs:
+                logger.info(f"Sample job data (first job): {json.dumps(valid_jobs[0], indent=2, default=str)}")
+                
+                # Validate required fields in each job
+                for i, job in enumerate(valid_jobs):
+                    missing_fields = []
+                    for field in ["title", "description", "location", "job_type", "organization_id"]:
+                        if field not in job:
+                            missing_fields.append(field)
+                    
+                    if missing_fields:
+                        logger.error(f"Job {i} is missing required fields: {', '.join(missing_fields)}")
+                    
+                    # Check nested fields
+                    if "location" in job:
+                        location = job["location"]
+                        missing_location_fields = []
+                        for field in ["city", "country"]:  # State is not always required
+                            if field not in location:
+                                missing_location_fields.append(field)
+                        
+                        if missing_location_fields:
+                            logger.error(f"Job {i} location is missing required fields: {', '.join(missing_location_fields)}")
+                    
+                    # Normalize the job data
+                    valid_jobs[i] = self._normalize_job_data(job)
+            
+            # Run the synchronous request in a thread pool to avoid blocking
+            def make_bulk_request():
+                session = requests.Session()
+                session.verify = False  # Disable SSL verification for development
+                
+                # Create the payload
+                payload = valid_jobs
+                
+                # Log the payload size
+                logger.debug(f"Sending bulk creation request with {len(payload)} jobs")
+                
+                return session.post(
+                    f"{LOCAL_API_URL}/v1/jobs/bulk",
+                    json=payload,
+                    timeout=60
+                )
+            
+            # Run the synchronous request in a thread pool
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(None, make_bulk_request)
+            
+            try:
+                response.raise_for_status()
+                result = response.json()
+                
+                # Log the result
+                logger.info(f"Bulk creation result: {json.dumps(result, indent=2, default=str)}")
+                
+                # Extract successful and failed jobs from the result
+                successful_jobs = result.get("successful_jobs", [])
+                failed_jobs = result.get("failed_jobs", [])
+                
+                yield JobProcessingEvent(
+                    event="batch_completed",
+                    total_files=len(processed_jobs),
+                    processed_count=len(successful_jobs),
+                    failed_count=len(failed_jobs) + len(invalid_jobs),
+                    processing_details={
+                        "stage": "job_creation",
+                        "total_time": result.get("total_time", 0),
+                        "successful_jobs": len(successful_jobs),
+                        "failed_jobs": len(failed_jobs) + len(invalid_jobs),
+                        "stats": result.get("stats", {})
+                    }
+                )
+            except requests.exceptions.HTTPError as e:
+                # Log the error response content
+                error_detail = "No error details"
+                try:
+                    if response.content:
+                        error_detail = response.json()
+                        logger.error(f"Error response from bulk creation endpoint: {json.dumps(error_detail, indent=2)}")
+                except Exception as json_error:
+                    logger.error(f"Error parsing error response: {str(json_error)}")
+                    error_detail = response.text if response.text else "No error details"
+                
+                logger.error(f"Error creating jobs in bulk: {e.__class__.__name__}: {str(e)}, Details: {error_detail}")
+                raise
+        except Exception as e:
+            logger.error(f"Error creating jobs in bulk: {str(e)}", exc_info=True)
+            
+            # Fallback to individual job creation
+            successful_count = 0
+            failed_count = 0
+            
+            logger.info(f"Falling back to individual job creation for {len(valid_jobs)} jobs")
+            
+            for i, job_data in enumerate(valid_jobs):
+                try:
+                    # Log the job data being sent
+                    logger.info(f"Attempting to create individual job {i+1}/{len(valid_jobs)}")
+                    
+                    # Ensure the job data is normalized
+                    normalized_job = self._normalize_job_data(job_data)
+                    
+                    # Run the synchronous request in a thread pool to avoid blocking
+                    def make_job_request():
+                        session = requests.Session()
+                        session.verify = False  # Disable SSL verification for development
+                        return session.post(
+                            f"{LOCAL_API_URL}/v1/jobs",
+                            json=normalized_job,
+                            timeout=30
+                        )
+                    
+                    # Run the synchronous request in a thread pool
+                    loop = asyncio.get_event_loop()
+                    response = await loop.run_in_executor(None, make_job_request)
+                    
+                    try:
+                        response.raise_for_status()
+                        job_result = response.json()
+                        logger.info(f"Successfully created job {i+1}: {job_result.get('id', 'No ID')}")
+                        successful_count += 1
+                    except requests.exceptions.HTTPError as e:
+                        failed_count += 1
+                        # Log the error response content
+                        error_detail = "No error details"
+                        try:
+                            if response.content:
+                                error_detail = response.json()
+                                logger.error(f"Error response from job creation endpoint: {json.dumps(error_detail, indent=2)}")
+                        except Exception as json_error:
+                            logger.error(f"Error parsing error response: {str(json_error)}")
+                            error_detail = response.text if response.text else "No error details"
+                        
+                        logger.error(f"Error creating individual job {i+1}: {e.__class__.__name__}: {str(e)}, Details: {error_detail}")
+                except Exception as job_error:
+                    failed_count += 1
+                    logger.error(f"Error creating individual job {i+1}: {str(job_error)}")
+            
+            yield JobProcessingEvent(
+                event="batch_completed",
+                total_files=len(processed_jobs),
+                processed_count=successful_count,
+                failed_count=failed_count + len(invalid_jobs),
+                processing_details={
+                    "stage": "job_creation",
+                    "total_time": sum(job.processing_time for job in processed_jobs),
+                    "successful_jobs": successful_count,
+                    "failed_jobs": failed_count + len(invalid_jobs),
+                    "error": str(e)
+                }
+            )
 
     async def __aenter__(self):
         """Async context manager entry"""
@@ -683,67 +907,264 @@ class BatchProcessor:
         status: str,
         start_time: float
     ) -> ProcessedJobData:
-        """Create processed job data from extracted text"""
-        try:
-            # Check rate limit
-            client_id = organization_id  # Use organization_id as client identifier
-            is_limited, retry_after = rate_limiter.is_rate_limited(client_id)
+        """Create processed job data from text content"""
+        # Log the length of the text content for debugging
+        logger.info(f"Creating processed job data for {file.name}, text content length: {len(text_content)}")
+        
+        # Check if text content is too short
+        if not text_content or len(text_content) < 50:
+            logger.warning(f"Text content for {file.name} is too short: {len(text_content)} chars")
             
-            if is_limited:
-                headers = {"Retry-After": str(retry_after)}
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail="Rate limit exceeded",
-                    headers=headers
-                )
-
-            # Extract job data using local endpoint
-            response = await self.local_client.post(
-                "/v1/jobs/extract-data",
-                json={
-                    'text': text_content,
-                    'filename': file.name
-                },
-                headers={
-                    "X-Organization-ID": organization_id,
-                    "X-Request-ID": str(uuid.uuid4())
+            # If mock data is requested, generate a placeholder
+            if is_mock:
+                logger.info(f"Generating mock data for {file.name}")
+                mock_data = {
+                    "title": {"en": f"Mock Job from {file.name}", "fr": f"Emploi simulé de {file.name}"},
+                    "description": {
+                        "en": f"This is a mock job description generated from {file.name}.",
+                        "fr": f"Ceci est une description d'emploi simulée générée à partir de {file.name}."
+                    },
+                    "location": {
+                        "city": {"en": "Sample City", "fr": "Ville Exemple"},
+                        "state": {"en": "Sample State", "fr": "État Exemple"},
+                        "country": {"en": "Sample Country", "fr": "Pays Exemple"},
+                        "postal_code": {"en": "12345", "fr": "12345"}
+                    },
+                    "requirements": {
+                        "en": ["Sample requirement 1", "Sample requirement 2"],
+                        "fr": ["Exigence exemple 1", "Exigence exemple 2"]
+                    },
+                    "job_type": "FULL_TIME",
+                    "organization_id": organization_id,
+                    "status": status,
+                    "remote": False,
+                    "skills": ["SKILL_1", "SKILL_2"],
+                    "is_mock": True
                 }
-            )
-            
-            if response.status_code == 429:
-                retry_after = response.headers.get("Retry-After", "60")
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail="Rate limit exceeded",
-                    headers={"Retry-After": retry_after}
+                return ProcessedJobData(
+                    original_file=str(file),
+                    extracted_data=mock_data,
+                    processing_time=time.time() - start_time
                 )
-
-            response.raise_for_status()
-            response_data = response.json()
-            # Extract the actual job data from the response
-            job_data = response_data.get('data', {})
-            
-            logger.debug(f"Extracted job data for {file.name}: {job_data}")
-
-            # Add additional metadata
-            job_data.update({
-                "organization_id": organization_id,
-                "is_mock": is_mock,
-                "status": status,
-                "original_file": file.name
-            })
-
+        
+        # Cache key based on content hash and organization
+        cache_key = f"{hashlib.md5(text_content.encode()).hexdigest()}_{organization_id}"
+        cached_result = self._get_cache(cache_key)
+        
+        if cached_result:
+            logger.info(f"Using cached result for {file.name}")
             return ProcessedJobData(
-                original_file=file.name,
+                original_file=str(file),
+                extracted_data=cached_result,
+                processing_time=time.time() - start_time
+            )
+        
+        try:
+            # Define the function to make the extract request
+            def make_extract_request():
+                # Create a payload with the required fields
+                payload = {
+                    "text": text_content,
+                    "organization_id": organization_id,
+                    "is_mock": is_mock,
+                    "status": status,
+                    "source_file": file.name
+                }
+                
+                logger.debug(f"Sending payload to extract endpoint, length: {len(text_content)}")
+                
+                # Create a session with SSL verification disabled for development
+                session = requests.Session()
+                session.verify = False
+                
+                # Make the request to the local API endpoint
+                return session.post(
+                    f"{LOCAL_API_URL}/v1/jobs/extract-data",
+                    json=payload,
+                    timeout=30
+                )
+            
+            # Run the synchronous request in a thread pool to avoid blocking
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(None, make_extract_request)
+            
+            # Check for HTTP errors
+            response.raise_for_status()
+            
+            # Parse the response JSON
+            result = response.json()
+            
+            # Extract the job data from the response
+            if "data" in result:
+                job_data = result["data"]
+            else:
+                job_data = result
+                
+            # Add organization_id and status if not present
+            if "organization_id" not in job_data:
+                job_data["organization_id"] = organization_id
+            if "status" not in job_data:
+                job_data["status"] = status
+            if "is_mock" not in job_data:
+                job_data["is_mock"] = is_mock
+                
+            # Normalize the job data to ensure it matches the expected format
+            job_data = self._normalize_job_data(job_data)
+                
+            # Cache the result
+            try:
+                self._set_cache(cache_key, job_data)
+            except Exception as cache_error:
+                logger.warning(f"Failed to cache result: {str(cache_error)}")
+            
+            return ProcessedJobData(
+                original_file=str(file),
                 extracted_data=job_data,
                 processing_time=time.time() - start_time
             )
-
-        except Exception as e:
-            logger.error(f"Error creating job data for {file.name}: {str(e)}", exc_info=True)
+            
+        except requests.exceptions.HTTPError as e:
+            error_detail = "No error details"
+            validation_errors = []
+            
+            # Handle 422 Unprocessable Entity errors (validation errors)
+            if e.response.status_code == 422:
+                try:
+                    error_response = e.response.json()
+                    logger.error(f"Validation error for {file.name}: {json.dumps(error_response, indent=2)}")
+                    
+                    # Extract validation error details
+                    if "detail" in error_response:
+                        if isinstance(error_response["detail"], list):
+                            for error in error_response["detail"]:
+                                if "msg" in error:
+                                    validation_errors.append(error["msg"])
+                        elif isinstance(error_response["detail"], str):
+                            validation_errors.append(error_response["detail"])
+                    
+                    error_detail = error_response
+                except Exception as json_error:
+                    logger.error(f"Error parsing validation error response: {str(json_error)}")
+                    error_detail = e.response.text if e.response.text else "No error details"
+                    validation_errors.append(f"Validation error: {str(e)}")
+            else:
+                validation_errors.append(f"HTTP error: {e.response.status_code} - {str(e)}")
+                
+            logger.error(f"Error extracting job data from {file.name}: {e.__class__.__name__}: {str(e)}, Details: {error_detail}")
+            
             return ProcessedJobData(
-                original_file=file.name,
+                original_file=str(file),
                 extracted_data={},
-                validation_errors=[str(e)],
+                validation_errors=validation_errors,
                 processing_time=time.time() - start_time
-            ) 
+            )
+            
+        except Exception as e:
+            logger.error(f"Error extracting job data from {file.name}: {str(e)}", exc_info=True)
+            
+            return ProcessedJobData(
+                original_file=str(file),
+                extracted_data={},
+                validation_errors=[f"Processing error: {str(e)}"],
+                processing_time=time.time() - start_time
+            )
+
+    async def _extract_text_from_txt(self, file_path: Path) -> str:
+        """Extract text from a TXT file"""
+        try:
+            logger.info(f"Processing TXT file: {file_path.name}")
+            if not file_path.exists():
+                raise FileNotFoundError(f"TXT file not found: {file_path}")
+            
+            # Read the text file
+            async with aiofiles.open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                text_content = await f.read()
+            
+            logger.info(f"Successfully extracted text from TXT: {file_path.name}, content length: {len(text_content)}")
+            return text_content
+        except Exception as e:
+            logger.error(f"Error extracting text from TXT file {file_path.name}: {str(e)}", exc_info=True)
+            raise ValueError(f"Failed to extract text from TXT file: {str(e)}")
+    
+    # DOCX support removed as it's not needed 
+
+    async def _extract_text_from_pdf(self, file_path: Path) -> str:
+        """Extract text from a PDF file using the semantic service"""
+        try:
+            logger.info(f"Processing PDF file: {file_path.name}")
+            
+            # Use the semantic service to convert PDF to text
+            result = await semantic_service.convert_pdf_to_text(file_path)
+            
+            # Extract text from the result - handle different response formats
+            if isinstance(result, dict):
+                # Try different possible keys where text might be stored
+                if "text" in result:
+                    text = result["text"]
+                elif "pages" in result:
+                    # Join pages with newlines
+                    text = "\n".join(result["pages"])
+                else:
+                    # Log all keys to help debug
+                    logger.warning(f"Unexpected response format from PDF conversion: {list(result.keys())}")
+                    # Try to extract any string values from the dictionary
+                    text_values = [v for v in result.values() if isinstance(v, str) and len(v) > 10]
+                    if text_values:
+                        text = "\n".join(text_values)
+                    else:
+                        text = str(result)
+            elif isinstance(result, str):
+                text = result
+            else:
+                logger.warning(f"Unexpected response type from PDF conversion: {type(result)}")
+                text = str(result)
+            
+            # Validate text content
+            if not text or len(text.strip()) < 10:
+                logger.warning(f"Extracted text is too short or empty for {file_path.name}: '{text}'")
+                if hasattr(result, 'content') and isinstance(result.content, bytes):
+                    # Try to decode the content directly
+                    try:
+                        text = result.content.decode('utf-8')
+                        logger.info(f"Extracted text from content: {len(text)} characters")
+                    except Exception as decode_error:
+                        logger.error(f"Error decoding content: {str(decode_error)}")
+            
+            logger.info(f"Successfully extracted text from PDF: {file_path.name}, content length: {len(text)}")
+            return text
+            
+        except Exception as e:
+            logger.error(f"Error extracting text from PDF {file_path.name}: {str(e)}", exc_info=True)
+            return f"Error processing PDF: {str(e)}" 
+
+    def _normalize_job_data(self, job_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize job data to ensure it matches the expected format"""
+        normalized_data = job_data.copy()
+        
+        # Ensure requirements is in the correct format
+        if "requirements" in normalized_data:
+            if isinstance(normalized_data["requirements"], list):
+                # Convert list to dictionary with language keys
+                normalized_data["requirements"] = {
+                    "en": normalized_data["requirements"],
+                    "fr": normalized_data["requirements"]
+                }
+        
+        # Ensure all required fields exist
+        if "remote" not in normalized_data:
+            normalized_data["remote"] = False
+            
+        # Ensure location has all required fields
+        if "location" in normalized_data:
+            if "postal_code" not in normalized_data["location"]:
+                normalized_data["location"]["postal_code"] = {"en": "", "fr": ""}
+                
+            # Ensure state exists even if not in US
+            if "state" not in normalized_data["location"]:
+                normalized_data["location"]["state"] = {"en": "", "fr": ""}
+        
+        # Add skills if missing
+        if "skills" not in normalized_data:
+            normalized_data["skills"] = []
+            
+        return normalized_data 

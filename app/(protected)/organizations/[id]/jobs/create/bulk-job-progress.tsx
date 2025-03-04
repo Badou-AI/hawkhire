@@ -58,6 +58,13 @@ export const BulkJobProgress = ({ stats }: BulkJobProgressProps) => {
     ]
   }
 
+  const explanations: Record<string, string[]> = {
+    unsupported: [
+      "Only PDF and TXT files are supported",
+      "Make sure all your job descriptions are in PDF or TXT format",
+    ],
+  }
+
   return (
     <div className="grid grid-cols-3 gap-4">
       <ProgressCard
@@ -79,7 +86,7 @@ export const BulkJobProgress = ({ stats }: BulkJobProgressProps) => {
         label="Unsupported"
         value={stats.unsupportedCount || 0}
         color="border-yellow-100"
-        explanation={["Only PDF files are supported"]}
+        explanation={explanations.unsupported}
       />
     </div>
   )

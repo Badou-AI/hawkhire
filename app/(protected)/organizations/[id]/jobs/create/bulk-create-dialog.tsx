@@ -184,7 +184,8 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
         <DialogHeader>
           <DialogTitle>Bulk Create Jobs</DialogTitle>
           <DialogDescription>
-            Upload a ZIP file containing job descriptions in PDF or TXT format. Each file will be processed and converted into a job posting.
+            Upload a ZIP file containing job descriptions in PDF or TXT format. Each file will be
+            processed and converted into a job posting.
           </DialogDescription>
         </DialogHeader>
 
