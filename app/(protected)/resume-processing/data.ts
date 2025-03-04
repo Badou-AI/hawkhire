@@ -300,22 +300,22 @@ export const transformApiResponseToUiFormat = (response: JobMatchProfile[]) => {
   console.log(`Filtered out ${response.length - validDocuments.length} invalid or John Doe entries`);
 
   return validDocuments.map(doc => {
-    console.log('Processing document:', {
-      id: doc.id,
-      name: `${doc.item_data.content.profile.first_name} ${doc.item_data.content.profile.last_name}`,
-      hasItemData: !!doc.item_data,
-      hasContent: !!doc.item_data?.content,
-      hasProfile: !!doc.item_data?.content?.profile,
-      contentKeys: doc.item_data?.content ? Object.keys(doc.item_data.content) : [],
-      profileKeys: doc.item_data?.content?.profile ? Object.keys(doc.item_data.content.profile) : []
-    });
-
     // Calculate match score
     const matchScore = doc.item_data.matching_score?.data?.score?.value 
       ? Math.round(doc.item_data.matching_score.data.score.value * 100)
       : 0;
     
-    // Determine stage based on match score - automatically shortlist candidates with 80%+ match scores
+    // Get justification text, avoiding the prompt text
+    const justificationText = doc.item_data.matching_score?.data?.justification?.type === 'text'
+      ? doc.item_data.matching_score.data.justification.meta.description
+      : '';
+    
+    // Only use justification if it's not the prompt text
+    const summary = !justificationText.includes('justification of the matching score in the language')
+      ? justificationText
+      : doc.item_data.content?.summary || 'No summary available';
+
+    // Determine stage based on match score
     const stage = matchScore >= 80 ? 'shortlisted' : 'new';
     
     // Log shortlisted candidates
@@ -347,9 +347,7 @@ export const transformApiResponseToUiFormat = (response: JobMatchProfile[]) => {
             ])
           )
         : {},
-      summary: doc.item_data.matching_score?.data?.justification?.meta?.description || 
-               doc.item_data.content?.summary || 
-               "No summary available",
+      summary,
       stage,
       otherMatches: [
         { 
