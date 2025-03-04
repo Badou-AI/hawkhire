@@ -360,7 +360,8 @@ export const transformApiResponseToUiFormat = (response: JobMatchProfile[]) => {
         }
       ] as OtherMatch[],
       email: doc.item_data.content?.profile?.email,
-      phone: doc.item_data.content?.profile?.tel_num
+      phone: doc.item_data.content?.profile?.tel_num,
+      item_data: doc.item_data
     };
   });
 };
@@ -440,7 +441,9 @@ export async function getResumeData() {
         skills: doc.item_data.content.skills || [],
         languages: [], // Default empty array since languages doesn't exist in the type
         createdAt: doc.item_data.timestamp ? new Date(doc.item_data.timestamp).toLocaleDateString() : '',
-        updatedAt: doc.item_data.timestamp ? new Date(doc.item_data.timestamp).toLocaleDateString() : ''
+        updatedAt: doc.item_data.timestamp ? new Date(doc.item_data.timestamp).toLocaleDateString() : '',
+        // Include the entire item_data object
+        item_data: doc.item_data
       };
     });
   } catch (error) {

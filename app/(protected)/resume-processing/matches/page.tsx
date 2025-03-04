@@ -1,5 +1,4 @@
-"use client"
-
+"use client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -48,9 +47,17 @@ import { PipelineStatus } from '@/components/pipeline-status';
 import { useSearchParams } from "next/navigation";
 import { Pagination } from '@/components/shared/pagination';
 import { getJob, type ApiJob } from "@/app/api/jobs/client";
+import dynamic from 'next/dynamic';
+import type { PDFViewerProps } from '@/components/pdf-viewer';
 
 // Import data from shared data file
 import { transformApiResponseToUiFormat, getSkillColor } from "../data";
+
+// Dynamically import the PDF viewer to avoid SSR issues
+const PDFViewer = dynamic<PDFViewerProps>(() => import('@/components/pdf-viewer'), {
+  ssr: false,
+  loading: () => <div>Loading PDF viewer...</div>
+});
 
 interface JobStats {
   totalCandidates: number;
@@ -99,6 +106,14 @@ interface Candidate {
   otherMatches: Array<{ jobTitle: string; score: number }>;
   email?: string;
   phone?: string;
+  item_data?: {
+    file_info?: {
+      name: string;
+      size: number;
+      mime_type: string;
+      processed_path: string;
+    };
+  };
 }
 
 // Add TypeScript declaration for the window.testPrint property
@@ -123,6 +138,7 @@ export default function MatchesPage() {
   const [shortlistThreshold, setShortlistThreshold] = useState(80)
   const [customThreshold, setCustomThreshold] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
+  const [selectedResume, setSelectedResume] = useState<string | null>(null);
 
   // Fetch job data
   useEffect(() => {
@@ -374,7 +390,25 @@ export default function MatchesPage() {
             <Badge variant={getMatchScoreVariant(candidate.matchScore)} className="match-score-label">Match Score</Badge>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm">View Profile</Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => {
+                console.log('Table view button clicked');
+                console.log('Full candidate data:', candidate);
+                const resumePath = candidate.item_data?.file_info?.processed_path;
+                console.log('Resume path:', resumePath);
+                if (resumePath) {
+                  const url = getResumeUrl(resumePath);
+                  console.log('Setting selected resume to:', url);
+                  setSelectedResume(url);
+                } else {
+                  console.error('No resume path found in candidate data:', candidate);
+                }
+              }}
+            >
+              View Resume
+            </Button>
             <Button size="sm">Contact</Button>
           </div>
         </div>
@@ -478,6 +512,31 @@ export default function MatchesPage() {
     // Scroll to top when changing pages
     window.scrollTo(0, 0)
   }
+
+  // Add this function to convert storage path to URL
+  const getResumeUrl = (storagePath: string) => {
+    console.log('Original path:', storagePath);
+    
+    // Clean the path by removing storage prefix and normalizing slashes
+    const cleanPath = storagePath
+      .replace(/^storage[\/\\]/, '')  // Remove storage prefix if present
+      .replace(/^[\/\\]+/, '')        // Remove leading slashes
+      .replace(/\\/g, '/')            // Normalize slashes to forward slashes
+      .replace(/^processed/, 'backend/storage/processed') // Add backend prefix
+      .replace(/\s+Original\s*/, ' ') // Remove "Original" from filename
+      .trim();
+    
+    console.log('Cleaned path:', cleanPath);
+    
+    // Get the current host
+    const host = window.location.origin;
+    
+    // Construct the final URL
+    const url = `${host}/api/storage/${cleanPath}`;
+    
+    console.log('Final URL:', url);
+    return url;
+  };
 
   return (
     <div className="flex flex-col min-h-screen print:min-h-0 print:h-auto">
@@ -933,6 +992,25 @@ export default function MatchesPage() {
                               Add
                             </Button>
                           )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              console.log('Table view button clicked');
+                              console.log('Full candidate data:', candidate);
+                              const resumePath = candidate.item_data?.file_info?.processed_path;
+                              console.log('Resume path:', resumePath);
+                              if (resumePath) {
+                                const url = getResumeUrl(resumePath);
+                                console.log('Setting selected resume to:', url);
+                                setSelectedResume(url);
+                              } else {
+                                console.error('No resume path found in candidate data:', candidate);
+                              }
+                            }}
+                          >
+                            View Resume
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -1021,6 +1099,27 @@ export default function MatchesPage() {
           </div>
         )}
       </div>
+
+      {/* Resume Viewer */}
+      <Sheet open={!!selectedResume} onOpenChange={(open) => {
+        console.log('Sheet state changed:', open);
+        console.log('Selected resume:', selectedResume);
+        if (!open) setSelectedResume(null);
+      }}>
+        <SheetContent side="right" className="w-full sm:max-w-[50%] p-6">
+          <SheetHeader>
+            <SheetTitle>Resume Viewer</SheetTitle>
+            <SheetDescription>
+              Viewing candidate&apos;s resume
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-6 h-[calc(100vh-200px)] overflow-auto">
+            {selectedResume && (
+              <PDFViewer filePath={selectedResume} />
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }
