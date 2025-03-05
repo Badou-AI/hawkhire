@@ -17,20 +17,6 @@ export async function POST(request: Request) {
     // Get organization data from request
     const organizationData = await request.json()
     
-    // Set the user's email for the trigger function
-    const { error: configError } = await supabase.rpc('set_config', {
-      key: 'app.current_user_email',
-      value: user.email
-    })
-
-    if (configError) {
-      console.error("Error setting user email:", configError)
-      return NextResponse.json(
-        { message: "Failed to set user configuration" },
-        { status: 500 }
-      )
-    }
-
     // Create organization
     const { data: organization, error: orgError } = await supabase
       .from("organizations")
@@ -42,16 +28,57 @@ export async function POST(request: Request) {
       console.error("Error creating organization:", orgError)
       return NextResponse.json(
         { message: orgError.message || "Failed to create organization" },
-        { status: 500 }
+        { 
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
       )
     }
 
-    return NextResponse.json(organization)
+    // Verify member creation
+    const { data: memberData, error: memberError } = await supabase
+      .from('organization_members')
+      .select('*')
+      .eq('organization_id', organization.id)
+      .eq('user_id', user.id)
+      .single()
+
+    if (memberError || !memberData) {
+      console.error("Error verifying member creation:", memberError)
+      // Clean up the organization if member creation failed
+      await supabase
+        .from("organizations")
+        .delete()
+        .eq('id', organization.id)
+      
+      return NextResponse.json(
+        { message: "Failed to create organization member" },
+        { 
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      )
+    }
+
+    return NextResponse.json(organization, {
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
   } catch (error) {
     console.error("Error in organization creation:", error)
     return NextResponse.json(
       { message: "Internal server error" },
-      { status: 500 }
+      { 
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      }
     )
   }
 } 

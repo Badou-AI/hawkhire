@@ -21,7 +21,12 @@ interface LocalizedLocationInputProps {
 }
 
 export function LocalizedLocationInput({
-  value,
+  value = {
+    city: { en: "", fr: "" },
+    state: { en: "", fr: "" },
+    country: { en: "", fr: "" },
+    postal_code: { en: "", fr: "" }
+  },
   onChange,
 }: LocalizedLocationInputProps) {
   const handleFieldChange = (
@@ -29,13 +34,14 @@ export function LocalizedLocationInput({
     lang: "en" | "fr",
     newValue: string
   ) => {
-    onChange({
+    const updatedValue = {
       ...value,
       [field]: {
-        ...value[field],
+        ...(value[field] || { en: "", fr: "" }),
         [lang]: newValue,
       },
-    })
+    }
+    onChange(updatedValue)
   }
 
   return (
@@ -51,7 +57,7 @@ export function LocalizedLocationInput({
           <div className="space-y-2">
             <label className="text-sm font-medium">City</label>
             <Input
-              value={value.city.fr}
+              value={value?.city?.en || ""}
               onChange={(e) => handleFieldChange("city", "en", e.target.value)}
               placeholder="Enter city name"
             />
@@ -59,7 +65,7 @@ export function LocalizedLocationInput({
           <div className="space-y-2">
             <label className="text-sm font-medium">State/Province</label>
             <Input
-              value={value.state.fr}
+              value={value?.state?.en || ""}
               onChange={(e) => handleFieldChange("state", "en", e.target.value)}
               placeholder="Enter state or province"
             />
@@ -67,7 +73,7 @@ export function LocalizedLocationInput({
           <div className="space-y-2">
             <label className="text-sm font-medium">Country</label>
             <Input
-              value={value.country.fr}
+              value={value?.country?.en || ""}
               onChange={(e) => handleFieldChange("country", "en", e.target.value)}
               placeholder="Enter country"
             />
@@ -75,7 +81,7 @@ export function LocalizedLocationInput({
           <div className="space-y-2">
             <label className="text-sm font-medium">Postal Code</label>
             <Input
-              value={value.postal_code.fr}
+              value={value?.postal_code?.en || ""}
               onChange={(e) => handleFieldChange("postal_code", "en", e.target.value)}
               placeholder="Enter postal code"
             />
@@ -89,7 +95,7 @@ export function LocalizedLocationInput({
           <div className="space-y-2">
             <label className="text-sm font-medium">Ville</label>
             <Input
-              value={value.city.fr || ""}
+              value={value?.city?.fr || ""}
               onChange={(e) => handleFieldChange("city", "fr", e.target.value)}
               placeholder="Entrez le nom de la ville"
             />
@@ -97,7 +103,7 @@ export function LocalizedLocationInput({
           <div className="space-y-2">
             <label className="text-sm font-medium">État/Province</label>
             <Input
-              value={value.state.fr || ""}
+              value={value?.state?.fr || ""}
               onChange={(e) => handleFieldChange("state", "fr", e.target.value)}
               placeholder="Entrez l'état ou la province"
             />
@@ -105,7 +111,7 @@ export function LocalizedLocationInput({
           <div className="space-y-2">
             <label className="text-sm font-medium">Pays</label>
             <Input
-              value={value.country.fr || ""}
+              value={value?.country?.fr || ""}
               onChange={(e) => handleFieldChange("country", "fr", e.target.value)}
               placeholder="Entrez le pays"
             />
@@ -113,7 +119,7 @@ export function LocalizedLocationInput({
           <div className="space-y-2">
             <label className="text-sm font-medium">Code Postal</label>
             <Input
-              value={value.postal_code.fr || ""}
+              value={value?.postal_code?.fr || ""}
               onChange={(e) => handleFieldChange("postal_code", "fr", e.target.value)}
               placeholder="Entrez le code postal"
             />

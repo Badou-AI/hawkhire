@@ -42,10 +42,10 @@ type FormValues = z.infer<typeof organizationCreationSchema>
 
 const defaultLocalizedText = { en: "", fr: "" }
 const defaultLocalizedLocation = {
-  city: defaultLocalizedText,
-  state: defaultLocalizedText,
-  country: defaultLocalizedText,
-  postal_code: defaultLocalizedText,
+  city: { en: "", fr: "" },
+  state: { en: "", fr: "" },
+  country: { en: "", fr: "" },
+  postal_code: { en: "", fr: "" }
 }
 
 export function OrganizationCreationForm() {
@@ -74,6 +74,7 @@ export function OrganizationCreationForm() {
       is_mock: false,
       mock_batch_id: null,
     },
+    mode: "onChange"
   })
 
   async function onSubmit(data: FormValues) {
@@ -108,13 +109,14 @@ export function OrganizationCreationForm() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Accept": "application/json",
         },
         body: JSON.stringify(data),
       })
 
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.message || "Failed to create organization")
+        const error = await response.json().catch(() => ({ message: response.statusText }))
+        throw new Error(error.message || `Failed to create organization: ${response.status}`)
       }
 
       const organization = await response.json()

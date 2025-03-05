@@ -1,0 +1,929 @@
+"""
+Batch job processing implementation with optimized performance.
+"""
+from typing import List, Dict, Any, Optional, AsyncGenerator, Tuple
+import asyncio
+import tempfile
+import time
+import os
+import sys
+import uuid
+import io
+print("Python executable path:")
+print(sys.executable)
+print("\nPython path:")
+print(sys.path)
+print("\nEnvironment:")
+import os
+print(os.environ.get('VIRTUAL_ENV'))
+
+import psutil
+from pathlib import Path
+import aiofiles
+import zipfile
+from fastapi import UploadFile, HTTPException, status
+from pydantic import BaseModel, ValidationError
+import requests
+from uuid import UUID
+from functools import lru_cache
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+import logging
+from ..services.metrics import metrics_service
+from ..services.semantic import semantic_service
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware import Middleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from collections import defaultdict
+import httpx
+import socket
+import shutil
+import json
+import concurrent.futures
+import hashlib
+import aiohttp
+
+
+# Constants
+LOCAL_API_URL = os.environ.get("LOCAL_API_URL", "http://127.0.0.1:8080")
+REMOTE_API_URL = os.environ.get("REMOTE_API_URL", "http://147.93.44.131:8000")
+
+# Configure logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+@dataclass
+class CacheEntry:
+    """Cache entry with expiration"""
+    data: Any
+    expires_at: datetime
+
+class JobValidationError(Exception):
+    """Custom exception for job validation errors"""
+    def __init__(self, errors: List[str]):
+        self.errors = errors
+        super().__init__(f"Job validation failed: {', '.join(errors)}")
+
+class BatchCreationResult(BaseModel):
+    """Result model for batch job creation"""
+    successful_jobs: List[Dict[str, Any]]
+    failed_jobs: List[Dict[str, Any]]
+    total_time: float
+    stats: Dict[str, int]
+
+@dataclass
+class ProcessedJobData:
+    """Data structure for processed job data"""
+    original_file: str
+    extracted_data: Dict[str, Any]
+    validation_errors: List[str] = field(default_factory=list)
+    processing_time: float = 0.0
+
+class JobProcessingEvent(BaseModel):
+    """Event emitted during job processing"""
+    event: str
+    total_files: int
+    processed_count: int
+    failed_count: int
+    file_name: Optional[str] = None
+    error: Optional[str] = None
+    unsupported_files: Optional[List[Dict[str, Any]]] = None
+    processing_details: Optional[Dict[str, Any]] = None
+
+class RateLimiter:
+    def __init__(self, requests_per_minute=30):
+        self.requests_per_minute = requests_per_minute
+        self.requests = defaultdict(list)
+        
+    def is_rate_limited(self, client_id: str) -> Tuple[bool, int]:
+        now = time.time()
+        minute_ago = now - 60
+        
+        # Clean old requests
+        self.requests[client_id] = [req_time for req_time in self.requests[client_id] 
+                                  if req_time > minute_ago]
+        
+        # Check if rate limited
+        if len(self.requests[client_id]) >= self.requests_per_minute:
+            retry_after = 60 - (now - self.requests[client_id][0])
+            return True, int(retry_after)
+            
+        # Add new request
+        self.requests[client_id].append(now)
+        return False, 0
+
+rate_limiter = RateLimiter()
+
+class BatchProcessor:
+    """Process batch uploads of job files"""
+    
+    def __init__(self):
+        """Initialize the batch processor"""
+        self.logger = logging.getLogger(__name__)
+        self.timeout = 60
+        self.local_client = httpx.AsyncClient(
+            base_url="http://127.0.0.1:8080",
+            timeout=self.timeout
+        )
+
+    async def process_zip(
+        self,
+        file: UploadFile,
+        organization_id: str,
+        is_mock: bool = False,
+        status: str = "DRAFT"
+    ) -> AsyncGenerator[JobProcessingEvent, None]:
+        """Process a ZIP file containing job files"""
+        try:
+            # Read the file content
+            content = await file.read()
+            
+            # Create a temporary directory
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_path = Path(temp_dir)
+                zip_path = temp_path / file.filename
+                
+                # Save the ZIP file
+                async with aiofiles.open(zip_path, 'wb') as f:
+                    await f.write(content)
+                
+                # Extract the ZIP file
+                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                    zip_ref.extractall(temp_path)
+                
+                # Process all files in the directory
+                processed_count = 0
+                failed_count = 0
+                total_files = len([f for f in temp_path.glob('**/*') if f.is_file() and f.suffix.lower() in {'.pdf', '.txt'}])
+                
+                if total_files == 0:
+                    yield JobProcessingEvent(
+                        event="error",
+                        error="No supported files found in ZIP",
+                        total_files=0,
+                        processed_count=0,
+                        failed_count=0
+                    )
+                    return
+                
+                # Process each file
+                for file_path in temp_path.glob('**/*'):
+                    if not file_path.is_file() or file_path.suffix.lower() not in {'.pdf', '.txt'}:
+                        continue
+                        
+                    try:
+                        await self._process_file(file_path, organization_id, status, is_mock)
+                        processed_count += 1
+                        yield JobProcessingEvent(
+                            event="progress",
+                            file_name=file_path.name,
+                            total_files=total_files,
+                            processed_count=processed_count,
+                            failed_count=failed_count
+                        )
+                    except Exception as e:
+                        failed_count += 1
+                        yield JobProcessingEvent(
+                            event="error",
+                            file_name=file_path.name,
+                            error=str(e),
+                            total_files=total_files,
+                            processed_count=processed_count,
+                            failed_count=failed_count
+                        )
+                
+                yield JobProcessingEvent(
+                    event="completed",
+                    total_files=total_files,
+                    processed_count=processed_count,
+                    failed_count=failed_count
+                )
+                
+        except Exception as e:
+            yield JobProcessingEvent(
+                event="error",
+                error=str(e),
+                total_files=0,
+                processed_count=0,
+                failed_count=0
+            )
+
+    async def _process_file(self, file_path: Path, organization_id: str, status: str, is_mock: bool = False) -> None:
+        """Process a single file"""
+        try:
+            # Extract text from file
+            if file_path.suffix.lower() == '.pdf':
+                text_content = await self._extract_text_from_pdf(file_path)
+            else:  # .txt file
+                async with aiofiles.open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                    text_content = await f.read()
+
+            if not text_content or len(text_content.strip()) < 10:
+                raise ValueError("Extracted text is too short or empty")
+
+            # Send to local API for processing
+            payload = {
+                "text": text_content,
+                "filename": file_path.name,
+                "organization_id": organization_id,
+                "is_mock": is_mock,
+                "status": status
+            }
+
+            async with self.local_client.post("/v1/jobs/extract-data", json=payload) as response:
+                if response.status_code != 200:
+                    raise Exception(f"API request failed: {response.text}")
+                job_data = response.json()
+                
+                if not job_data:
+                    raise ValueError("No job data extracted")
+
+                self.logger.info(f"Successfully processed {file_path.name}")
+
+        except Exception as e:
+            self.logger.error(f"Error processing file {file_path.name}: {str(e)}")
+            raise
+
+    async def _extract_text_from_pdf(self, file_path: Path) -> str:
+        """Extract text from a PDF file using PyPDF2"""
+        try:
+            import PyPDF2
+            text_content = []
+            
+            with open(file_path, 'rb') as file:
+                pdf_reader = PyPDF2.PdfReader(file)
+                for page in pdf_reader.pages:
+                    text = page.extract_text()
+                    if text:
+                        text_content.append(text)
+            
+            return "\n".join(text_content)
+            
+        except Exception as e:
+            self.logger.error(f"Error extracting text from PDF {file_path.name}: {str(e)}")
+            raise ValueError(f"Failed to extract text from PDF: {str(e)}")
+
+    def _test_remote_connection(self):
+        """Test connection to remote API and log diagnostics"""
+        try:
+            # Use requests for synchronous testing
+            session = requests.Session()
+            session.verify = False  # Disable SSL verification
+            
+            # Test base URL connection
+            logger.info(f"Testing connection to base URL: {self.remote_url}")
+            base_response = session.get(self.remote_url, timeout=10)
+            logger.info(f"Base URL connection successful: {base_response.status_code}")
+            
+            # Test specific endpoint
+            endpoint = f"{self.remote_url}/v1/tools/convert_pdf2text"
+            logger.info(f"Testing connection to endpoint: {endpoint}")
+            endpoint_response = session.head(endpoint, timeout=10)
+            logger.info(f"Endpoint connection successful: {endpoint_response.status_code}")
+            
+            # Network diagnostics
+            logger.info("Network diagnostics: ")
+            hostname = socket.gethostname()
+            ip_address = socket.gethostbyname(hostname)
+            logger.info(f"Hostname: {hostname}, IP: {ip_address}")
+            
+            # Test direct socket connection
+            logger.info(f"Testing direct socket connection to {self.remote_url.split('//')[1]}")
+            host, port = self.remote_url.split('//')[1].split(':')
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)
+            result = sock.connect_ex((host, int(port)))
+            if result == 0:
+                logger.info(f"Socket connection successful to {host}:{port}")
+            else:
+                logger.error(f"Socket connection failed to {host}:{port} with error code {result}")
+            sock.close()
+            
+        except Exception as e:
+            logger.error(f"Error testing remote connection: {str(e)}", exc_info=True)
+
+    def _get_system_metrics(self) -> Dict[str, float]:
+        """Get current system metrics"""
+        process = psutil.Process(os.getpid())
+        memory_info = process.memory_info()
+        return {
+            'memory_percent': process.memory_percent(),
+            'memory_rss': memory_info.rss / 1024 / 1024,  # MB
+            'cpu_percent': process.cpu_percent()
+        }
+
+    def _update_metrics(self, metric_type: str, value: Any):
+        """Update performance metrics"""
+        metrics_service.update_metrics(metric_type, value)
+
+    def _adjust_batch_size(self, file_size: int) -> int:
+        """Dynamically adjust batch size based on file size and system resources"""
+        metrics = self._get_system_metrics()
+        
+        # Reduce batch size if memory usage is high
+        if metrics['memory_percent'] > self.max_memory_percent:
+            return max(1, self.batch_size // 2)
+        
+        # Adjust based on file size
+        if file_size > 10 * 1024 * 1024:  # 10MB
+            return max(1, self.batch_size // 2)
+        elif file_size < 1 * 1024 * 1024:  # 1MB
+            return min(20, self.batch_size * 2)
+        
+        return self.batch_size
+
+    async def _stream_file(self, file: Path) -> AsyncGenerator[bytes, None]:
+        """Stream file content in chunks"""
+        async with aiofiles.open(file, 'rb') as f:
+            while chunk := await f.read(self.chunk_size):
+                yield chunk
+
+    @property
+    def metrics(self) -> Dict[str, Any]:
+        """Get current metrics"""
+        return self._metrics.copy()
+
+    def get_historical_metrics(self, days: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Get historical metrics for specified period"""
+        return metrics_service.get_historical_metrics(days=days)
+
+    def get_performance_summary(self) -> Dict[str, Any]:
+        """Get summary of processing performance"""
+        return metrics_service.get_performance_summary()
+
+    def _get_cache(self, key: str) -> Optional[Any]:
+        """Get value from cache if not expired"""
+        if not hasattr(self, '_cache'):
+            self._cache = {}
+            return None
+            
+        if key in self._cache:
+            entry = self._cache[key]
+            if entry.expires_at > datetime.now():
+                return entry.data
+            del self._cache[key]
+        return None
+
+    def _set_cache(self, key: str, value: Any, ttl: int = 3600) -> None:
+        """Set value in cache with expiration"""
+        if not hasattr(self, '_cache'):
+            self._cache = {}
+        
+        self._cache[key] = CacheEntry(
+            data=value,
+            expires_at=datetime.now() + timedelta(seconds=ttl)
+        )
+
+    @lru_cache(maxsize=100)
+    def _get_file_type(self, filename: str) -> str:
+        """Get file type from filename with caching"""
+        return filename.split('.')[-1].lower()
+
+    async def _process_files_in_parallel(
+        self,
+        files: List[Path],
+        organization_id: str,
+        is_mock: bool,
+        status: str
+    ) -> AsyncGenerator[JobProcessingEvent, None]:
+        """Process multiple files in parallel"""
+        tasks = []
+
+        for file in files:
+            task = asyncio.create_task(self._process_file(
+                file=file,
+                organization_id=organization_id,
+                is_mock=is_mock,
+                status=status
+            ))
+            tasks.append((file, task))
+
+        for file, task in tasks:
+            try:
+                result = await task
+                
+                yield JobProcessingEvent(
+                    event="file_processing_complete",
+                    total_files=len(files),
+                    processed_count=1,
+                    failed_count=0,
+                    file_name=file.name,
+                    processing_details={
+                        "stage": "completed",
+                        "current_file": file.name,
+                        "job_data": result.extracted_data
+                    }
+                )
+
+            except Exception as e:
+                logger.error(f"Error processing file {file.name}: {str(e)}", exc_info=True)
+                yield JobProcessingEvent(
+                    event="file_processing_failed",
+                    total_files=len(files),
+                    processed_count=0,
+                    failed_count=1,
+                    file_name=file.name,
+                    error=str(e)
+                )
+
+    async def _validate_job_data(self, job_data: Dict[str, Any]) -> Tuple[bool, List[str]]:
+        """Validate job data against schema"""
+        errors = []
+        
+        # Validate job type
+        valid_job_types = [
+            "FULL_TIME", "PART_TIME", "CONTRACT", "FREELANCE", 
+            "INTERNSHIP", "VOLUNTEER", "TO_BE_DETERMINED"
+        ]
+        
+        if "job_type" not in job_data:
+            errors.append("Missing job_type")
+        elif job_data["job_type"] not in valid_job_types:
+            errors.append(f"Invalid job type: {job_data['job_type']}")
+
+        # Validate required fields
+        required_fields = ["title", "description", "location"]
+        for field in required_fields:
+            if field not in job_data:
+                errors.append(f"Missing {field}")
+                continue
+
+        # Validate translations
+        langs = ["en", "fr"]
+        for field in ["title", "description"]:
+            if field in job_data:
+                for lang in langs:
+                    if lang not in job_data[field] or not job_data[field][lang]:
+                        errors.append(f"Missing {lang} translation for {field}")
+
+        # Validate location fields
+        if "location" in job_data:
+            required_loc_fields = ["city", "country"]  # State is not always required
+            
+            # Check if state is required (only for US)
+            is_us = False
+            if "country" in job_data["location"]:
+                country_en = job_data["location"]["country"].get("en", "").lower()
+                country_fr = job_data["location"]["country"].get("fr", "").lower()
+                is_us = "usa" in country_en or "united states" in country_en or "états-unis" in country_fr
+
+            if is_us:
+                required_loc_fields.append("state")
+
+            for loc_field in required_loc_fields:
+                if loc_field not in job_data["location"]:
+                    errors.append(f"Missing location.{loc_field}")
+                    continue
+
+                for lang in langs:
+                    if lang not in job_data["location"][loc_field] or not job_data["location"][loc_field][lang]:
+                        errors.append(f"Missing {lang} translation for location.{loc_field}")
+
+        # Validate requirements
+        if "requirements" in job_data:
+            if isinstance(job_data["requirements"], dict):
+                # Check if requirements has language keys
+                for lang in langs:
+                    if lang not in job_data["requirements"]:
+                        errors.append(f"Missing {lang} translation for requirements")
+                    elif not isinstance(job_data["requirements"][lang], list):
+                        errors.append(f"Requirements.{lang} must be a list")
+            elif isinstance(job_data["requirements"], list):
+                # If requirements is a list, it's probably the old format
+                # We'll convert it later, so no error here
+                pass
+            else:
+                errors.append("Requirements must be a dictionary with language keys or a list")
+        else:
+            errors.append("Missing requirements")
+
+        # Validate organization_id
+        try:
+            if "organization_id" not in job_data:
+                errors.append("Missing organization_id")
+            else:
+                UUID(job_data["organization_id"])
+        except ValueError:
+            errors.append("Invalid organization_id format")
+
+        return len(errors) == 0, errors
+
+    async def create_jobs_bulk(self, processed_jobs: List[ProcessedJobData]) -> AsyncGenerator[JobProcessingEvent, None]:
+        """Create jobs in bulk from processed data"""
+        valid_jobs = []
+        invalid_jobs = []
+        
+        # Filter out jobs with validation errors
+        for job_data in processed_jobs:
+            if not job_data.validation_errors:
+                valid_jobs.append(job_data.extracted_data)
+            else:
+                invalid_jobs.append(job_data)
+        
+        if not valid_jobs:
+            yield JobProcessingEvent(
+                event="batch_completed",
+                total_files=len(processed_jobs),
+                processed_count=0,
+                failed_count=len(processed_jobs),
+                processing_details={
+                    "stage": "job_creation",
+                    "total_time": 0,
+                    "successful_jobs": 0,
+                    "failed_jobs": len(processed_jobs),
+                    "error": "No valid jobs to create"
+                }
+            )
+            return
+        
+        try:
+            logger.info(f"Sending {len(valid_jobs)} valid jobs to bulk creation endpoint")
+            
+            # Log the first job data for debugging
+            if valid_jobs:
+                logger.info(f"Sample job data (first job): {json.dumps(valid_jobs[0], indent=2, default=str)}")
+                
+                # Validate required fields in each job
+                for i, job in enumerate(valid_jobs):
+                    missing_fields = []
+                    for field in ["title", "description", "location", "job_type", "organization_id"]:
+                        if field not in job:
+                            missing_fields.append(field)
+                    
+                    if missing_fields:
+                        logger.error(f"Job {i} is missing required fields: {', '.join(missing_fields)}")
+                    
+                    # Check nested fields
+                    if "location" in job:
+                        location = job["location"]
+                        missing_location_fields = []
+                        for field in ["city", "country"]:  # State is not always required
+                            if field not in location:
+                                missing_location_fields.append(field)
+                        
+                        if missing_location_fields:
+                            logger.error(f"Job {i} location is missing required fields: {', '.join(missing_location_fields)}")
+                    
+                    # Normalize the job data
+                    valid_jobs[i] = self._normalize_job_data(job)
+            
+            # Run the synchronous request in a thread pool to avoid blocking
+            def make_bulk_request():
+                session = requests.Session()
+                session.verify = False  # Disable SSL verification for development
+                
+                # Create the payload
+                payload = valid_jobs
+                
+                # Log the payload size
+                logger.debug(f"Sending bulk creation request with {len(payload)} jobs")
+                
+                return session.post(
+                    f"{LOCAL_API_URL}/v1/jobs/bulk",
+                    json=payload,
+                    timeout=60
+                )
+            
+            # Run the synchronous request in a thread pool
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(None, make_bulk_request)
+            
+            try:
+                response.raise_for_status()
+                result = response.json()
+                
+                # Log the result
+                logger.info(f"Bulk creation result: {json.dumps(result, indent=2, default=str)}")
+                
+                # Extract successful and failed jobs from the result
+                successful_jobs = result.get("successful_jobs", [])
+                failed_jobs = result.get("failed_jobs", [])
+                
+                yield JobProcessingEvent(
+                    event="batch_completed",
+                    total_files=len(processed_jobs),
+                    processed_count=len(successful_jobs),
+                    failed_count=len(failed_jobs) + len(invalid_jobs),
+                    processing_details={
+                        "stage": "job_creation",
+                        "total_time": result.get("total_time", 0),
+                        "successful_jobs": len(successful_jobs),
+                        "failed_jobs": len(failed_jobs) + len(invalid_jobs),
+                        "stats": result.get("stats", {})
+                    }
+                )
+            except requests.exceptions.HTTPError as e:
+                # Log the error response content
+                error_detail = "No error details"
+                try:
+                    if response.content:
+                        error_detail = response.json()
+                        logger.error(f"Error response from bulk creation endpoint: {json.dumps(error_detail, indent=2)}")
+                except Exception as json_error:
+                    logger.error(f"Error parsing error response: {str(json_error)}")
+                    error_detail = response.text if response.text else "No error details"
+                
+                logger.error(f"Error creating jobs in bulk: {e.__class__.__name__}: {str(e)}, Details: {error_detail}")
+                raise
+        except Exception as e:
+            logger.error(f"Error creating jobs in bulk: {str(e)}", exc_info=True)
+            
+            # Fallback to individual job creation
+            successful_count = 0
+            failed_count = 0
+            
+            logger.info(f"Falling back to individual job creation for {len(valid_jobs)} jobs")
+            
+            for i, job_data in enumerate(valid_jobs):
+                try:
+                    # Log the job data being sent
+                    logger.info(f"Attempting to create individual job {i+1}/{len(valid_jobs)}")
+                    
+                    # Ensure the job data is normalized
+                    normalized_job = self._normalize_job_data(job_data)
+                    
+                    # Run the synchronous request in a thread pool to avoid blocking
+                    def make_job_request():
+                        session = requests.Session()
+                        session.verify = False  # Disable SSL verification for development
+                        return session.post(
+                            f"{LOCAL_API_URL}/v1/jobs",
+                            json=normalized_job,
+                            timeout=30
+                        )
+                    
+                    # Run the synchronous request in a thread pool
+                    loop = asyncio.get_event_loop()
+                    response = await loop.run_in_executor(None, make_job_request)
+                    
+                    try:
+                        response.raise_for_status()
+                        job_result = response.json()
+                        logger.info(f"Successfully created job {i+1}: {job_result.get('id', 'No ID')}")
+                        successful_count += 1
+                    except requests.exceptions.HTTPError as e:
+                        failed_count += 1
+                        # Log the error response content
+                        error_detail = "No error details"
+                        try:
+                            if response.content:
+                                error_detail = response.json()
+                                logger.error(f"Error response from job creation endpoint: {json.dumps(error_detail, indent=2)}")
+                        except Exception as json_error:
+                            logger.error(f"Error parsing error response: {str(json_error)}")
+                            error_detail = response.text if response.text else "No error details"
+                        
+                        logger.error(f"Error creating individual job {i+1}: {e.__class__.__name__}: {str(e)}, Details: {error_detail}")
+                except Exception as job_error:
+                    failed_count += 1
+                    logger.error(f"Error creating individual job {i+1}: {str(job_error)}")
+            
+            yield JobProcessingEvent(
+                event="batch_completed",
+                total_files=len(processed_jobs),
+                processed_count=successful_count,
+                failed_count=failed_count + len(invalid_jobs),
+                processing_details={
+                    "stage": "job_creation",
+                    "total_time": sum(job.processing_time for job in processed_jobs),
+                    "successful_jobs": successful_count,
+                    "failed_jobs": failed_count + len(invalid_jobs),
+                    "error": str(e)
+                }
+            )
+
+    async def __aenter__(self):
+        """Async context manager entry"""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit"""
+        await self.local_client.aclose()
+
+    async def _create_processed_job_data(
+        self,
+        file: Path,
+        text_content: str,
+        organization_id: str,
+        is_mock: bool,
+        status: str,
+        start_time: float
+    ) -> ProcessedJobData:
+        """Create processed job data from text content"""
+        try:
+            logger.info(f"Creating job data for {file.name}, text length: {len(text_content)}")
+            
+            # Prepare request payload
+                payload = {
+                    "text": text_content,
+                "filename": file.name,
+                    "organization_id": organization_id,
+                "is_mock": is_mock,  # Keep is_mock flag for database purposes only
+                    "status": status
+                }
+                
+            # Send request to local API
+            local_api_url = f"{LOCAL_API_URL}/v1/jobs/extract-data"
+            logger.info(f"Sending request to local API: {local_api_url}")
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.post(local_api_url, json=payload) as response:
+                    response_text = await response.text()
+                    
+                    if response.status != 200:
+                        logger.error(f"Local API request failed with status {response.status}: {response_text}")
+                        
+                        if response.status == 400:
+                            # Validation error
+                            raise ValueError(f"Invalid job data: {response_text}")
+                        else:
+                            # Server error
+                            raise Exception(f"Failed to extract job data: {response_text}")
+                    
+                    try:
+                        extracted_data = json.loads(response_text)
+                    except json.JSONDecodeError:
+                        logger.error(f"Failed to parse API response as JSON: {response_text}")
+                        raise ValueError("Invalid response format from job data extraction")
+                    
+                    if not isinstance(extracted_data, dict):
+                        logger.error(f"Unexpected response type: {type(extracted_data)}")
+                        raise ValueError("Invalid response format from job data extraction")
+                    
+                    # Calculate processing time
+                    processing_time = time.time() - start_time
+                    
+                    # Normalize the extracted data
+                    try:
+                        normalized_data = self._normalize_job_data(extracted_data)
+                    except ValueError as ve:
+                        logger.error(f"Data normalization failed: {str(ve)}")
+                        raise ValueError(f"Failed to normalize job data: {str(ve)}")
+                    
+                    return ProcessedJobData(
+                        original_file=str(file),
+                        extracted_data=normalized_data,
+                        processing_time=processing_time
+                    )
+
+        except ValueError as ve:
+            logger.error(f"Validation error creating job data: {str(ve)}")
+            raise
+        except Exception as e:
+            logger.error(f"Error creating job data: {str(e)}")
+            raise
+
+    async def _extract_text_from_txt(self, file_path: Path) -> str:
+        """Extract text from a TXT file"""
+        try:
+            logger.info(f"Processing TXT file: {file_path.name}")
+            if not file_path.exists():
+                raise FileNotFoundError(f"TXT file not found: {file_path}")
+            
+            # Read the text file
+            async with aiofiles.open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                text_content = await f.read()
+            
+            logger.info(f"Successfully extracted text from TXT: {file_path.name}, content length: {len(text_content)}")
+            return text_content
+        except Exception as e:
+            logger.error(f"Error extracting text from TXT file {file_path.name}: {str(e)}", exc_info=True)
+            raise ValueError(f"Failed to extract text from TXT file: {str(e)}")
+    
+    # DOCX support removed as it's not needed 
+
+    def _normalize_job_data(self, job_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize job data to match required schema"""
+        normalized_data = job_data.copy()
+        
+        # Normalize title
+        if "title" in normalized_data:
+            if isinstance(normalized_data["title"], str):
+                normalized_data["title"] = {"en": normalized_data["title"], "fr": normalized_data["title"]}
+            elif not isinstance(normalized_data["title"], dict):
+                raise ValueError("Invalid title format")
+        else:
+            raise ValueError("Title is required")
+            
+        # Normalize description
+        if "description" in normalized_data:
+            if isinstance(normalized_data["description"], str):
+                normalized_data["description"] = {"en": normalized_data["description"], "fr": normalized_data["description"]}
+            elif not isinstance(normalized_data["description"], dict):
+                raise ValueError("Invalid description format")
+        else:
+            raise ValueError("Description is required")
+            
+        # Normalize requirements
+        if "requirements" in normalized_data:
+            if isinstance(normalized_data["requirements"], list):
+                normalized_data["requirements"] = {
+                    "en": normalized_data["requirements"],
+                    "fr": normalized_data["requirements"]
+                }
+            elif not isinstance(normalized_data["requirements"], dict):
+                raise ValueError("Invalid requirements format")
+        else:
+            normalized_data["requirements"] = {"en": [], "fr": []}
+            
+        # Normalize skills (convert to uppercase)
+        if "skills" in normalized_data:
+            if isinstance(normalized_data["skills"], list):
+                normalized_data["skills"] = [s.upper() for s in normalized_data["skills"]]
+            else:
+                raise ValueError("Skills must be a list")
+        else:
+            normalized_data["skills"] = []
+            
+        # Normalize location
+        if "location" in normalized_data:
+            location = normalized_data["location"]
+            normalized_location = {}
+            
+            # Normalize city
+            if "city" in location:
+                if isinstance(location["city"], str):
+                    normalized_location["city"] = {"en": location["city"], "fr": location["city"]}
+                elif isinstance(location["city"], dict):
+                    if not ("en" in location["city"] and "fr" in location["city"]):
+                        city_value = next(iter(location["city"].values()))
+                        normalized_location["city"] = {"en": city_value, "fr": city_value}
+                    else:
+                        normalized_location["city"] = location["city"]
+            else:
+                normalized_location["city"] = {"en": "", "fr": ""}
+                
+            # Normalize state
+            if "state" in location:
+                if isinstance(location["state"], str):
+                    normalized_location["state"] = {"en": location["state"], "fr": location["state"]}
+                elif isinstance(location["state"], dict):
+                    if not ("en" in location["state"] and "fr" in location["state"]):
+                        state_value = next(iter(location["state"].values()))
+                        normalized_location["state"] = {"en": state_value, "fr": state_value}
+                    else:
+                        normalized_location["state"] = location["state"]
+            else:
+                normalized_location["state"] = {"en": "", "fr": ""}
+                
+            # Normalize country
+            if "country" in location:
+                if isinstance(location["country"], str):
+                    normalized_location["country"] = {"en": location["country"], "fr": location["country"]}
+                elif isinstance(location["country"], dict):
+                    if not ("en" in location["country"] and "fr" in location["country"]):
+                        country_value = next(iter(location["country"].values()))
+                        normalized_location["country"] = {"en": country_value, "fr": country_value}
+                    else:
+                        normalized_location["country"] = location["country"]
+            else:
+                normalized_location["country"] = {"en": "", "fr": ""}
+                
+            # Normalize postal code
+            if "postal_code" in location:
+                if isinstance(location["postal_code"], str):
+                    normalized_location["postal_code"] = {"en": location["postal_code"], "fr": location["postal_code"]}
+                elif isinstance(location["postal_code"], dict):
+                    if not ("en" in location["postal_code"] and "fr" in location["postal_code"]):
+                        postal_value = next(iter(location["postal_code"].values()))
+                        normalized_location["postal_code"] = {"en": postal_value, "fr": postal_value}
+                    else:
+                        normalized_location["postal_code"] = location["postal_code"]
+            else:
+                normalized_location["postal_code"] = {"en": "", "fr": ""}
+
+            normalized_data["location"] = normalized_location
+        else:
+            normalized_data["location"] = {
+                "city": {"en": "", "fr": ""},
+                "state": {"en": "", "fr": ""},
+                "country": {"en": "", "fr": ""},
+                "postal_code": {"en": "", "fr": ""}
+            }
+
+        # Ensure job_type is valid
+        if "job_type" in normalized_data:
+            job_type = normalized_data["job_type"].upper()
+            valid_types = ["FULL_TIME", "PART_TIME", "CONTRACT", "FREELANCE", "INTERNSHIP", "VOLUNTEER", "TO_BE_DETERMINED"]
+            if job_type not in valid_types:
+                normalized_data["job_type"] = "TO_BE_DETERMINED"
+            else:
+                normalized_data["job_type"] = job_type
+        else:
+            normalized_data["job_type"] = "TO_BE_DETERMINED"
+
+        # Ensure organization_id is present
+        if "organization_id" not in normalized_data:
+            raise ValueError("organization_id is required")
+
+        # Add or normalize other required fields
+        if "remote" not in normalized_data:
+            normalized_data["remote"] = False
+
+        if "skills" not in normalized_data:
+            normalized_data["skills"] = []
+            
+        # Keep is_mock flag for database purposes only
+        normalized_data["is_mock"] = job_data.get("is_mock", False)
+
+        return normalized_data 

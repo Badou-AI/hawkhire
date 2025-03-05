@@ -29,6 +29,8 @@ from sentence_transformers import SentenceTransformer
 from pydantic import ValidationError
 from asyncio import Semaphore
 import traceback
+import logging
+import spacy
 
 # Load environment variables from .env file
 load_dotenv(Path(__file__).parent.parent / '.env')
@@ -61,7 +63,6 @@ app.add_middleware(
         "http://localhost:3000", 
         "http://127.0.0.1:3000", 
         "https://hawkhire.com", 
-        "https://beta.hawkhire.ai",
         "https://beta.hawkhire.com",
         FRONTEND_URL
     ],
@@ -3372,132 +3373,90 @@ async def convert_job_pdf(
 
 @app.post("/v1/jobs/extract-data", tags=["Jobs"])
 async def extract_job_data(body: Dict = Body(...)):
-    """Extract structured job data from text using LLM"""
-    text = body.get('text')
-    filename = body.get('filename')
-    
-    if not text:
-        raise HTTPException(status_code=422, detail="Text is required in request body")
-        
+    """Extract structured job data from text using spaCy"""
     try:
-        # Detect language to handle non-English content
-        language = await detect_language(text)
+        text = body.get('text')
+        filename = body.get('filename', '')
+        organization_id = body.get('organization_id')
+        is_mock = body.get('is_mock', False)
+        status = body.get('status', 'DRAFT')
         
-        # Extract structured data using LLM
-        schema = {
-            "type": "object",
-            "required": ["title", "description", "job_type", "location", "remote", "requirements", "skills"],
-            "properties": {
-                "title": {
-                    "type": "object",
-                    "properties": {
-                        "en": { "type": "string", "description": "Job title in English" },
-                        "fr": { "type": "string", "description": "Job title in French" }
-                    }
-                },
-                "description": {
-                    "type": "object",
-                    "properties": {
-                        "en": { "type": "string", "description": "Job description in English" },
-                        "fr": { "type": "string", "description": "Job description in French" }
-                    }
-                },
-                "job_type": {
-                    "type": "string",
-                    "enum": ["FULL_TIME", "PART_TIME", "CONTRACT", "FREELANCE", "INTERNSHIP", "VOLUNTEER", "TO_BE_DETERMINED"],
-                    "description": "Type of employment"
-                },
-                "location": {
-                    "type": "object",
-                    "properties": {
-                        "city": { 
-                            "type": "object",
-                            "properties": {
-                                "en": { "type": "string" },
-                                "fr": { "type": "string" }
-                            }
-                        },
-                        "state": { 
-                            "type": "object",
-                            "properties": {
-                                "en": { "type": "string" },
-                                "fr": { "type": "string" }
-                            }
-                        },
-                        "country": { 
-                            "type": "object",
-                            "properties": {
-                                "en": { "type": "string" },
-                                "fr": { "type": "string" }
-                            }
-                        },
-                        "postal_code": { 
-                            "type": "object",
-                            "properties": {
-                                "en": { "type": "string" },
-                                "fr": { "type": "string" }
-                            }
-                        }
-                    }
-                },
-                "remote": {
-                    "type": "boolean",
-                    "description": "Whether this is a remote position"
-                },
-                "requirements": {
-                    "type": "object",
-                    "properties": {
-                        "en": {
-                            "type": "array",
-                            "items": { "type": "string" }
-                        },
-                        "fr": {
-                            "type": "array",
-                            "items": { "type": "string" }
-                        }
-                    }
-                },
-                "skills": {
-                    "type": "array",
-                    "items": { "type": "string" },
-                    "description": "Required skills (uppercase constants)"
-                },
-                "salary_min": {
-                    "type": "number",
-                    "nullable": True,
-                    "description": "Minimum salary"
-                },
-                "salary_max": {
-                    "type": "number",
-                    "nullable": True,
-                    "description": "Maximum salary"
-                },
-                "salary_currency": {
-                    "type": "string",
-                    "default": "USD",
-                    "description": "Salary currency code"
-                },
-                "rating": {
-                    "type": "number",
-                    "nullable": True,
-                    "description": "Job rating"
-                }
-            }
+        if not text:
+            raise HTTPException(status_code=422, detail="Text is required in request body")
+            
+        if not organization_id:
+            raise HTTPException(status_code=422, detail="organization_id is required")
+
+        # Use spaCy to extract structured data
+        doc = nlp(text)
+        
+        # Extract title from first sentence
+        title = next((sent.text.strip() for sent in doc.sents), "Untitled Position")
+        
+        # Extract location information
+        locations = [ent.text for ent in doc.ents if ent.label_ == "GPE"]
+        location = {
+            "city": {"en": locations[0] if locations else "", "fr": ""},
+            "state": {"en": locations[1] if len(locations) > 1 else "", "fr": ""},
+            "country": {"en": locations[-1] if locations else "", "fr": ""},
+            "postal_code": {"en": "", "fr": ""}
         }
         
-        extracted_data = await semantic_service.extract_knowledge(
-            text=text,
-            schema=schema
-        )
-            
-        return extracted_data
+        # Extract skills (technical terms and proper nouns)
+        skills = list(set([
+            ent.text.upper() for ent in doc.ents 
+            if ent.label_ in ["ORG", "PRODUCT"] 
+            or (ent.text.isupper() and len(ent.text) > 1)
+        ]))
         
+        # Extract requirements (bullet points or numbered lists)
+        requirements = [
+            sent.text.strip() 
+            for sent in doc.sents 
+            if any(char in sent.text for char in ["•", "-", "●"]) 
+            or sent.text.strip().startswith(tuple("123456789"))
+        ]
+        
+        # Determine job type
+        job_types = {
+            "full time": "FULL_TIME",
+            "part time": "PART_TIME",
+            "contract": "CONTRACT",
+            "freelance": "FREELANCE",
+            "intern": "INTERNSHIP",
+            "volunteer": "VOLUNTEER"
+        }
+        
+        job_type = "TO_BE_DETERMINED"
+        text_lower = text.lower()
+        for key, value in job_types.items():
+            if key in text_lower:
+                job_type = value
+                break
+        
+        # Create structured response
+        extracted_data = {
+            "title": {"en": title, "fr": title},
+            "description": {"en": text, "fr": text},
+            "location": location,
+            "requirements": {"en": requirements, "fr": requirements},
+            "skills": skills,
+            "job_type": job_type,
+            "remote": "remote" in text_lower or "télétravail" in text_lower,
+            "organization_id": organization_id,
+            "status": status,
+            "is_mock": is_mock,
+            "salary_currency": "USD"
+        }
+        
+        logger.info(f"Successfully extracted job data from {filename}")
+        return extracted_data
+
     except Exception as e:
-        if isinstance(e, HTTPException):
-            raise e
+        logger.error(f"Error extracting job data from {filename}: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail=f"Error extracting job data: {str(e)}"
+            detail=f"Failed to extract job data: {str(e)}"
         )
 
 @app.post("/v1/test/process-resume", tags=["Testing"])
@@ -3661,3 +3620,125 @@ class ProcessingError(Exception):
 REMOTE_API_URL = os.getenv("REMOTE_API_URL")
 if not REMOTE_API_URL:
     print("Warning: REMOTE_API_URL not set, services will use mock mode")
+
+# Initialize logger
+logger = logging.getLogger(__name__)
+
+@app.post("/v1/jobs/extract-data", tags=["Jobs"])
+async def extract_job_data(body: Dict = Body(...)):
+    """Extract structured job data from text content"""
+    try:
+        text = body.get("text", "")
+        filename = body.get("filename", "unknown")
+        organization_id = body.get("organization_id")
+        is_mock = body.get("is_mock", False)
+        status = body.get("status", "DRAFT")
+
+        if not text or not organization_id:
+            raise ValueError("Text content and organization_id are required")
+
+        # Define the schema for job data extraction
+        schema = {
+            "title": {"type": "string", "required": True},
+            "description": {"type": "string", "required": True},
+            "requirements": {"type": "array", "items": {"type": "string"}},
+            "skills": {"type": "array", "items": {"type": "string"}},
+            "location": {
+                "type": "object",
+                "properties": {
+                    "city": {"type": "string"},
+                    "state": {"type": "string"},
+                    "country": {"type": "string"},
+                    "postal_code": {"type": "string"}
+                }
+            },
+            "job_type": {"type": "string"},
+            "remote": {"type": "boolean"},
+            "salary_min": {"type": "number"},
+            "salary_max": {"type": "number"},
+            "salary_currency": {"type": "string"}
+        }
+
+        # Extract job data using semantic service
+        extracted_data = await semantic_service.extract_knowledge(text, schema)
+        
+        if not extracted_data:
+            raise ValueError("Failed to extract job data from text")
+
+        # Add required fields
+        extracted_data["organization_id"] = organization_id
+        extracted_data["is_mock"] = is_mock
+        extracted_data["status"] = status
+
+        logger.info(f"Successfully extracted job data from {filename}")
+        return extracted_data
+
+    except ValueError as e:
+        logger.error(f"Validation error extracting job data from {filename}: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error extracting job data from {filename}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Load spaCy model for text processing
+try:
+    nlp = spacy.load("en_core_web_sm")
+except OSError:
+    logger.warning("spaCy model not found, downloading...")
+    import subprocess
+    subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"])
+    nlp = spacy.load("en_core_web_sm")
+except Exception as e:
+    logger.error(f"Failed to load spaCy model: {str(e)}")
+    raise
+
+def extract_structured_data(text: str) -> Dict:
+    """Extract structured job data from text using spaCy"""
+    doc = nlp(text)
+    
+    # Basic extraction of title (first sentence usually contains the role)
+    title = next((sent.text for sent in doc.sents), "").strip()
+    
+    # Extract skills (look for technical terms and proper nouns)
+    skills = list(set([
+        ent.text.upper() for ent in doc.ents 
+        if ent.label_ in ["ORG", "PRODUCT", "GPE"] 
+        or ent.text.isupper()
+    ]))
+    
+    # Extract location information (look for GPE entities)
+    locations = [ent.text for ent in doc.ents if ent.label_ == "GPE"]
+    location = {
+        "city": {"en": locations[0] if locations else "", "fr": ""},
+        "state": {"en": locations[1] if len(locations) > 1 else "", "fr": ""},
+        "country": {"en": locations[-1] if locations else "", "fr": ""},
+        "postal_code": {"en": "", "fr": ""}
+    }
+    
+    # Extract job type (look for common patterns)
+    job_types = ["FULL_TIME", "PART_TIME", "CONTRACT", "FREELANCE", "INTERNSHIP", "VOLUNTEER"]
+    job_type = next(
+        (jt for jt in job_types if jt.replace("_", " ").lower() in text.lower()),
+        "TO_BE_DETERMINED"
+    )
+    
+    # Extract requirements (look for bullet points or numbered lists)
+    requirements = [
+        sent.text.strip() 
+        for sent in doc.sents 
+        if any(char in sent.text for char in ["•", "-", "●"]) 
+        or sent.text.strip().startswith(tuple("123456789"))
+    ]
+    
+    return {
+        "title": {"en": title, "fr": title},  # Use same for both languages initially
+        "description": {"en": text, "fr": text},  # Use same for both languages initially
+        "requirements": {"en": requirements, "fr": requirements},
+        "skills": skills,
+        "location": location,
+        "job_type": job_type,
+        "remote": "remote" in text.lower(),
+        "salary_min": None,
+        "salary_max": None,
+        "salary_currency": "USD"
+    }

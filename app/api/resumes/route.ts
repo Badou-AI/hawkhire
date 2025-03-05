@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // Get API URL from environment variable or use default
-const API_URL = process.env.PYTHON_API_URL || 'https://api.hawkhire.ai'
+const API_URL = process.env.PYTHON_API_URL || 'http://127.0.0.1:8080'
 
 interface DocumentItem {
   id: string;
