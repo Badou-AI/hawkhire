@@ -1,4 +1,6 @@
+/** @type {import('tailwindcss').Config} */
 module.exports = {
+  darkMode: ["class"],
   content: [
     './pages/**/*.{ts,tsx}',
     './components/**/*.{ts,tsx}',
@@ -86,8 +88,44 @@ module.exports = {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
       },
+      typography: {
+        DEFAULT: {
+          css: {
+            maxWidth: '100%',
+            color: 'var(--tw-prose-body)',
+            lineHeight: '1.75',
+            p: {
+              marginTop: '1.25em',
+              marginBottom: '1.25em',
+            },
+            'ul > li': {
+              paddingLeft: '0.375em',
+              marginTop: '0.5em',
+              marginBottom: '0.5em',
+            },
+            'ol > li': {
+              paddingLeft: '0.375em',
+              marginTop: '0.5em',
+              marginBottom: '0.5em',
+            },
+            h2: {
+              marginTop: '1.5em',
+              marginBottom: '0.75em',
+              fontWeight: '700',
+            },
+            h3: {
+              marginTop: '1.5em',
+              marginBottom: '0.75em',
+              fontWeight: '600',
+            },
+          },
+        },
+      },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [
+    require("tailwindcss-animate"),
+    require("@tailwindcss/typography"),
+  ],
 }
 

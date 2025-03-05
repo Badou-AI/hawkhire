@@ -5,6 +5,7 @@ import { Share2, BookmarkIcon } from 'lucide-react'
 import { getJob, getSimilarJobs } from '@/app/api/jobs/client'
 import { type Job } from '@/types/job'
 import Link from 'next/link'
+import JobDescription from '@/components/jobs/job-description'
 
 type PageParams = {
   id: string;
@@ -89,7 +90,11 @@ export default async function JobPage({
 
               <div className="mt-8">
                 <h3 className="text-lg font-medium">Overview</h3>
-                <p className="mt-2 text-gray-600">{job.description}</p>
+                <JobDescription 
+                  textBlob={job.text_blob}
+                  fallbackDescription={job.description}
+                  className="mt-2"
+                />
               </div>
 
               <div className="mt-8">

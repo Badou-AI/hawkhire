@@ -1517,6 +1517,14 @@ class JobBase(BaseModel):
         description="ID of the mock data batch",
         example="550e8400-e29b-41d4-a716-446655440000"
     )
+    text_blob: Optional[LocalizedText] = Field(
+        None,
+        description="Markdown formatted job description in English and French",
+        example={
+            "en": "# Job Title\n\n## About Us\nWe are a leading company...\n\n## Requirements\n* 5+ years of experience\n* Strong communication skills",
+            "fr": "# Titre du Poste\n\n## À Propos de Nous\nNous sommes une entreprise leader...\n\n## Exigences\n* 5+ ans d'expérience\n* Solides compétences en communication"
+        }
+    )
 
 class JobCreate(JobBase):
     """Model for creating a new job"""

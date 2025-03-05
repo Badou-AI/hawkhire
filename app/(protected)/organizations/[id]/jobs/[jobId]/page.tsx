@@ -3,18 +3,18 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
-  ArrowLeft,
-  Briefcase,
-  Clock,
-  MapPin,
-  DollarSign,
-  Users,
-  Share2,
-  Bookmark,
-  Building,
-  Calendar,
-  CheckCircle,
-  Loader2
+    ArrowLeft,
+    Briefcase,
+    Clock,
+    MapPin,
+    DollarSign,
+    Users,
+    Share2,
+    Bookmark,
+    Building,
+    Calendar,
+    CheckCircle,
+    Loader2
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -24,6 +24,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { createClient } from "@/lib/supabase/client";
+import { JobDescription } from '@/components/jobs/job-description';
 
 interface JobDetail {
   id: string;
@@ -40,6 +41,11 @@ interface JobDetail {
   applicants: number;
   status: string;
   createdAt: string;
+  text_blob?: {
+    en?: string;
+    fr?: string;
+    [key: string]: string | undefined;
+  };
   organization: {
     id: string;
     name: string;
@@ -130,6 +136,8 @@ interface OrgData {
 export default function JobDetailPage() {
   const params = useParams();
   const router = useRouter();
+  // Use a hardcoded locale since we're in a server component
+  const locale = 'en';
   const organizationId = params.id as string;
   const jobId = params.jobId as string;
   
@@ -165,6 +173,7 @@ export default function JobDetailPage() {
             created_at,
             organization_id,
             processed,
+            text_blob,
             organizations (
               id,
               name,
@@ -276,6 +285,7 @@ export default function JobDetailPage() {
           applicants: applicantCount,
           status: jobData.status,
           createdAt: jobData.created_at,
+          text_blob: jobData.text_blob,
           organization: {
             id: orgData.id,
             name: getLocalizedText(orgData.name),
@@ -436,9 +446,11 @@ export default function JobDetailPage() {
                 {/* Job Description */}
                 <div className="mb-8">
                   <h2 className="text-xl font-semibold mb-4">Job Description</h2>
-                  <div className="prose max-w-none">
-                    <p className="whitespace-pre-line">{job.description}</p>
-                  </div>
+                  <JobDescription 
+                    textBlob={job.text_blob}
+                    fallbackDescription={job.description}
+                    locale={locale}
+                  />
                 </div>
                 
                 {/* Requirements */}

@@ -12,6 +12,8 @@ from ..services.api_client import APIClient
 from ..services.metrics import MetricsService
 import re
 import sys
+import tempfile
+from .file_processor import FileProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -61,9 +63,34 @@ class LLMClient:
                 logger.warning(f"Text is too short for reliable extraction: {text_length} chars")
                 raise ValueError("Text is too short for reliable extraction")
             
+            # Check if the text contains error messages from PDF extraction
+            error_indicators = [
+                '[Error extracting text from PDF',
+                'EOF marker not found',
+                '[PDF file not found:',
+                '[No readable text content found in'
+            ]
+            
+            has_extraction_error = any(indicator in text for indicator in error_indicators)
+            
+            # Clean up the text by removing excessive newlines and spaces
+            cleaned_text = text
+            if not has_extraction_error:
+                # Replace "\n " pattern (newline followed by space) with just space
+                cleaned_text = re.sub(r'\n\s+', ' ', text)
+                # Normalize multiple spaces to single space
+                cleaned_text = re.sub(r'\s+', ' ', cleaned_text)
+                # Normalize remaining newlines (replace multiple with double newlines)
+                cleaned_text = re.sub(r'\n{2,}', '\n\n', cleaned_text)
+                # Remove any leading/trailing whitespace
+                cleaned_text = cleaned_text.strip()
+            
+            # Generate markdown directly from the cleaned text instead of creating a temporary file
+            markdown_text = self._format_text_as_markdown(cleaned_text) if not has_extraction_error else cleaned_text
+            
             # Prepare payload for local API
             payload = {
-                "text": text,
+                "text": cleaned_text,
                 "filename": file_name,
                 "organization_id": organization_id,
                 "status": "DRAFT"
@@ -108,21 +135,44 @@ class LLMClient:
                                             if desc.startswith(title):
                                                 desc = desc[len(title):].strip()
                                         
-                                        # Fix excessive whitespace and newlines
-                                        # First, replace "\n " pattern (newline followed by space) with just space
-                                        desc = re.sub(r'\n\s+', ' ', desc)
-                                        
-                                        # Then normalize remaining newlines (replace multiple with double newlines)
-                                        desc = re.sub(r'\n{2,}', '\n\n', desc)
-                                        
-                                        # Remove any leading/trailing whitespace
+                                        # Clean up the description
+                                        desc = re.sub(r'\n\s+', ' ', desc)  # Replace newline+space with just space
+                                        desc = re.sub(r'\s+', ' ', desc)    # Normalize spaces
                                         desc = desc.strip()
                                         
                                         # Update the description
                                         extracted_data["description"][lang] = desc
                             
-                            # Also clean up the title if it has newlines
-                            title = re.sub(r'\n\s+', ' ', title)
+                            # Clean up the title if it has newlines
+                            if "title" in extracted_data and isinstance(extracted_data["title"], dict):
+                                for lang in ["en", "fr"]:
+                                    if lang in extracted_data["title"] and isinstance(extracted_data["title"][lang], str):
+                                        title = extracted_data["title"][lang]
+                                        # Replace newline+space with just space
+                                        title = re.sub(r'\n\s+', ' ', title)
+                                        # Normalize spaces
+                                        title = re.sub(r'\s+', ' ', title)
+                                        # Remove any leading/trailing whitespace
+                                        title = title.strip()
+                                        # Update the title
+                                        extracted_data["title"][lang] = title
+                            
+                            # Add the markdown text_blob field
+                            if "text_blob" not in extracted_data:
+                                extracted_data["text_blob"] = {}
+                            
+                            # Only use markdown_text if it's not an error message
+                            if has_extraction_error:
+                                # Use the description as a fallback for the text_blob
+                                if "description" in extracted_data and isinstance(extracted_data["description"], dict):
+                                    for lang in ["en", "fr"]:
+                                        if lang in extracted_data["description"] and isinstance(extracted_data["description"][lang], str):
+                                            desc = extracted_data["description"][lang]
+                                            # Convert the description to markdown
+                                            extracted_data["text_blob"][lang] = self._format_text_as_markdown(desc)
+                            else:
+                                extracted_data["text_blob"]["en"] = markdown_text
+                                extracted_data["text_blob"]["fr"] = markdown_text
                             
                             logger.info(f"Successfully extracted job data from {file_name}")
                             return extracted_data
@@ -149,7 +199,7 @@ class LLMClient:
                     nlp = spacy.load("en_core_web_sm")
                 
                 # Process text with spaCy
-                doc = nlp(text)
+                doc = nlp(cleaned_text)
                 
                 # Extract title from first sentence
                 title = next((sent.text.strip() for sent in doc.sents), "Untitled Position")
@@ -311,7 +361,8 @@ class LLMClient:
                     "remote": "remote" in text_lower or "télétravail" in text_lower or "à distance" in text_lower,
                     "organization_id": organization_id,
                     "status": "DRAFT",
-                    "is_mock": False
+                    "is_mock": False,
+                    "text_blob": {"en": markdown_text, "fr": markdown_text}
                 }
                 
                 logger.info(f"Successfully extracted job data locally using spaCy for {file_name}")
@@ -342,6 +393,100 @@ class LLMClient:
             logger.error(f"Error extracting job data: {str(e)}")
             # Re-raise the error instead of creating fallback data
             raise Exception(f"Failed to extract job data: {str(e)}")
+    
+    def _format_text_as_markdown(self, text: str) -> str:
+        """Format extracted text as Markdown
+        
+        Args:
+            text: Raw extracted text
+            
+        Returns:
+            Markdown formatted text
+        """
+        logger.info("Formatting text as Markdown")
+        
+        try:
+            # Check if text is empty or contains error messages
+            if not text or len(text.strip()) < 10 or any(error in text for error in [
+                '[Error extracting text from PDF',
+                'EOF marker not found',
+                '[PDF file not found:',
+                '[No readable text content found in'
+            ]):
+                logger.warning(f"Text is too short or contains errors: {text[:100]}")
+                return text
+            
+            # Clean up the text first - normalize spaces and newlines while preserving formatting
+            # Replace multiple consecutive spaces (more than 2) with 2 spaces
+            text = re.sub(r' {3,}', '  ', text)
+            
+            # Replace multiple consecutive newlines (more than 2) with 2 newlines
+            text = re.sub(r'\n{3,}', '\n\n', text)
+            
+            # Identify potential headers (all caps lines or lines ending with colon)
+            lines = text.split('\n')
+            markdown_lines = []
+            
+            for i, line in enumerate(lines):
+                line = line.strip()
+                if not line:
+                    markdown_lines.append('')
+                    continue
+                
+                # Check if this line looks like a header
+                if (line.isupper() and len(line) > 3 and len(line) < 100) or \
+                   (line.endswith(':') and len(line) < 100):
+                    # Make it a markdown header
+                    if i > 0 and markdown_lines and markdown_lines[-1]:  # Add extra line before header if needed
+                        markdown_lines.append('')
+                    markdown_lines.append(f"## {line}")
+                    if i < len(lines) - 1 and lines[i+1].strip():  # Add extra line after header if needed
+                        markdown_lines.append('')
+                # Check if this line looks like a subheader (title case, not too long)
+                elif line.istitle() and len(line) > 3 and len(line) < 80 and not line.endswith('.'):
+                    if i > 0 and markdown_lines and markdown_lines[-1]:  # Add extra line before subheader if needed
+                        markdown_lines.append('')
+                    markdown_lines.append(f"### {line}")
+                    if i < len(lines) - 1 and lines[i+1].strip():  # Add extra line after subheader if needed
+                        markdown_lines.append('')
+                # Check if this line looks like a list item
+                elif line.startswith(('•', '-', '*', '○', '·', '>', '»')) or \
+                     re.match(r'^\d+[\.\)]\s', line):
+                    # Ensure it's formatted as a markdown list item
+                    if not line.startswith(('- ', '* ', '1. ')):
+                        if line.startswith(('•', '○', '·')):
+                            line = '- ' + line[1:].strip()
+                        elif line.startswith(('>', '»')):
+                            line = '- ' + line[1:].strip()
+                        elif re.match(r'^\d+[\.\)]\s', line):
+                            # Already a numbered list, just ensure proper spacing
+                            num_match = re.match(r'^\d+[\.\)]', line)
+                            if num_match:
+                                num_part = num_match.group(0)
+                                line = num_part + ' ' + line[len(num_part):].strip()
+                    markdown_lines.append(line)
+                else:
+                    # Regular paragraph text
+                    markdown_lines.append(line)
+            
+            # Join the lines back together
+            markdown_text = '\n'.join(markdown_lines)
+            
+            # Add some basic markdown formatting
+            # Bold text that appears to be important (all caps within sentences)
+            markdown_text = re.sub(r'([^A-Z]|^)([A-Z]{2,}[A-Z\s]{0,10})([^A-Z]|$)', 
+                                  r'\1**\2**\3', markdown_text)
+            
+            # Ensure proper spacing for lists
+            markdown_text = re.sub(r'\n(- .*)\n(- )', r'\n\1\n\2', markdown_text)
+            
+            logger.info("Successfully formatted text as Markdown")
+            return markdown_text
+            
+        except Exception as e:
+            logger.error(f"Error formatting text as Markdown: {str(e)}", exc_info=True)
+            # Return the original text if formatting fails
+            return text
     
     async def validate_schema(self, job_data: Dict[str, Any]) -> List[str]:
         """Validate job data against schema

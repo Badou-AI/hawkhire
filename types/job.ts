@@ -18,6 +18,7 @@ export interface Job {
     company_type: string
   }
   processed?: ProcessedJob
+  text_blob?: LocalizedText
 }
 
 export interface ProcessedJob {
@@ -38,4 +39,13 @@ export interface ProcessedJob {
   // Processing metadata
   error_message?: string
   processing_duration?: number
+}
+
+/**
+ * Represents text content in multiple languages
+ */
+export interface LocalizedText {
+  en?: string
+  fr?: string
+  [key: string]: string | undefined
 } 
