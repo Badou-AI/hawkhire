@@ -3,13 +3,13 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
 } from "@/components/ui/dialog"
 import { Upload, AlertCircle } from "lucide-react"
 import { Label } from "@/components/ui/label"
@@ -49,6 +49,7 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
   const [error, setError] = useState<string>("")
   const [unsupportedFiles, setUnsupportedFiles] = useState<Array<{name: string, type: string, reason: string}>>([])
   const [currentFile, setCurrentFile] = useState<string>("")
+  const [isOpen, setIsOpen] = useState(false)
 
   // Add useEffect for debugging
   useEffect(() => {
@@ -72,6 +73,30 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
       processingTime: 0,
       unsupportedCount: 0
     })
+  }
+
+  // Reset function to clear state when dialog is closed
+  const handleClose = () => {
+    setIsOpen(false)
+  }
+
+  // Reset function when dialog is opened
+  const handleOpen = () => {
+    setIsOpen(true)
+    // Don't reset the stats if we're in completed state
+    if (processingStatus !== 'completed') {
+      setFile(null)
+      setError("")
+      setCurrentFile("")
+      setProcessingStatus('idle')
+      setStats({
+        totalFiles: 0,
+        processedCount: 0,
+        failedCount: 0,
+        processingTime: 0,
+        unsupportedCount: 0
+      })
+    }
   }
 
   const handleUpload = async () => {
@@ -230,7 +255,7 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
   }
 
   return (
-    <Dialog>
+    <Dialog open={isOpen} onOpenChange={handleOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" className="gap-2">
           <Upload className="h-4 w-4" />
@@ -247,36 +272,40 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
         </DialogHeader>
 
         <div className="space-y-6">
-          <FileDropzone
-            onFileSelect={handleFileSelect}
-            disabled={processingStatus === 'uploading' || processingStatus === 'processing'}
-            acceptedTypes={['.zip']}
-            description="Drop your ZIP file here"
-            fileTypeDescription="ZIP files only"
-            maxSize={50}
-          />
+          {processingStatus !== 'completed' && (
+            <FileDropzone
+              onFileSelect={handleFileSelect}
+              disabled={processingStatus === 'uploading' || processingStatus === 'processing'}
+              acceptedTypes={['.zip']}
+              description="Drop your ZIP file here"
+              fileTypeDescription="ZIP files only"
+              maxSize={50}
+            />
+          )}
 
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="is-mock"
-                checked={isMock}
-                onCheckedChange={(checked) => setIsMock(checked as boolean)}
-                disabled={processingStatus === 'uploading' || processingStatus === 'processing'}
-              />
-              <Label htmlFor="is-mock">Mark jobs as mock data</Label>
-            </div>
+          {processingStatus !== 'completed' && (
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="is-mock"
+                  checked={isMock}
+                  onCheckedChange={(checked) => setIsMock(checked as boolean)}
+                  disabled={processingStatus === 'uploading' || processingStatus === 'processing'}
+                />
+                <Label htmlFor="is-mock">Mark jobs as mock data</Label>
+              </div>
 
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="is-published"
-                checked={isPublished}
-                onCheckedChange={(checked) => setIsPublished(checked as boolean)}
-                disabled={processingStatus === 'uploading' || processingStatus === 'processing'}
-              />
-              <Label htmlFor="is-published">Publish jobs immediately</Label>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="is-published"
+                  checked={isPublished}
+                  onCheckedChange={(checked) => setIsPublished(checked as boolean)}
+                  disabled={processingStatus === 'uploading' || processingStatus === 'processing'}
+                />
+                <Label htmlFor="is-published">Publish jobs immediately</Label>
+              </div>
             </div>
-          </div>
+          )}
 
           {processingStatus !== 'idle' && (
             <div className="space-y-4">
@@ -286,6 +315,8 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
                 currentFile={currentFile || file?.name}
                 error={error}
                 unsupportedFiles={unsupportedFiles}
+                organizationId={organizationId}
+                onClose={handleClose}
               />
             </div>
           )}
@@ -299,15 +330,17 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
         </div>
 
         <DialogFooter>
-          <Button
-            type="submit"
-            onClick={handleUpload}
-            disabled={!file || processingStatus === 'uploading' || processingStatus === 'processing'}
-          >
-            {processingStatus === 'uploading' || processingStatus === 'processing'
-              ? "Processing..."
-              : "Upload and Process"}
-          </Button>
+          {processingStatus !== 'completed' && (
+            <Button
+              type="submit"
+              onClick={handleUpload}
+              disabled={!file || processingStatus === 'uploading' || processingStatus === 'processing'}
+            >
+              {processingStatus === 'uploading' || processingStatus === 'processing'
+                ? "Processing..."
+                : "Upload and Process"}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

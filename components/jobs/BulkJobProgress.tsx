@@ -1,6 +1,8 @@
 import { Progress } from "@/components/ui/progress";
 import { Alert } from "@/components/ui/alert";
 import { CheckCircleIcon, XCircleIcon, AlertTriangleIcon, FileIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
 
 interface BulkJobProgressProps {
   stats: {
@@ -14,9 +16,19 @@ interface BulkJobProgressProps {
   currentFile?: string;
   error?: string;
   unsupportedFiles?: Array<{name: string, type: string, reason: string}>;
+  organizationId?: string;
+  onClose?: () => void;
 }
 
-export function BulkJobProgress({ stats, processingStatus, currentFile, error, unsupportedFiles }: BulkJobProgressProps) {
+export function BulkJobProgress({ 
+  stats, 
+  processingStatus, 
+  currentFile, 
+  error, 
+  unsupportedFiles,
+  organizationId,
+  onClose
+}: BulkJobProgressProps) {
   const progress = stats.totalFiles > 0 
     ? ((stats.processedCount + stats.failedCount + (stats.unsupportedCount || 0)) / stats.totalFiles) * 100
     : 0;
@@ -48,15 +60,13 @@ export function BulkJobProgress({ stats, processingStatus, currentFile, error, u
           </div>
         </div>
 
-        {(stats.unsupportedCount ?? 0) > 0 && (
-          <div className="flex items-center gap-2 p-4 bg-yellow-50 rounded-lg">
-            <AlertTriangleIcon className="w-5 h-5 text-yellow-500" />
-            <div>
-              <div className="text-sm font-medium">Unsupported</div>
-              <div className="text-2xl font-bold">{stats.unsupportedCount}</div>
-            </div>
+        <div className="flex items-center gap-2 p-4 bg-yellow-50 rounded-lg">
+          <AlertTriangleIcon className="w-5 h-5 text-yellow-500" />
+          <div>
+            <div className="text-sm font-medium">Unsupported</div>
+            <div className="text-2xl font-bold">{stats.unsupportedCount || 0}</div>
           </div>
-        )}
+        </div>
       </div>
 
       {unsupportedFiles && unsupportedFiles.length > 0 && (
@@ -77,15 +87,33 @@ export function BulkJobProgress({ stats, processingStatus, currentFile, error, u
         </div>
       )}
 
-      {currentFile && (
+      {currentFile && processingStatus !== 'completed' && (
         <div className="text-sm text-gray-600">
           Processing: {currentFile}
         </div>
       )}
 
       {processingStatus === 'completed' && (
-        <div className="text-sm text-gray-600">
-          Completed in {stats.processingTime.toFixed(1)}s
+        <div className="space-y-4">
+          <div className="text-sm text-gray-600 flex items-center gap-2">
+            <CheckCircleIcon className="w-4 h-4 text-green-500" />
+            Processing completed in {stats.processingTime.toFixed(1)}s
+          </div>
+          
+          {organizationId && (
+            <div className="flex gap-2 justify-end mt-4">
+              {onClose && (
+                <Button variant="outline" onClick={onClose}>
+                  Close
+                </Button>
+              )}
+              <Link href={`/organizations/${organizationId}/jobs`}>
+                <Button>
+                  Go to Jobs
+                </Button>
+              </Link>
+            </div>
+          )}
         </div>
       )}
 
@@ -95,15 +123,17 @@ export function BulkJobProgress({ stats, processingStatus, currentFile, error, u
         </Alert>
       )}
 
-      <div className="mt-4 space-y-4">
-        <div className="text-sm text-gray-500">
-          <p>
-            Uploading and processing your job descriptions. This may take a few
-            minutes depending on the number of files.
-          </p>
-          <p className="mt-2">Note: Only PDF and TXT files are supported.</p>
+      {processingStatus !== 'completed' && (
+        <div className="mt-4 space-y-4">
+          <div className="text-sm text-gray-500">
+            <p>
+              Uploading and processing your job descriptions. This may take a few
+              minutes depending on the number of files.
+            </p>
+            <p className="mt-2">Note: Only PDF and TXT files are supported.</p>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 } 
