@@ -91,7 +91,7 @@ export default async function JobPage({
               <div className="mt-8">
                 <h3 className="text-lg font-medium">Overview</h3>
                 <JobDescription 
-                  textBlob={job.text_blob}
+                  summary={job.summary}
                   fallbackDescription={job.description}
                   className="mt-2"
                 />

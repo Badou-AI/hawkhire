@@ -1,48 +1,31 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
-import { LocalizedText } from '@/types/job';
 import { useTranslation } from 'react-i18next';
 import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
 
 interface JobDescriptionProps {
-  textBlob?: LocalizedText;
+  summary?: string;
   fallbackDescription?: string;
   className?: string;
-  locale?: string;
 }
 
 /**
  * Component for rendering job descriptions with Markdown formatting
- * Uses the text_blob field if available, otherwise falls back to the regular description
+ * Uses the summary field if available, otherwise falls back to the regular description
  */
 export const JobDescription: React.FC<JobDescriptionProps> = ({
-  textBlob,
+  summary,
   fallbackDescription = '',
   className = '',
-  locale = 'en', // Default to English if not provided
 }) => {
   const { t } = useTranslation();
 
   const getTextContent = () => {
-    // If textBlob is not provided, use fallback
-    if (!textBlob) return fallbackDescription;
-
-    // Try to get content in current locale
-    const localeContent = locale === 'fr' ? textBlob.fr : textBlob.en;
+    // If summary is provided and not empty, use it
+    if (summary) return summary;
     
-    // If current locale content exists and is not an error message, use it
-    if (localeContent && !isExtractionError(localeContent)) {
-      return localeContent;
-    }
-    
-    // Try the other locale if current has an error
-    const otherLocaleContent = locale === 'fr' ? textBlob.en : textBlob.fr;
-    if (otherLocaleContent && !isExtractionError(otherLocaleContent)) {
-      return otherLocaleContent;
-    }
-    
-    // If both locales have errors or are empty, use fallback
+    // Otherwise use fallback
     return fallbackDescription;
   };
 
@@ -81,16 +64,14 @@ export const JobDescription: React.FC<JobDescriptionProps> = ({
     // Track if we're in a list
     let inList = false;
     let listIndentation = 0;
-    let consecutiveNumberedItems = 0;
     
     for (let i = 0; i < lines.length; i++) {
-      let line = lines[i].trim();
+      const line = lines[i].trim();
       
       if (!line) {
         // Empty line - add it to maintain paragraph breaks
         processedLines.push('');
         inList = false;
-        consecutiveNumberedItems = 0;
         continue;
       }
       
@@ -104,7 +85,6 @@ export const JobDescription: React.FC<JobDescriptionProps> = ({
         processedLines.push(`- ${itemContent}`);
         inList = true;
         listIndentation = bulletMatch[1].length;
-        consecutiveNumberedItems = 0;
         continue;
       }
       
@@ -115,7 +95,6 @@ export const JobDescription: React.FC<JobDescriptionProps> = ({
         processedLines.push(`${number}. ${itemContent}`);
         inList = true;
         listIndentation = numberedMatch[2].length;
-        consecutiveNumberedItems++;
         continue;
       }
       
@@ -137,7 +116,6 @@ export const JobDescription: React.FC<JobDescriptionProps> = ({
         processedLines.push(`## ${line.charAt(0).toUpperCase() + line.slice(1).toLowerCase()}`);
         processedLines.push('');
         inList = false;
-        consecutiveNumberedItems = 0;
         continue;
       }
       
@@ -150,40 +128,12 @@ export const JobDescription: React.FC<JobDescriptionProps> = ({
         processedLines.push(`### ${line}`);
         processedLines.push('');
         inList = false;
-        consecutiveNumberedItems = 0;
         continue;
-      }
-      
-      // Check for lines that look like they might be numbered list items without proper formatting
-      // For example: "1 - Some text" or "1. Some text" without proper spacing
-      if (line.match(/^\d+\s*[\-\.\)]\s+/) && !inList) {
-        // Convert to proper numbered list format
-        line = line.replace(/^(\d+)\s*[\-\.\)]\s+/, '$1. ');
-        processedLines.push(line);
-        inList = true;
-        consecutiveNumberedItems = 1;
-        continue;
-      }
-      
-      // Check for lines that might be continuing a numbered list
-      if (consecutiveNumberedItems > 0 && line.match(/^\d+/) && !numberedMatch) {
-        // This might be a numbered item without proper formatting
-        const numMatch = line.match(/^(\d+)/);
-        if (numMatch) {
-          const restOfLine = line.substring(numMatch[0].length).trim();
-          if (restOfLine.startsWith('-') || restOfLine.startsWith('.') || restOfLine.startsWith(')')) {
-            line = `${numMatch[0]}. ${restOfLine.substring(1).trim()}`;
-            processedLines.push(line);
-            consecutiveNumberedItems++;
-            continue;
-          }
-        }
       }
       
       // Regular line
       processedLines.push(line);
       inList = false;
-      consecutiveNumberedItems = 0;
     }
     
     // Join the processed lines
@@ -255,7 +205,11 @@ export const JobDescription: React.FC<JobDescriptionProps> = ({
     );
   };
 
-  return <div className={className}>{renderContent()}</div>;
+  return (
+    <div className={cn("job-description", className)}>
+      {renderContent()}
+    </div>
+  );
 };
 
 export default JobDescription; 

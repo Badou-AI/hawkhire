@@ -14,6 +14,8 @@ import re
 import sys
 import tempfile
 from .file_processor import FileProcessor
+import copy
+from uuid import UUID
 
 logger = logging.getLogger(__name__)
 
@@ -122,59 +124,60 @@ class LLMClient:
                                 logger.info(f"Adding missing organization_id to extracted data")
                                 extracted_data["organization_id"] = organization_id
                             
-                            # Clean up the description
-                            if "description" in extracted_data and isinstance(extracted_data["description"], dict):
-                                for lang in ["en", "fr"]:
-                                    if lang in extracted_data["description"] and isinstance(extracted_data["description"][lang], str):
-                                        # Format the description better
-                                        desc = extracted_data["description"][lang]
-                                        
-                                        # Remove the title from the beginning if it's there
-                                        if "title" in extracted_data and isinstance(extracted_data["title"], dict) and lang in extracted_data["title"]:
-                                            title = extracted_data["title"][lang]
-                                            if desc.startswith(title):
-                                                desc = desc[len(title):].strip()
-                                        
-                                        # Clean up the description
-                                        desc = re.sub(r'\n\s+', ' ', desc)  # Replace newline+space with just space
-                                        desc = re.sub(r'\s+', ' ', desc)    # Normalize spaces
-                                        desc = desc.strip()
-                                        
-                                        # Update the description
-                                        extracted_data["description"][lang] = desc
+                            # Clean up the description - updated for single language model
+                            if "description" in extracted_data:
+                                if isinstance(extracted_data["description"], dict):
+                                    # Handle legacy format (convert to single language)
+                                    lang = extracted_data.get("language", "en")
+                                    if lang in extracted_data["description"]:
+                                        extracted_data["description"] = extracted_data["description"][lang]
+                                    else:
+                                        # Fallback to English or first available language
+                                        if "en" in extracted_data["description"]:
+                                            extracted_data["description"] = extracted_data["description"]["en"]
+                                        else:
+                                            # Get the first value from the dict
+                                            first_lang = next(iter(extracted_data["description"]))
+                                            extracted_data["description"] = extracted_data["description"][first_lang]
+                                
+                                # Ensure description is properly formatted
+                                if isinstance(extracted_data["description"], str):
+                                    extracted_data["description"] = self._format_text_as_markdown(extracted_data["description"])
                             
-                            # Clean up the title if it has newlines
-                            if "title" in extracted_data and isinstance(extracted_data["title"], dict):
-                                for lang in ["en", "fr"]:
-                                    if lang in extracted_data["title"] and isinstance(extracted_data["title"][lang], str):
-                                        title = extracted_data["title"][lang]
-                                        # Replace newline+space with just space
-                                        title = re.sub(r'\n\s+', ' ', title)
-                                        # Normalize spaces
-                                        title = re.sub(r'\s+', ' ', title)
-                                        # Remove any leading/trailing whitespace
-                                        title = title.strip()
-                                        # Update the title
-                                        extracted_data["title"][lang] = title
+                            # Handle requirements - updated for single language model
+                            if "requirements" in extracted_data:
+                                if isinstance(extracted_data["requirements"], dict):
+                                    # Handle legacy format (convert to single language)
+                                    lang = extracted_data.get("language", "en")
+                                    if lang in extracted_data["requirements"]:
+                                        extracted_data["requirements"] = extracted_data["requirements"][lang]
+                                    elif "en" in extracted_data["requirements"]:
+                                        extracted_data["requirements"] = extracted_data["requirements"]["en"]
+                                    else:
+                                        # Get the first value from the dict
+                                        first_lang = next(iter(extracted_data["requirements"]))
+                                        extracted_data["requirements"] = extracted_data["requirements"][first_lang]
                             
-                            # Add the markdown text_blob field
-                            if "text_blob" not in extracted_data:
-                                extracted_data["text_blob"] = {}
+                            # Ensure language is set
+                            if "language" not in extracted_data:
+                                extracted_data["language"] = "en"
                             
-                            # Only use markdown_text if it's not an error message
-                            if has_extraction_error:
-                                # Use the description as a fallback for the text_blob
-                                if "description" in extracted_data and isinstance(extracted_data["description"], dict):
-                                    for lang in ["en", "fr"]:
-                                        if lang in extracted_data["description"] and isinstance(extracted_data["description"][lang], str):
-                                            desc = extracted_data["description"][lang]
-                                            # Convert the description to markdown
-                                            extracted_data["text_blob"][lang] = self._format_text_as_markdown(desc)
-                            else:
-                                extracted_data["text_blob"]["en"] = markdown_text
-                                extracted_data["text_blob"]["fr"] = markdown_text
+                            # Create structured response
+                            extracted_data = {
+                                "title": {"en": title, "fr": title},
+                                "description": {"en": description, "fr": description},
+                                "location": location,
+                                "requirements": {"en": requirements, "fr": requirements},
+                                "skills": skills,
+                                "job_type": job_type,
+                                "remote": "remote" in text_lower or "télétravail" in text_lower or "à distance" in text_lower,
+                                "organization_id": organization_id,
+                                "status": "DRAFT",
+                                "is_mock": False,
+                                "summary": description[:500] + ("..." if len(description) > 500 else "")
+                            }
                             
-                            logger.info(f"Successfully extracted job data from {file_name}")
+                            logger.info(f"Successfully extracted job data locally using spaCy for {file_name}")
                             return extracted_data
                         else:
                             response_text = await response.text()
@@ -362,7 +365,7 @@ class LLMClient:
                     "organization_id": organization_id,
                     "status": "DRAFT",
                     "is_mock": False,
-                    "text_blob": {"en": markdown_text, "fr": markdown_text}
+                    "summary": description[:500] + ("..." if len(description) > 500 else "")
                 }
                 
                 logger.info(f"Successfully extracted job data locally using spaCy for {file_name}")
@@ -516,159 +519,151 @@ class LLMClient:
             if field not in job_data:
                 errors.append(f"Missing {field}")
                 continue
-
-        # Validate translations
-        langs = ["en", "fr"]
+        
+        # Validate language field
+        if "language" not in job_data:
+            errors.append("Missing language field")
+        elif not isinstance(job_data["language"], str):
+            errors.append(f"Language must be a string, got {type(job_data['language'])}")
+        
+        # Validate title and description are strings (or handle legacy format)
         for field in ["title", "description"]:
             if field in job_data:
-                for lang in langs:
-                    if lang not in job_data[field] or not job_data[field][lang]:
+                # Handle legacy format (dict with language keys)
+                if isinstance(job_data[field], dict):
+                    # Check if the dict has the language key
+                    lang = job_data.get("language", "en")
+                    if lang not in job_data[field]:
                         errors.append(f"Missing {lang} translation for {field}")
+                elif not isinstance(job_data[field], str):
+                    errors.append(f"{field} must be a string, got {type(job_data[field])}")
 
         # Validate location fields
         if "location" in job_data:
             required_loc_fields = ["city", "country"]  # State is not always required
             
-            # Check if state is required (only for US)
-            is_us = False
-            if "country" in job_data["location"]:
-                country_en = job_data["location"]["country"].get("en", "").lower()
-                country_fr = job_data["location"]["country"].get("fr", "").lower()
-                is_us = "usa" in country_en or "united states" in country_en or "états-unis" in country_fr
-
-            if is_us:
-                required_loc_fields.append("state")
-
-            for loc_field in required_loc_fields:
-                if loc_field not in job_data["location"]:
-                    errors.append(f"Missing location.{loc_field}")
-                    continue
-
-                for lang in langs:
-                    if lang not in job_data["location"][loc_field] or not job_data["location"][loc_field][lang]:
-                        errors.append(f"Missing {lang} translation for location.{loc_field}")
+            # Check if location is a dict
+            if not isinstance(job_data["location"], dict):
+                errors.append(f"Location must be a dictionary, got {type(job_data['location'])}")
+            else:
+                # Check required location fields
+                for loc_field in required_loc_fields:
+                    if loc_field not in job_data["location"]:
+                        errors.append(f"Missing location.{loc_field}")
+                    elif isinstance(job_data["location"][loc_field], dict):
+                        # Handle legacy format (dict with language keys)
+                        lang = job_data.get("language", "en")
+                        if lang not in job_data["location"][loc_field]:
+                            errors.append(f"Missing {lang} translation for location.{loc_field}")
+                    elif not isinstance(job_data["location"][loc_field], str):
+                        errors.append(f"location.{loc_field} must be a string, got {type(job_data['location'][loc_field])}")
 
         # Validate requirements
         if "requirements" in job_data:
+            # Handle legacy format (dict with language keys)
             if isinstance(job_data["requirements"], dict):
-                # Check if requirements has language keys
-                for lang in langs:
-                    if lang not in job_data["requirements"]:
-                        errors.append(f"Missing {lang} translation for requirements")
-                    elif not isinstance(job_data["requirements"][lang], list):
-                        errors.append(f"Requirements.{lang} must be a list")
-            elif isinstance(job_data["requirements"], list):
-                # If requirements is a list, it's probably the old format
-                # We'll convert it later, so no error here
-                pass
-            else:
-                errors.append("Requirements must be a dictionary with language keys or a list")
+                lang = job_data.get("language", "en")
+                if lang not in job_data["requirements"]:
+                    errors.append(f"Missing {lang} translation for requirements")
+                elif not isinstance(job_data["requirements"][lang], list):
+                    errors.append(f"Requirements.{lang} must be a list")
+            elif not isinstance(job_data["requirements"], list):
+                errors.append("Requirements must be a list")
         else:
             errors.append("Missing requirements")
 
         # Validate organization_id
         try:
-            from uuid import UUID
             if "organization_id" not in job_data:
                 errors.append("Missing organization_id")
             else:
                 UUID(job_data["organization_id"])
         except ValueError:
             errors.append("Invalid organization_id format")
+        
+        # Validate summary field
+        if "summary" in job_data and not isinstance(job_data["summary"], str):
+            errors.append(f"Summary must be a string, got {type(job_data['summary'])}")
 
         return errors
     
     def normalize_job_data(self, job_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Normalize job data to match required schema
+        """Normalize job data to ensure it conforms to the expected schema
         
         Args:
-            job_data: Job data to normalize
+            job_data: Raw job data to normalize
             
         Returns:
             Normalized job data
-            
-        Raises:
-            ValueError: If normalization fails
         """
-        normalized_data = job_data.copy()
-        logger.info(f"Normalizing job data: {json.dumps(job_data, indent=2)[:500]}...")
+        normalized_data = copy.deepcopy(job_data)
+        logger.debug(f"Normalizing job data: {json.dumps(job_data, indent=2)[:500]}...")
         
-        # Detect if the content is primarily French
-        is_french_document = False
-        if "title" in job_data and isinstance(job_data["title"], dict) and "en" in job_data["title"]:
-            title_text = job_data["title"]["en"]
-            # Check for common French words
-            french_indicators = ["poste", "emploi", "travail", "entreprise", "société", "fiche"]
-            if any(indicator in title_text.lower() for indicator in french_indicators):
-                logger.info("Detected French content in the document")
-                is_french_document = True
+        # Determine language (default to English)
+        language = normalized_data.get("language", "en")
         
         # Normalize title
         if "title" in normalized_data:
-            if isinstance(normalized_data["title"], str):
-                logger.debug(f"Converting title from string to dict: {normalized_data['title']}")
-                normalized_data["title"] = {"en": normalized_data["title"], "fr": normalized_data["title"]}
-            elif not isinstance(normalized_data["title"], dict):
+            if isinstance(normalized_data["title"], dict):
+                # Convert from multilingual to single language
+                if language in normalized_data["title"]:
+                    normalized_data["title"] = normalized_data["title"][language]
+                elif "en" in normalized_data["title"]:
+                    normalized_data["title"] = normalized_data["title"]["en"]
+                else:
+                    # Get first available language
+                    first_lang = next(iter(normalized_data["title"]))
+                    normalized_data["title"] = normalized_data["title"][first_lang]
+            
+            # Ensure title is a string
+            if not isinstance(normalized_data["title"], str):
                 logger.warning(f"Invalid title format: {type(normalized_data['title'])}. Setting default title.")
-                normalized_data["title"] = {"en": "Untitled Position", "fr": "Poste sans titre"}
-            else:
-                # Ensure both language fields are populated
-                if "en" in normalized_data["title"] and not "fr" in normalized_data["title"]:
-                    normalized_data["title"]["fr"] = normalized_data["title"]["en"]
-                elif "fr" in normalized_data["title"] and not "en" in normalized_data["title"]:
-                    normalized_data["title"]["en"] = normalized_data["title"]["fr"]
-                
-                # If this is a French document and French field is empty but English isn't
-                if is_french_document and "fr" in normalized_data["title"] and "en" in normalized_data["title"]:
-                    if not normalized_data["title"]["fr"] and normalized_data["title"]["en"]:
-                        normalized_data["title"]["fr"] = normalized_data["title"]["en"]
+                normalized_data["title"] = "Untitled Position"
         else:
             logger.warning("Title is missing. Setting default title.")
-            normalized_data["title"] = {"en": "Untitled Position", "fr": "Poste sans titre"}
+            normalized_data["title"] = "Untitled Position"
             
         # Normalize description
         if "description" in normalized_data:
-            if isinstance(normalized_data["description"], str):
-                logger.debug(f"Converting description from string to dict")
-                normalized_data["description"] = {"en": normalized_data["description"], "fr": normalized_data["description"]}
-            elif not isinstance(normalized_data["description"], dict):
+            if isinstance(normalized_data["description"], dict):
+                # Convert from multilingual to single language
+                if language in normalized_data["description"]:
+                    normalized_data["description"] = normalized_data["description"][language]
+                elif "en" in normalized_data["description"]:
+                    normalized_data["description"] = normalized_data["description"]["en"]
+                else:
+                    # Get first available language
+                    first_lang = next(iter(normalized_data["description"]))
+                    normalized_data["description"] = normalized_data["description"][first_lang]
+            
+            # Ensure description is a string
+            if not isinstance(normalized_data["description"], str):
                 logger.warning(f"Invalid description format: {type(normalized_data['description'])}. Setting default description.")
-                normalized_data["description"] = {"en": "No description provided", "fr": "Aucune description fournie"}
-            else:
-                # Ensure both language fields are populated
-                if "en" in normalized_data["description"] and not "fr" in normalized_data["description"]:
-                    normalized_data["description"]["fr"] = normalized_data["description"]["en"]
-                elif "fr" in normalized_data["description"] and not "en" in normalized_data["description"]:
-                    normalized_data["description"]["en"] = normalized_data["description"]["fr"]
-                
-                # If this is a French document and French field is empty but English isn't
-                if is_french_document and "fr" in normalized_data["description"] and "en" in normalized_data["description"]:
-                    if not normalized_data["description"]["fr"] and normalized_data["description"]["en"]:
-                        normalized_data["description"]["fr"] = normalized_data["description"]["en"]
+                normalized_data["description"] = "No description provided"
         else:
             logger.warning("Description is missing. Setting default description.")
-            normalized_data["description"] = {"en": "No description provided", "fr": "Aucune description fournie"}
+            normalized_data["description"] = "No description provided"
             
         # Normalize requirements
         if "requirements" in normalized_data:
-            if isinstance(normalized_data["requirements"], list):
-                logger.debug(f"Converting requirements from list to dict")
-                normalized_data["requirements"] = {
-                    "en": normalized_data["requirements"],
-                    "fr": normalized_data["requirements"]
-                }
-            elif not isinstance(normalized_data["requirements"], dict):
+            if isinstance(normalized_data["requirements"], dict):
+                # Convert from multilingual to single language
+                if language in normalized_data["requirements"]:
+                    normalized_data["requirements"] = normalized_data["requirements"][language]
+                elif "en" in normalized_data["requirements"]:
+                    normalized_data["requirements"] = normalized_data["requirements"]["en"]
+                else:
+                    # Get first available language
+                    first_lang = next(iter(normalized_data["requirements"]))
+                    normalized_data["requirements"] = normalized_data["requirements"][first_lang]
+            
+            # Ensure requirements is a list
+            if not isinstance(normalized_data["requirements"], list):
                 logger.warning(f"Invalid requirements format: {type(normalized_data['requirements'])}. Setting empty requirements.")
-                normalized_data["requirements"] = {"en": [], "fr": []}
-            else:
-                # Ensure both language fields are populated
-                if "en" in normalized_data["requirements"] and not "fr" in normalized_data["requirements"]:
-                    normalized_data["requirements"]["fr"] = normalized_data["requirements"]["en"]
-                elif "fr" in normalized_data["requirements"] and not "en" in normalized_data["requirements"]:
-                    normalized_data["requirements"]["en"] = normalized_data["requirements"]["fr"]
+                normalized_data["requirements"] = []
         else:
             logger.debug("Requirements not provided. Setting empty requirements.")
-            normalized_data["requirements"] = {"en": [], "fr": []}
+            normalized_data["requirements"] = []
             
         # Normalize skills (convert to uppercase)
         if "skills" in normalized_data:
@@ -690,119 +685,97 @@ class LLMClient:
             if not isinstance(location, dict):
                 logger.warning(f"Location is not a dict: {type(location)}. Setting empty location.")
                 normalized_location = {
-                    "city": {"en": "", "fr": ""},
-                    "state": {"en": "", "fr": ""},
-                    "country": {"en": "", "fr": ""},
-                    "postal_code": {"en": "", "fr": ""}
+                    "city": "",
+                    "state": "",
+                    "country": "",
+                    "postal_code": ""
                 }
             else:
+                # Handle multilingual location format
+                if "city" in location and isinstance(location["city"], dict):
+                    # Convert from multilingual to single language
+                    if language in location["city"]:
+                        location["city"] = location["city"][language]
+                    elif "en" in location["city"]:
+                        location["city"] = location["city"]["en"]
+                    else:
+                        # Get first available language
+                        first_lang = next(iter(location["city"]))
+                        location["city"] = location["city"][first_lang]
+                
+                if "state" in location and isinstance(location["state"], dict):
+                    # Convert from multilingual to single language
+                    if language in location["state"]:
+                        location["state"] = location["state"][language]
+                    elif "en" in location["state"]:
+                        location["state"] = location["state"]["en"]
+                    else:
+                        # Get first available language
+                        first_lang = next(iter(location["state"]))
+                        location["state"] = location["state"][first_lang]
+                
+                if "country" in location and isinstance(location["country"], dict):
+                    # Convert from multilingual to single language
+                    if language in location["country"]:
+                        location["country"] = location["country"][language]
+                    elif "en" in location["country"]:
+                        location["country"] = location["country"]["en"]
+                    else:
+                        # Get first available language
+                        first_lang = next(iter(location["country"]))
+                        location["country"] = location["country"][first_lang]
+                
+                if "postal_code" in location and isinstance(location["postal_code"], dict):
+                    # Convert from multilingual to single language
+                    if language in location["postal_code"]:
+                        location["postal_code"] = location["postal_code"][language]
+                    elif "en" in location["postal_code"]:
+                        location["postal_code"] = location["postal_code"]["en"]
+                    else:
+                        # Get first available language
+                        first_lang = next(iter(location["postal_code"]))
+                        location["postal_code"] = location["postal_code"][first_lang]
+                
                 # Normalize city
-                if "city" in location:
-                    if isinstance(location["city"], str):
-                        normalized_location["city"] = {"en": location["city"], "fr": location["city"]}
-                    elif isinstance(location["city"], dict):
-                        if not ("en" in location["city"] and "fr" in location["city"]):
-                            city_value = next(iter(location["city"].values()), "")
-                            normalized_location["city"] = {"en": city_value, "fr": city_value}
-                        else:
-                            normalized_location["city"] = location["city"]
-                            # If this is a French document and French field is empty but English isn't
-                            if is_french_document and not location["city"]["fr"] and location["city"]["en"]:
-                                normalized_location["city"]["fr"] = location["city"]["en"]
-                            # If English field is empty but French isn't
-                            elif not location["city"]["en"] and location["city"]["fr"]:
-                                normalized_location["city"]["en"] = location["city"]["fr"]
-                    else:
-                        logger.warning(f"Invalid city format: {type(location['city'])}. Setting empty city.")
-                        normalized_location["city"] = {"en": "", "fr": ""}
-                else:
-                    normalized_location["city"] = {"en": "", "fr": ""}
-                    
+                normalized_location["city"] = location.get("city", "")
+                if not isinstance(normalized_location["city"], str):
+                    normalized_location["city"] = ""
+                
                 # Normalize state
-                if "state" in location:
-                    if isinstance(location["state"], str):
-                        normalized_location["state"] = {"en": location["state"], "fr": location["state"]}
-                    elif isinstance(location["state"], dict):
-                        if not ("en" in location["state"] and "fr" in location["state"]):
-                            state_value = next(iter(location["state"].values()), "")
-                            normalized_location["state"] = {"en": state_value, "fr": state_value}
-                        else:
-                            normalized_location["state"] = location["state"]
-                            # If this is a French document and French field is empty but English isn't
-                            if is_french_document and not location["state"]["fr"] and location["state"]["en"]:
-                                normalized_location["state"]["fr"] = location["state"]["en"]
-                            # If English field is empty but French isn't
-                            elif not location["state"]["en"] and location["state"]["fr"]:
-                                normalized_location["state"]["en"] = location["state"]["fr"]
-                    else:
-                        logger.warning(f"Invalid state format: {type(location['state'])}. Setting empty state.")
-                        normalized_location["state"] = {"en": "", "fr": ""}
-                else:
-                    normalized_location["state"] = {"en": "", "fr": ""}
-                    
+                normalized_location["state"] = location.get("state", "")
+                if not isinstance(normalized_location["state"], str):
+                    normalized_location["state"] = ""
+                
                 # Normalize country
-                if "country" in location:
-                    if isinstance(location["country"], str):
-                        normalized_location["country"] = {"en": location["country"], "fr": location["country"]}
-                    elif isinstance(location["country"], dict):
-                        if not ("en" in location["country"] and "fr" in location["country"]):
-                            country_value = next(iter(location["country"].values()), "")
-                            normalized_location["country"] = {"en": country_value, "fr": country_value}
-                        else:
-                            normalized_location["country"] = location["country"]
-                            # If this is a French document and French field is empty but English isn't
-                            if is_french_document and not location["country"]["fr"] and location["country"]["en"]:
-                                normalized_location["country"]["fr"] = location["country"]["en"]
-                            # If English field is empty but French isn't
-                            elif not location["country"]["en"] and location["country"]["fr"]:
-                                normalized_location["country"]["en"] = location["country"]["fr"]
-                    else:
-                        logger.warning(f"Invalid country format: {type(location['country'])}. Setting empty country.")
-                        normalized_location["country"] = {"en": "", "fr": ""}
-                else:
-                    normalized_location["country"] = {"en": "", "fr": ""}
-                    
-                # Normalize postal code
-                if "postal_code" in location:
-                    if isinstance(location["postal_code"], str):
-                        normalized_location["postal_code"] = {"en": location["postal_code"], "fr": location["postal_code"]}
-                    elif isinstance(location["postal_code"], dict):
-                        if not ("en" in location["postal_code"] and "fr" in location["postal_code"]):
-                            postal_value = next(iter(location["postal_code"].values()), "")
-                            normalized_location["postal_code"] = {"en": postal_value, "fr": postal_value}
-                        else:
-                            normalized_location["postal_code"] = location["postal_code"]
-                            # If this is a French document and French field is empty but English isn't
-                            if is_french_document and not location["postal_code"]["fr"] and location["postal_code"]["en"]:
-                                normalized_location["postal_code"]["fr"] = location["postal_code"]["en"]
-                            # If English field is empty but French isn't
-                            elif not location["postal_code"]["en"] and location["postal_code"]["fr"]:
-                                normalized_location["postal_code"]["en"] = location["postal_code"]["fr"]
-                    else:
-                        logger.warning(f"Invalid postal_code format: {type(location['postal_code'])}. Setting empty postal_code.")
-                        normalized_location["postal_code"] = {"en": "", "fr": ""}
-                else:
-                    normalized_location["postal_code"] = {"en": "", "fr": ""}
-
+                normalized_location["country"] = location.get("country", "")
+                if not isinstance(normalized_location["country"], str):
+                    normalized_location["country"] = ""
+                
+                # Normalize postal_code
+                normalized_location["postal_code"] = location.get("postal_code", "")
+                if not isinstance(normalized_location["postal_code"], str):
+                    normalized_location["postal_code"] = ""
+            
             normalized_data["location"] = normalized_location
         else:
             logger.debug("Location not provided. Setting empty location.")
             normalized_data["location"] = {
-                "city": {"en": "", "fr": ""},
-                "state": {"en": "", "fr": ""},
-                "country": {"en": "", "fr": ""},
-                "postal_code": {"en": "", "fr": ""}
+                "city": "",
+                "state": "",
+                "country": "",
+                "postal_code": ""
             }
-
-        # Ensure job_type is valid
+            
+        # Normalize job_type
         if "job_type" in normalized_data:
-            job_type = str(normalized_data["job_type"]).upper()
-            valid_types = ["FULL_TIME", "PART_TIME", "CONTRACT", "FREELANCE", "INTERNSHIP", "VOLUNTEER", "TO_BE_DETERMINED"]
-            if job_type not in valid_types:
-                logger.warning(f"Invalid job_type: {job_type}. Setting TO_BE_DETERMINED.")
-                normalized_data["job_type"] = "TO_BE_DETERMINED"
+            job_type = normalized_data["job_type"]
+            valid_job_types = ["FULL_TIME", "PART_TIME", "CONTRACT", "FREELANCE", "INTERNSHIP", "VOLUNTEER", "TO_BE_DETERMINED"]
+            
+            if isinstance(job_type, str) and job_type.upper() in valid_job_types:
+                normalized_data["job_type"] = job_type.upper()
             else:
-                normalized_data["job_type"] = job_type
+                logger.debug(f"Invalid job type: {job_type}. Setting TO_BE_DETERMINED.")
+                normalized_data["job_type"] = "TO_BE_DETERMINED"
         else:
             logger.debug("Job type not provided. Setting TO_BE_DETERMINED.")
             normalized_data["job_type"] = "TO_BE_DETERMINED"
@@ -820,27 +793,16 @@ class LLMClient:
         # Keep is_mock flag for database purposes only
         normalized_data["is_mock"] = job_data.get("is_mock", False)
         
-        # Final check for empty translations in a French document
-        if is_french_document:
-            logger.info("Performing final check for empty translations in French document")
-            # Check all bilingual fields to ensure French translations exist
-            for field in ["title", "description"]:
-                if field in normalized_data and isinstance(normalized_data[field], dict):
-                    if "en" in normalized_data[field] and "fr" in normalized_data[field]:
-                        if not normalized_data[field]["fr"] and normalized_data[field]["en"]:
-                            logger.info(f"Copying English content to empty French field for {field}")
-                            normalized_data[field]["fr"] = normalized_data[field]["en"]
-            
-            # Check location fields
-            if "location" in normalized_data and isinstance(normalized_data["location"], dict):
-                for loc_field in ["city", "state", "country", "postal_code"]:
-                    if loc_field in normalized_data["location"] and isinstance(normalized_data["location"][loc_field], dict):
-                        if "en" in normalized_data["location"][loc_field] and "fr" in normalized_data["location"][loc_field]:
-                            if not normalized_data["location"][loc_field]["fr"] and normalized_data["location"][loc_field]["en"]:
-                                logger.info(f"Copying English content to empty French field for location.{loc_field}")
-                                normalized_data["location"][loc_field]["fr"] = normalized_data["location"][loc_field]["en"]
+        # Ensure language is set
+        if "language" not in normalized_data:
+            normalized_data["language"] = language
         
-        logger.info(f"Normalized job data successfully. Title: {normalized_data['title'].get('en', 'N/A')}")
+        # Ensure summary is set
+        if "summary" not in normalized_data or not normalized_data["summary"]:
+            logger.debug("Summary not provided. Using description as summary.")
+            normalized_data["summary"] = normalized_data["description"]
+        
+        logger.info(f"Normalized job data successfully. Title: {normalized_data['title']}")
         return normalized_data
 
 class LLMIntegration:

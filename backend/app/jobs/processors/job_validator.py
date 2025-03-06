@@ -24,7 +24,11 @@ class JobValidator:
         """
         errors = []
         
-        logger.info(f"Validating job data: {job_data.get('title', {}).get('en', 'Unknown title')}")
+        # Get title for logging
+        title = job_data.get('title', 'Unknown title')
+        if isinstance(title, dict):
+            title = title.get('en', 'Unknown title')
+        logger.info(f"Validating job data: {title}")
         
         # Validate job type
         valid_job_types = [
@@ -43,56 +47,64 @@ class JobValidator:
             if field not in job_data:
                 errors.append(f"Missing {field}")
                 continue
-
-        # Validate translations
-        langs = ["en", "fr"]
+        
+        # Validate language field
+        if "language" not in job_data:
+            errors.append("Missing language field")
+        elif not isinstance(job_data["language"], str):
+            errors.append(f"Language must be a string, got {type(job_data['language'])}")
+        
+        # Validate title and description
         for field in ["title", "description"]:
             if field in job_data:
-                for lang in langs:
+                # Handle legacy format (dict with language keys)
+                if isinstance(job_data[field], dict):
+                    # Check if the dict has the language key
+                    lang = job_data.get("language", "en")
                     if lang not in job_data[field]:
                         errors.append(f"Missing {lang} translation for {field}")
                     elif not job_data[field][lang]:
                         errors.append(f"Empty {lang} translation for {field}")
+                elif not isinstance(job_data[field], str):
+                    errors.append(f"{field} must be a string, got {type(job_data[field])}")
+                elif not job_data[field]:
+                    errors.append(f"Empty {field}")
 
         # Validate location fields
         if "location" in job_data:
             required_loc_fields = ["city", "country"]  # State is not always required
             
-            # Check if state is required (only for US)
-            is_us = False
-            if "country" in job_data["location"]:
-                country_en = job_data["location"]["country"].get("en", "").lower()
-                country_fr = job_data["location"]["country"].get("fr", "").lower()
-                is_us = "usa" in country_en or "united states" in country_en or "états-unis" in country_fr
-
-            if is_us:
-                required_loc_fields.append("state")
-
-            for loc_field in required_loc_fields:
-                if loc_field not in job_data["location"]:
-                    errors.append(f"Missing location.{loc_field}")
-                    continue
-
-                for lang in langs:
-                    if lang not in job_data["location"][loc_field]:
-                        errors.append(f"Missing {lang} translation for location.{loc_field}")
-                    elif not job_data["location"][loc_field][lang]:
-                        errors.append(f"Empty {lang} translation for location.{loc_field}")
+            # Check if location is a dict
+            if not isinstance(job_data["location"], dict):
+                errors.append(f"Location must be a dictionary, got {type(job_data['location'])}")
+            else:
+                # Check required location fields
+                for loc_field in required_loc_fields:
+                    if loc_field not in job_data["location"]:
+                        errors.append(f"Missing location.{loc_field}")
+                    elif isinstance(job_data["location"][loc_field], dict):
+                        # Handle legacy format (dict with language keys)
+                        lang = job_data.get("language", "en")
+                        if lang not in job_data["location"][loc_field]:
+                            errors.append(f"Missing {lang} translation for location.{loc_field}")
+                        elif not job_data["location"][loc_field][lang]:
+                            errors.append(f"Empty {lang} translation for location.{loc_field}")
+                    elif not isinstance(job_data["location"][loc_field], str):
+                        errors.append(f"location.{loc_field} must be a string, got {type(job_data['location'][loc_field])}")
+                    elif not job_data["location"][loc_field]:
+                        errors.append(f"Empty location.{loc_field}")
 
         # Validate requirements
         if "requirements" in job_data:
+            # Handle legacy format (dict with language keys)
             if isinstance(job_data["requirements"], dict):
-                # Check if requirements has language keys
-                for lang in langs:
-                    if lang not in job_data["requirements"]:
-                        errors.append(f"Missing {lang} translation for requirements")
-                    elif not isinstance(job_data["requirements"][lang], list):
-                        errors.append(f"Requirements.{lang} must be a list")
-            elif isinstance(job_data["requirements"], list):
-                # If requirements is a list, it's probably the old format
-                errors.append("Requirements is a list, expected a dictionary with language keys")
-            else:
-                errors.append("Requirements must be a dictionary with language keys or a list")
+                lang = job_data.get("language", "en")
+                if lang not in job_data["requirements"]:
+                    errors.append(f"Missing {lang} translation for requirements")
+                elif not isinstance(job_data["requirements"][lang], list):
+                    errors.append(f"Requirements.{lang} must be a list")
+            elif not isinstance(job_data["requirements"], list):
+                errors.append("Requirements must be a list")
         else:
             errors.append("Missing requirements")
 
@@ -104,6 +116,10 @@ class JobValidator:
                 UUID(job_data["organization_id"])
         except ValueError:
             errors.append("Invalid organization_id format")
+        
+        # Validate summary field
+        if "summary" in job_data and not isinstance(job_data["summary"], str):
+            errors.append(f"Summary must be a string, got {type(job_data['summary'])}")
 
         # Log validation results
         if errors:

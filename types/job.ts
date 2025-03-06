@@ -11,6 +11,8 @@ export interface Job {
   postedAt: string
   skills: string[]
   remote: boolean
+  language?: string
+  summary?: string
   organization?: {
     industry: string
     size_range: string
@@ -18,7 +20,6 @@ export interface Job {
     company_type: string
   }
   processed?: ProcessedJob
-  text_blob?: LocalizedText
 }
 
 export interface ProcessedJob {
