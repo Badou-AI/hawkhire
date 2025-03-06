@@ -9,8 +9,9 @@ export async function GET(request: Request) {
     console.log('searchParams', searchParams);
     // Check if we're fetching a single job
     const jobId = searchParams.get('id')
+    const language = searchParams.get('language') || 'en'
     if (jobId) {
-      const response = await fetch(`${API_URL}/v1/jobs/with/organizations/${jobId}`, {
+      const response = await fetch(`${API_URL}/v1/jobs/with/organizations/${jobId}?language=${language}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'
@@ -37,7 +38,7 @@ export async function GET(request: Request) {
     const pageSize = searchParams.get('page_size') || '15'
 
     const response = await fetch(
-      `${API_URL}/v1/jobs/with/organizations?page=${page}&page_size=${pageSize}`,
+      `${API_URL}/v1/jobs/with/organizations?page=${page}&page_size=${pageSize}&language=${language}`,
       {
         method: 'GET',
         headers: {

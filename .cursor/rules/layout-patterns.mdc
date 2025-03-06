@@ -1,5 +1,10 @@
 ---
 description: 
+globs: *.tsx
+alwaysApply: false
+---
+---
+description: 
 globs: 
 ---
  # Layout Patterns & Best Practices

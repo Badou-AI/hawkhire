@@ -5,15 +5,15 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
-import { jobFormSchema, type JobFormData, transformFormToRequest } from "./types"
+import { jobFormSchema, type JobFormData, transformFormToRequestSingle } from "./types"
 import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
+    Form,
+    FormControl,
+    FormDescription,
+    FormField,
+    FormItem,
+    FormLabel,
+    FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -41,14 +41,15 @@ export function JobCreationForm({ organizationId }: JobCreationFormProps) {
       remote: false,
       skills: [],
       status: "DRAFT",
-      show_contact_info: false
+      show_contact_info: false,
+      language: "en"
     }
   })
 
   const onSubmit = async (data: JobFormData) => {
     try {
       setIsSubmitting(true)
-      const jobData = transformFormToRequest(data, organizationId)
+      const jobData = transformFormToRequestSingle(data, organizationId)
 
       const response = await fetch(`/api/v1/organizations/${organizationId}/jobs`, {
         method: 'POST',
@@ -183,6 +184,44 @@ export function JobCreationForm({ organizationId }: JobCreationFormProps) {
                             </FormLabel>
                           </FormItem>
                         </RadioGroup>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="language"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Language</FormLabel>
+                      <FormControl>
+                        <select
+                          className="w-full p-2 border rounded"
+                          {...field}
+                        >
+                          <option value="en">English</option>
+                          <option value="fr">French</option>
+                        </select>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="summary"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Summary</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Provide a brief summary of the job..."
+                          className="min-h-[100px]"
+                          {...field}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

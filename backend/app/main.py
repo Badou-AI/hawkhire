@@ -1560,6 +1560,7 @@ async def list_jobs(
     page: int = Query(0, ge=0, description="Page number (0-based)"),
     page_size: int = Query(20, ge=1, le=100, description="Number of items per page"),
     id: Optional[UUID4] = None,
+    language: str = Query("en", description="Language filter"),
     order: str = Query(None, description="Order by column (prefix with - for descending)")
 ):
     """
@@ -1570,6 +1571,7 @@ async def list_jobs(
     - page: Page number (0-based)
     - page_size: Number of items per page (max 100)
     - id: Filter by specific job ID (UUID)
+    - language: Filter by language (default: en)
     - order: Order by column (prefix with - for descending)
     """
     try:
@@ -1585,6 +1587,9 @@ async def list_jobs(
         # Handle filtering
         if id is not None:
             query = query.eq('id', str(id))  # Convert UUID to string for Supabase query
+        
+        # Filter by language
+        query = query.eq('language', language)
             
         # Handle ordering
         if order:
@@ -1647,23 +1652,27 @@ async def get_job(job_id: UUID4, select: str = None):
             raise e
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/v1/jobs/with/{related_table}", tags=["Jobs"])
-async def get_jobs_with_related(
+@app.get("/v1/jobs/with/{related_table}", tags=["Jobs"], response_model=JobList)
+async def list_jobs_with_related(
     related_table: str,
     select: str = None,
-    page: int = 0,
-    page_size: int = 10,
-    order: str = None,
-    industry: str = None,
-    skills: str = None,
-    exclude_id: str = None,
-    use_semantic: bool = False,
-    job_title: str = None,
-    job_description: str = None
+    page: int = Query(0, ge=0, description="Page number (0-based)"),
+    page_size: int = Query(20, ge=1, le=100, description="Number of items per page"),
+    id: Optional[UUID4] = None,
+    language: str = Query("en", description="Language filter"),
+    order: str = Query(None, description="Order by column (prefix with - for descending)")
 ):
     """
-    Fetch jobs with related table data and optional similarity filters.
-    Supports both traditional and semantic search.
+    Fetch jobs with related table data
+    
+    Parameters:
+    - related_table: Name of the related table to include
+    - select: Comma-separated list of columns to return
+    - page: Page number (0-based)
+    - page_size: Number of items per page (max 100)
+    - id: Filter by specific job ID (UUID)
+    - language: Filter by language (default: en)
+    - order: Order by column (prefix with - for descending)
     """
     try:
         # Validate related table name to prevent injection
@@ -1671,59 +1680,6 @@ async def get_jobs_with_related(
         if related_table not in allowed_tables:
             raise HTTPException(status_code=400, detail=f"Invalid related table. Allowed tables: {', '.join(allowed_tables)}")
         
-        # Start building the query
-        if use_semantic and (job_title or job_description):
-            # Generate embedding for the search query
-            search_text = f"{job_title or ''}\n{job_description or ''}"
-            embedding = await job_embedding_service.generate_embedding(search_text)
-            
-            # Use vector similarity search to get matching job IDs
-            matches = supabase.rpc('match_jobs', {
-                'query_embedding': embedding,
-                'match_threshold': 0.7,
-                'match_count': page_size * 2  # Get extra results for filtering
-            }).execute()
-            
-            if matches.data:
-                # Get the matched job IDs
-                job_ids = [match['id'] for match in matches.data]
-                
-                # Now fetch the full job data with related tables
-                query = supabase.table('jobs')
-                
-                # Build the select statement
-                if select:
-                    base_columns = select.replace(" ", "").split(",")
-                else:
-                    base_columns = ["*"]
-                    
-                # Add the related table to the selection
-                select_statement = f"{','.join(base_columns)},{related_table}(*)"
-                query = query.select(select_statement)
-                
-                # Filter by matched IDs
-                query = query.in_('id', job_ids)
-                
-                # Get the jobs
-                response = query.execute()
-                
-                # Sort results to match the similarity order
-                similarity_map = {match['id']: match['similarity'] for match in matches.data}
-                sorted_data = sorted(
-                    response.data,
-                    key=lambda job: similarity_map.get(job['id'], 0),
-                    reverse=True
-                )
-                
-                return {
-                    "data": sorted_data,
-                    "page": page,
-                    "page_size": page_size,
-                    "total": len(sorted_data),
-                    "search_type": "semantic"
-                }
-        
-        # If semantic search failed or wasn't requested, use traditional search
         query = supabase.table('jobs')
         
         # Build the select statement
@@ -1735,39 +1691,24 @@ async def get_jobs_with_related(
         # Add the related table to the selection
         select_statement = f"{','.join(base_columns)},{related_table}(*)"
         query = query.select(select_statement)
-
-        # Apply additional filters
-        filters_applied = []
         
-        if industry and industry.strip():
-            query = query.eq('organizations.industry', industry)
-            filters_applied.append(f"industry={industry}")
+        # Handle filtering
+        if id is not None:
+            query = query.eq('id', str(id))  # Convert UUID to string for Supabase query
         
-        if skills and skills.strip():
-            skill_list = [s.strip() for s in skills.split(',') if s.strip()]
-            if skill_list:
-                # Match if job has ANY of the skills (more lenient)
-                query = query.contains('skills', skill_list)
-                filters_applied.append(f"skills={skill_list}")
-        
-        if exclude_id and exclude_id.strip():
-            query = query.neq('id', exclude_id)
-            filters_applied.append(f"exclude_id={exclude_id}")
+        # Filter by language
+        query = query.eq('language', language)
             
-        # Add default ordering by created_at if no order specified
+        # Handle ordering
         if order:
             if order.startswith('-'):
                 query = query.order(order[1:], desc=True)
             else:
                 query = query.order(order)
-        else:
-            query = query.order('created_at', desc=True)
                 
         # Get total count before pagination
         count_response = query.execute()
         total_count = len(count_response.data)
-        
-        print(f"Similar jobs query - Filters: {', '.join(filters_applied)}, Total found: {total_count}")
                 
         # Handle pagination
         start = page * page_size
@@ -1776,17 +1717,25 @@ async def get_jobs_with_related(
         
         response = query.execute()
         
-        return {
-            "data": response.data,
-            "page": page,
-            "page_size": page_size,
-            "total": total_count,
-            "filters": filters_applied,
-            "search_type": "traditional"
-        }
+        # Convert the response data to JobInDB objects
+        jobs_data = []
+        for job in response.data:
+            # Extract the related table data
+            related_data = job.pop(related_table, None)
+            
+            # Add the related data back with the correct key
+            job[related_table] = related_data
+            
+            jobs_data.append(JobInDB(**job))
+        
+        return JobList(
+            data=jobs_data,
+            page=page,
+            page_size=page_size,
+            total=total_count
+        )
         
     except Exception as e:
-        print(f"Error in get_jobs_with_related: {str(e)}")
         if isinstance(e, HTTPException):
             raise e
         raise HTTPException(status_code=500, detail=str(e))
@@ -3379,93 +3328,93 @@ async def convert_job_pdf(
             detail=f"Error converting PDF: {str(e)}"
         )
 
-@app.post("/v1/jobs/extract-data", tags=["Jobs"])
-async def extract_job_data(body: Dict = Body(...)):
-    """Extract structured job data from text using spaCy"""
-    try:
-        text = body.get('text')
-        filename = body.get('filename', '')
-        organization_id = body.get('organization_id')
-        is_mock = body.get('is_mock', False)
-        status = body.get('status', 'DRAFT')
+# @app.post("/v1/jobs/extract-data", tags=["Jobs"])
+# async def extract_job_data(body: Dict = Body(...)):
+#     """Extract structured job data from text using spaCy"""
+#     try:
+#         text = body.get('text')
+#         filename = body.get('filename', '')
+#         organization_id = body.get('organization_id')
+#         is_mock = body.get('is_mock', False)
+#         status = body.get('status', 'DRAFT')
         
-        if not text:
-            raise HTTPException(status_code=422, detail="Text is required in request body")
+#         if not text:
+#             raise HTTPException(status_code=422, detail="Text is required in request body")
             
-        if not organization_id:
-            raise HTTPException(status_code=422, detail="organization_id is required")
+#         if not organization_id:
+#             raise HTTPException(status_code=422, detail="organization_id is required")
 
-        # Use spaCy to extract structured data
-        doc = nlp(text)
+#         # Use spaCy to extract structured data
+#         doc = nlp(text)
         
-        # Extract title from first sentence
-        title = next((sent.text.strip() for sent in doc.sents), "Untitled Position")
+#         # Extract title from first sentence
+#         title = next((sent.text.strip() for sent in doc.sents), "Untitled Position")
         
-        # Extract location information
-        locations = [ent.text for ent in doc.ents if ent.label_ == "GPE"]
-        location = {
-            "city": {"en": locations[0] if locations else "", "fr": ""},
-            "state": {"en": locations[1] if len(locations) > 1 else "", "fr": ""},
-            "country": {"en": locations[-1] if locations else "", "fr": ""},
-            "postal_code": {"en": "", "fr": ""}
-        }
+#         # Extract location information
+#         locations = [ent.text for ent in doc.ents if ent.label_ == "GPE"]
+#         location = {
+#             "city": {"en": locations[0] if locations else "", "fr": ""},
+#             "state": {"en": locations[1] if len(locations) > 1 else "", "fr": ""},
+#             "country": {"en": locations[-1] if locations else "", "fr": ""},
+#             "postal_code": {"en": "", "fr": ""}
+#         }
         
-        # Extract skills (technical terms and proper nouns)
-        skills = list(set([
-            ent.text.upper() for ent in doc.ents 
-            if ent.label_ in ["ORG", "PRODUCT"] 
-            or (ent.text.isupper() and len(ent.text) > 1)
-        ]))
+#         # Extract skills (technical terms and proper nouns)
+#         skills = list(set([
+#             ent.text.upper() for ent in doc.ents 
+#             if ent.label_ in ["ORG", "PRODUCT"] 
+#             or (ent.text.isupper() and len(ent.text) > 1)
+#         ]))
         
-        # Extract requirements (bullet points or numbered lists)
-        requirements = [
-            sent.text.strip() 
-            for sent in doc.sents 
-            if any(char in sent.text for char in ["•", "-", "●"]) 
-            or sent.text.strip().startswith(tuple("123456789"))
-        ]
+#         # Extract requirements (bullet points or numbered lists)
+#         requirements = [
+#             sent.text.strip() 
+#             for sent in doc.sents 
+#             if any(char in sent.text for char in ["•", "-", "●"]) 
+#             or sent.text.strip().startswith(tuple("123456789"))
+#         ]
         
-        # Determine job type
-        job_types = {
-            "full time": "FULL_TIME",
-            "part time": "PART_TIME",
-            "contract": "CONTRACT",
-            "freelance": "FREELANCE",
-            "intern": "INTERNSHIP",
-            "volunteer": "VOLUNTEER"
-        }
+#         # Determine job type
+#         job_types = {
+#             "full time": "FULL_TIME",
+#             "part time": "PART_TIME",
+#             "contract": "CONTRACT",
+#             "freelance": "FREELANCE",
+#             "intern": "INTERNSHIP",
+#             "volunteer": "VOLUNTEER"
+#         }
         
-        job_type = "TO_BE_DETERMINED"
-        text_lower = text.lower()
-        for key, value in job_types.items():
-            if key in text_lower:
-                job_type = value
-                break
+#         job_type = "TO_BE_DETERMINED"
+#         text_lower = text.lower()
+#         for key, value in job_types.items():
+#             if key in text_lower:
+#                 job_type = value
+#                 break
         
-        # Create structured response
-        extracted_data = {
-            "title": {"en": title, "fr": title},
-            "description": {"en": text, "fr": text},
-            "location": location,
-            "requirements": {"en": requirements, "fr": requirements},
-            "skills": skills,
-            "job_type": job_type,
-            "remote": "remote" in text_lower or "télétravail" in text_lower,
-            "organization_id": organization_id,
-            "status": status,
-            "is_mock": is_mock,
-            "salary_currency": "USD"
-        }
+#         # Create structured response
+#         extracted_data = {
+#             "title": {"en": title, "fr": title},
+#             "description": {"en": text, "fr": text},
+#             "location": location,
+#             "requirements": {"en": requirements, "fr": requirements},
+#             "skills": skills,
+#             "job_type": job_type,
+#             "remote": "remote" in text_lower or "télétravail" in text_lower,
+#             "organization_id": organization_id,
+#             "status": status,
+#             "is_mock": is_mock,
+#             "salary_currency": "USD"
+#         }
         
-        logger.info(f"Successfully extracted job data from {filename}")
-        return extracted_data
+#         logger.info(f"Successfully extracted job data from {filename}")
+#         return extracted_data
 
-    except Exception as e:
-        logger.error(f"Error extracting job data from {filename}: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to extract job data: {str(e)}"
-        )
+#     except Exception as e:
+#         logger.error(f"Error extracting job data from {filename}: {str(e)}")
+#         raise HTTPException(
+#             status_code=500,
+#             detail=f"Failed to extract job data: {str(e)}"
+#         )
 
 @app.post("/v1/test/process-resume", tags=["Testing"])
 async def test_resume_processing(
@@ -3651,6 +3600,7 @@ async def extract_job_data(body: Dict = Body(...)):
             "description": {"type": "string", "required": True},
             "requirements": {"type": "array", "items": {"type": "string"}},
             "skills": {"type": "array", "items": {"type": "string"}},
+            "summary": {"type": "string", "required": True, "description": "A thorough summary of the job in a digest format that includes the description, requirements, and skills. This should be a minimum of 2 paragraphs that is directly addressed to the candidate. Add as many details as possible to make it as useful as possible for the candidate."},
             "location": {
                 "type": "object",
                 "properties": {
@@ -3717,36 +3667,39 @@ def extract_structured_data(text: str) -> Dict:
     # Extract location information (look for GPE entities)
     locations = [ent.text for ent in doc.ents if ent.label_ == "GPE"]
     location = {
-        "city": {"en": locations[0] if locations else "", "fr": ""},
-        "state": {"en": locations[1] if len(locations) > 1 else "", "fr": ""},
-        "country": {"en": locations[-1] if locations else "", "fr": ""},
-        "postal_code": {"en": "", "fr": ""}
+        "city": locations[0] if locations else "",
+        "state": locations[1] if len(locations) > 1 else "",
+        "country": locations[-1] if locations else "",
+        "postal_code": ""
     }
     
     # Extract job type (look for common patterns)
     job_types = ["FULL_TIME", "PART_TIME", "CONTRACT", "FREELANCE", "INTERNSHIP", "VOLUNTEER"]
     job_type = next(
-        (jt for jt in job_types if jt.replace("_", " ").lower() in text.lower()),
-        "TO_BE_DETERMINED"
+        (jt for jt in job_types if jt.lower().replace("_", " ") in text.lower()),
+        "FULL_TIME"  # Default to full time
     )
     
     # Extract requirements (look for bullet points or numbered lists)
-    requirements = [
-        sent.text.strip() 
-        for sent in doc.sents 
-        if any(char in sent.text for char in ["•", "-", "●"]) 
-        or sent.text.strip().startswith(tuple("123456789"))
-    ]
+    requirements = []
+    for sent in doc.sents:
+        sent_text = sent.text.strip()
+        if sent_text.startswith("•") or sent_text.startswith("-") or re.match(r"^\d+\.", sent_text):
+            requirements.append(sent_text)
+    
+    # Create a summary
+    summary = text[:500] + "..." if len(text) > 500 else text
+    
+    # Detect language
+    language = detect_language(text)
     
     return {
-        "title": {"en": title, "fr": title},  # Use same for both languages initially
-        "description": {"en": text, "fr": text},  # Use same for both languages initially
-        "requirements": {"en": requirements, "fr": requirements},
+        "title": title,
+        "description": text,
+        "requirements": requirements,
         "skills": skills,
         "location": location,
         "job_type": job_type,
-        "remote": "remote" in text.lower(),
-        "salary_min": None,
-        "salary_max": None,
-        "salary_currency": "USD"
+        "language": language,
+        "summary": summary
     }

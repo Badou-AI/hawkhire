@@ -3,18 +3,18 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
-    ArrowLeft,
-    Briefcase,
-    Clock,
-    MapPin,
-    DollarSign,
-    Users,
-    Share2,
-    Bookmark,
-    Building,
-    Calendar,
-    CheckCircle,
-    Loader2
+  ArrowLeft,
+  Briefcase,
+  Clock,
+  MapPin,
+  DollarSign,
+  Users,
+  Share2,
+  Bookmark,
+  Building,
+  Calendar,
+  CheckCircle,
+  Loader2
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -41,11 +41,7 @@ interface JobDetail {
   applicants: number;
   status: string;
   createdAt: string;
-  text_blob?: {
-    en?: string;
-    fr?: string;
-    [key: string]: string | undefined;
-  };
+  summary: string;
   organization: {
     id: string;
     name: string;
@@ -173,7 +169,7 @@ export default function JobDetailPage() {
             created_at,
             organization_id,
             processed,
-            text_blob,
+            summary,
             organizations (
               id,
               name,
@@ -285,7 +281,7 @@ export default function JobDetailPage() {
           applicants: applicantCount,
           status: jobData.status,
           createdAt: jobData.created_at,
-          text_blob: jobData.text_blob,
+          summary: jobData.summary,
           organization: {
             id: orgData.id,
             name: getLocalizedText(orgData.name),
@@ -447,7 +443,7 @@ export default function JobDetailPage() {
                 <div className="mb-8">
                   <h2 className="text-xl font-semibold mb-4">Job Description</h2>
                   <JobDescription 
-                    textBlob={job.text_blob}
+                    summary={job.summary}
                     fallbackDescription={job.description}
                     locale={locale}
                   />

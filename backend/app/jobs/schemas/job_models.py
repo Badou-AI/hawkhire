@@ -4,51 +4,57 @@ from datetime import datetime
 
 class JobLocation(BaseModel):
     """Model for job location data"""
-    city: Dict[str, str] = Field(..., description="City name in multiple languages")
-    country: Dict[str, str] = Field(..., description="Country name in multiple languages")
-    state: Dict[str, str] = Field(default_factory=dict, description="State/province in multiple languages")
-    postal_code: Dict[str, str] = Field(default_factory=dict, description="Postal code in multiple languages")
+    city: str = Field(..., description="City name")
+    country: str = Field(..., description="Country name")
+    state: str = Field("", description="State/province")
+    postal_code: str = Field("", description="Postal code")
 
 class JobRequirements(BaseModel):
-    """Model for job requirements in different languages"""
+    """Model for job requirements in different languages (for backward compatibility)"""
     en: List[str] = Field(default_factory=list, description="Requirements in English")
     fr: List[str] = Field(default_factory=list, description="Requirements in French")
+
+class LocalizedText(BaseModel):
+    """Model for multilingual text (for backward compatibility)"""
+    en: str = Field("", description="English text")
+    fr: str = Field("", description="French text")
 
 class BaseJobData(BaseModel):
     """Base model for job data"""
     
-    title: Dict[str, str] = Field(..., description="Job title in different languages")
-    description: Dict[str, str] = Field(..., description="Job description in different languages")
-    location: Dict[str, Dict[str, str]] = Field(..., description="Job location")
+    title: str = Field(..., description="Job title")
+    description: str = Field(..., description="Job description")
+    location: Dict[str, str] = Field(..., description="Job location")
     job_type: str = Field(..., description="Job type")
     organization_id: str = Field(..., description="Organization ID")
-    requirements: Dict[str, List[str]] = Field(..., description="Job requirements in different languages")
+    requirements: List[str] = Field(default_factory=list, description="Job requirements")
     skills: List[str] = Field(default_factory=list, description="Required skills")
     remote: bool = Field(False, description="Whether the job is remote")
     is_mock: bool = Field(False, description="Whether the job is mock data")
     status: str = Field("DRAFT", description="Job status")
+    language: str = Field("en", description="Language of the job posting")
+    summary: Optional[str] = Field(None, description="Descriptive summary for the candidate to read")
     
     class Config:
         schema_extra = {
             "example": {
-                "title": {"en": "Software Engineer", "fr": "Ingénieur Logiciel"},
-                "description": {"en": "Job description in English", "fr": "Description du poste en français"},
+                "title": "Software Engineer",
+                "description": "Job description",
                 "location": {
-                    "city": {"en": "New York", "fr": "New York"},
-                    "country": {"en": "United States", "fr": "États-Unis"},
-                    "state": {"en": "NY", "fr": "NY"},
-                    "postal_code": {"en": "10001", "fr": "10001"}
+                    "city": "New York",
+                    "country": "United States",
+                    "state": "NY",
+                    "postal_code": "10001"
                 },
                 "job_type": "FULL_TIME",
                 "organization_id": "00000000-0000-0000-0000-000000000000",
-                "requirements": {
-                    "en": ["Bachelor's degree", "3+ years experience"],
-                    "fr": ["Diplôme de bachelor", "3+ ans d'expérience"]
-                },
+                "requirements": ["Bachelor's degree", "3+ years experience"],
                 "skills": ["Python", "FastAPI", "React"],
                 "remote": True,
                 "is_mock": False,
-                "status": "DRAFT"
+                "status": "DRAFT",
+                "language": "en",
+                "summary": "We are looking for a Software Engineer to join our team."
             }
         }
 

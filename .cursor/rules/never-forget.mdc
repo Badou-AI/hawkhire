@@ -1,5 +1,10 @@
 ---
 description: 
+globs: *.py, *.tsx, *.ts
+alwaysApply: false
+---
+---
+description: 
 globs: 
 ---
 ---

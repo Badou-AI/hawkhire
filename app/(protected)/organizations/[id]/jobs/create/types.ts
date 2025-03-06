@@ -6,18 +6,30 @@ export type JobType = z.infer<typeof JobType>
 export const JobStatus = z.enum(["DRAFT", "PUBLISHED", "CLOSED", "ARCHIVED"])
 export type JobStatus = z.infer<typeof JobStatus>
 
+// For backward compatibility
 export const LocalizedString = z.object({
   en: z.string(),
   fr: z.string().optional()
 })
 export type LocalizedString = z.infer<typeof LocalizedString>
 
+// For backward compatibility
 export const LocalizedStringArray = z.object({
   en: z.array(z.string()),
   fr: z.array(z.string()).optional()
 })
 export type LocalizedStringArray = z.infer<typeof LocalizedStringArray>
 
+// New single-language location structure
+export const JobLocationSingle = z.object({
+  city: z.string(),
+  state: z.string(),
+  country: z.string(),
+  postal_code: z.string()
+})
+export type JobLocationSingle = z.infer<typeof JobLocationSingle>
+
+// For backward compatibility
 export const JobLocation = z.object({
   city: LocalizedString,
   state: LocalizedString,
@@ -26,6 +38,34 @@ export const JobLocation = z.object({
 })
 export type JobLocation = z.infer<typeof JobLocation>
 
+// New single-language job creation request
+export const JobCreationRequestSingle = z.object({
+  organization_id: z.string().uuid(),
+  title: z.string(),
+  description: z.string(),
+  requirements: z.array(z.string()),
+  skills: z.array(z.string()),
+  status: JobStatus,
+  location: JobLocationSingle,
+  job_type: JobType,
+  salary_min: z.number(),
+  salary_max: z.number(),
+  salary_currency: z.string(),
+  remote: z.boolean(),
+  rating: z.number(),
+  is_mock: z.boolean(),
+  language: z.string().default("en"),
+  summary: z.string().optional(),
+  opening_date: z.string().optional(),
+  closing_date: z.string().optional(),
+  contact_person: z.string().optional(),
+  contact_email: z.string().email().optional(),
+  contact_phone: z.string().optional(),
+  show_contact_info: z.boolean()
+})
+export type JobCreationRequestSingle = z.infer<typeof JobCreationRequestSingle>
+
+// For backward compatibility
 export const JobCreationRequest = z.object({
   organization_id: z.string().uuid(),
   title: LocalizedString,
@@ -66,6 +106,8 @@ export const jobFormSchema = z.object({
   salaryCurrency: z.string().min(1),
   remote: z.boolean().default(false),
   status: z.literal("DRAFT").default("DRAFT"),
+  language: z.string().default("en"),
+  summary: z.string().optional(),
   opening_date: z.string().optional(),
   closing_date: z.string().optional(),
   contact_person: z.string().optional(),
@@ -75,7 +117,43 @@ export const jobFormSchema = z.object({
 })
 export type JobFormData = z.infer<typeof jobFormSchema>
 
-// Helper function to transform form data to API request
+// Helper function to transform form data to API request (new single-language version)
+export function transformFormToRequestSingle(
+  formData: JobFormData,
+  organizationId: string
+): JobCreationRequestSingle {
+  return {
+    organization_id: organizationId,
+    title: formData.title,
+    description: formData.description,
+    requirements: formData.requirements?.split('\n').filter(Boolean) || [],
+    skills: formData.skills,
+    status: formData.status,
+    location: {
+      city: formData.city,
+      state: formData.state,
+      country: formData.country,
+      postal_code: formData.postalCode
+    },
+    job_type: formData.jobType,
+    salary_min: formData.salaryMin,
+    salary_max: formData.salaryMax,
+    salary_currency: formData.salaryCurrency,
+    remote: formData.remote,
+    rating: 0,
+    is_mock: false,
+    language: formData.language || "en",
+    summary: formData.summary,
+    opening_date: formData.opening_date,
+    closing_date: formData.closing_date,
+    contact_person: formData.contact_person,
+    contact_email: formData.contact_email,
+    contact_phone: formData.contact_phone,
+    show_contact_info: formData.show_contact_info
+  }
+}
+
+// Helper function to transform form data to API request (for backward compatibility)
 export function transformFormToRequest(
   formData: JobFormData,
   organizationId: string

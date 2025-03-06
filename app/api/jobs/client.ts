@@ -1,7 +1,9 @@
 // Types
+// Legacy interfaces for backward compatibility
 export interface LocalizedText {
   en: string
   fr: string
+  [key: string]: string // Add index signature to allow string indexing
 }
 
 export interface LocalizedLocation {
@@ -33,17 +35,20 @@ export interface Organization {
   additional_locations: LocalizedLocation[]
 }
 
+// Updated ApiJob interface to support both legacy and new format
 export interface ApiJob {
   id: string
-  title: string
+  title: string | LocalizedText
   organizations: Organization
   location: {
-    city: LocalizedText
-    state: LocalizedText
-  }
+    city: string | LocalizedText
+    state: string | LocalizedText
+    country?: string | LocalizedText
+    postal_code?: string | LocalizedText
+  } | Record<string, string>
   job_type: string
   rating: number | null
-  description: string
+  description: string | LocalizedText
   salary_min: number | null
   salary_max: number | null
   salary_currency: string
@@ -54,7 +59,9 @@ export interface ApiJob {
   is_mock: boolean
   mock_batch_id: string | null
   status: string
-  requirements: {
+  language?: string
+  summary?: string
+  requirements: string[] | {
     en: string[]
     fr: string[]
   }
@@ -96,6 +103,8 @@ export interface Job {
   postedAt: string;
   skills: string[];
   remote: boolean;
+  language?: string;
+  summary?: string;
   organization?: {
     industry: string;
     size_range: string;
@@ -110,71 +119,63 @@ const API_URL = typeof window !== 'undefined'
   ? process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8080'
   : process.env.PYTHON_API_URL || 'http://127.0.0.1:8080'
 
+// Helper function to check if a value is a localized text object
+function isLocalizedText(value: unknown): value is LocalizedText {
+  return value !== null && typeof value === 'object' && ('en' in value || 'fr' in value);
+}
+
+// Helper function to extract text from potentially localized fields
+function extractText(field: string | LocalizedText | Record<string, string> | undefined, preferredLanguage: string = 'en'): string {
+  if (!field) return '';
+  
+  // If it's already a string, return it
+  if (typeof field === 'string') return field;
+  
+  // If it's a localized text object
+  if (isLocalizedText(field)) {
+    // Try to get the preferred language
+    if (field[preferredLanguage]) return field[preferredLanguage];
+    // Fallback to any available language
+    return field.en || field.fr || '';
+  }
+  
+  // If it's another type of object, try to stringify it
+  return JSON.stringify(field);
+}
+
 // Helper function to map backend job response to frontend Job type
 export function mapBackendJobToFrontend(backendJob: ApiJob): Job {
-  const locationString = `${backendJob.location.city.fr}, ${backendJob.location.state.fr}`
+  // Determine the language to use
+  const language = backendJob.language || 'en';
+  
+  // Extract location
+  let locationString = '';
+  if (typeof backendJob.location === 'object') {
+    const city = extractText(backendJob.location.city, language);
+    const state = extractText(backendJob.location.state, language);
+    locationString = `${city}, ${state}`;
+  }
 
   const salaryString = backendJob.salary_min && backendJob.salary_max
     ? `$${backendJob.salary_min/1000}k - $${backendJob.salary_max/1000}k ${backendJob.salary_currency}`
-    : 'Competitive'
+    : 'Competitive';
 
   // Handle organization fields that might be localized JSON strings
   const parseLocalizedField = (field: string | LocalizedText | Record<string, string> | undefined): string => {
-    if (!field) return ''
-    if (typeof field === 'string') {
-      try {
-        // Try to parse if it's a stringified JSON
-        const parsed = JSON.parse(field)
-        return parsed.fr || parsed['fr'] || field
-      } catch {
-        return field
-      }
-    }
-    if (typeof field === 'object') {
-      // Check if it has an 'en' property
-      if ('fr' in field && typeof field.fr === 'string') {
-        return field.fr
-      }
-      // Otherwise try to get the first value
-      const values = Object.values(field)
-      if (values.length > 0 && typeof values[0] === 'string') {
-        return values[0]
-      }
-    }
-    return String(field)
+    return extractText(field, language);
   }
 
-  // Extract title from potentially complex structure
-  let title = ''
-  if (typeof backendJob.title === 'string') {
-    title = backendJob.title
-  } else if (typeof backendJob.title === 'object' && backendJob.title !== null) {
-    // Handle the potential structure variations
-    const titleObj = backendJob.title as unknown as { fr?: string };
-    title = titleObj?.fr || '';
-  }
+  // Extract title
+  const title = extractText(backendJob.title, language);
 
   // Extract company name
-  let company = 'Company Name!'
+  let company = 'Company Name';
   if (backendJob.organizations) {
-    if (typeof backendJob.organizations.name === 'string') {
-      company = backendJob.organizations.name
-    } else if (typeof backendJob.organizations.name === 'object' && backendJob.organizations.name !== null) {
-      // Handle the potential structure variations
-      const nameObj = backendJob.organizations.name as unknown as { fr?: string };
-      company = nameObj?.fr || 'Company Name!';
-    }
+    company = extractText(backendJob.organizations.name, language);
   }
 
   // Extract description
-  let description = ''
-  if (typeof backendJob.description === 'string') {
-    description = backendJob.description
-  } else if (typeof backendJob.description === 'object' && backendJob.description !== null) {
-    // Handle the potential structure variations
-    const descObj = backendJob.description as unknown as { fr?: string };
-    description = descObj?.fr || '';
-  }
+  const description = extractText(backendJob.description, language);
 
   return {
     id: backendJob.id,
@@ -189,6 +190,8 @@ export function mapBackendJobToFrontend(backendJob: ApiJob): Job {
     postedAt: backendJob.created_at,
     skills: backendJob.skills || [],
     remote: backendJob.remote,
+    language: backendJob.language,
+    summary: backendJob.summary,
     organization: backendJob.organizations ? {
       industry: parseLocalizedField(backendJob.organizations.industry),
       size_range: parseLocalizedField(backendJob.organizations.size_range),
@@ -209,10 +212,10 @@ export function mapBackendJobToFrontend(backendJob: ApiJob): Job {
 }
 
 // API Client functions
-export async function getJobs(page: number = 0, pageSize: number = 15): Promise<JobsResponse> {
+export async function getJobs(page: number = 0, pageSize: number = 15, language: string = 'en'): Promise<JobsResponse> {
   try {
     const response = await fetch(
-      `${API_URL}/v1/jobs/with/organizations?page=${page}&page_size=${pageSize}`,
+      `${API_URL}/v1/jobs/with/organizations?page=${page}&page_size=${pageSize}&language=${language}`,
       {
         method: 'GET',
         headers: {
@@ -232,11 +235,11 @@ export async function getJobs(page: number = 0, pageSize: number = 15): Promise<
   }
 }
 
-export async function getJob(id: string): Promise<Job | null> {
+export async function getJob(id: string, language: string = 'en'): Promise<Job | null> {
   if (!id) throw new Error('Job ID is required')
   
   try {
-    const response = await fetch(`${API_URL}/v1/jobs/with/organizations/${encodeURIComponent(id)}`, {
+    const response = await fetch(`${API_URL}/v1/jobs/with/organizations/${encodeURIComponent(id)}?language=${language}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'
