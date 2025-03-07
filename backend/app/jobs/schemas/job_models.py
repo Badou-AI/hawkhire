@@ -9,16 +9,6 @@ class JobLocation(BaseModel):
     state: str = Field("", description="State/province")
     postal_code: str = Field("", description="Postal code")
 
-class JobRequirements(BaseModel):
-    """Model for job requirements in different languages (for backward compatibility)"""
-    en: List[str] = Field(default_factory=list, description="Requirements in English")
-    fr: List[str] = Field(default_factory=list, description="Requirements in French")
-
-class LocalizedText(BaseModel):
-    """Model for multilingual text (for backward compatibility)"""
-    en: str = Field("", description="English text")
-    fr: str = Field("", description="French text")
-
 class BaseJobData(BaseModel):
     """Base model for job data"""
     
@@ -36,7 +26,7 @@ class BaseJobData(BaseModel):
     summary: Optional[str] = Field(None, description="Descriptive summary for the candidate to read")
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "title": "Software Engineer",
                 "description": "Job description",
@@ -48,20 +38,19 @@ class BaseJobData(BaseModel):
                 },
                 "job_type": "FULL_TIME",
                 "organization_id": "00000000-0000-0000-0000-000000000000",
-                "requirements": ["Bachelor's degree", "3+ years experience"],
-                "skills": ["Python", "FastAPI", "React"],
+                "requirements": ["3+ years of experience", "Bachelor's degree"],
+                "skills": ["PYTHON", "JAVASCRIPT", "REACT"],
                 "remote": True,
                 "is_mock": False,
                 "status": "DRAFT",
                 "language": "en",
-                "summary": "We are looking for a Software Engineer to join our team."
+                "summary": "We are looking for a software engineer to join our team."
             }
         }
 
 class ProcessedJobData(BaseModel):
     """Model for processed job data"""
-    
-    original_file: str = Field(..., description="Original file path")
+    original_file: str = Field(..., description="Original file name")
     extracted_data: Dict[str, Any] = Field(..., description="Extracted job data")
-    processing_time: float = Field(..., description="Processing time in seconds")
-    validation_errors: List[str] = Field(default_factory=list, description="Validation errors if any") 
+    validation_errors: List[str] = Field(default_factory=list, description="Validation errors")
+    processing_time: float = Field(0.0, description="Processing time in seconds") 

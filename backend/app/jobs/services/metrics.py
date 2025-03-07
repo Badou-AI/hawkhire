@@ -202,4 +202,61 @@ class MetricsService:
         Returns:
             Dictionary of current metrics
         """
-        return self._metrics.copy() 
+        return self._metrics.copy()
+    
+    def record_batch_processing(
+        self,
+        organization_id: str,
+        total_files: int,
+        processed_files: int,
+        failed_files: int,
+        processing_time: float,
+        unsupported_files: int = 0
+    ):
+        """Record metrics for batch processing
+        
+        Args:
+            organization_id: Organization ID
+            total_files: Total number of files processed
+            processed_files: Number of successfully processed files
+            failed_files: Number of failed files
+            processing_time: Total processing time in seconds
+            unsupported_files: Number of unsupported files
+        """
+        logger.info(
+            f"Batch processing completed: {processed_files}/{total_files} files processed, "
+            f"{failed_files} failed, {unsupported_files} unsupported, "
+            f"in {processing_time:.2f}s"
+        )
+        
+        # Update metrics
+        self._metrics["processing_count"] += total_files
+        self._metrics["success_count"] += processed_files
+        self._metrics["failure_count"] += failed_files
+        self._metrics["total_processing_time"] += processing_time
+        self._metrics["avg_processing_time"] = (
+            self._metrics["total_processing_time"] / self._metrics["processing_count"]
+            if self._metrics["processing_count"] > 0 else 0
+        )
+        
+        # Add batch-specific metrics
+        batch_metrics = {
+            "timestamp": datetime.now().isoformat(),
+            "organization_id": organization_id,
+            "total_files": total_files,
+            "processed_files": processed_files,
+            "failed_files": failed_files,
+            "unsupported_files": unsupported_files,
+            "processing_time": processing_time,
+            "avg_file_time": processing_time / total_files if total_files > 0 else 0,
+            "success_rate": processed_files / total_files if total_files > 0 else 0
+        }
+        
+        # Add to historical metrics
+        self._historical_metrics.append(batch_metrics)
+        
+        # Update last updated timestamp
+        self._metrics["last_updated"] = datetime.now().isoformat()
+        
+        # Save historical snapshot
+        self._save_historical_snapshot() 

@@ -194,13 +194,36 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
               const event = JSON.parse(eventData)
               console.log('Parsed event:', event)
 
+              // Normalize event type - backend might send 'event' or 'type'
+              const eventType = event.event || event.type
+              if (!eventType) {
+                console.log('Event has no type or event field:', event)
+                return
+              }
+
               // Always update the file name if present
               if (event.file_name && event.file_name !== 'null') {
                 console.log('Processing file:', event.file_name)
                 setCurrentFile(event.file_name)
+              } else if (event.current_file && event.current_file !== 'null') {
+                console.log('Processing file:', event.current_file)
+                setCurrentFile(event.current_file)
               }
 
-              switch (event.event) {
+              // Map backend event types to frontend event types
+              let normalizedEventType = eventType.toLowerCase()
+              if (normalizedEventType === 'processing_started') normalizedEventType = 'processing_started'
+              else if (normalizedEventType === 'file_processed') normalizedEventType = 'file_processed'
+              else if (normalizedEventType === 'processing_completed') normalizedEventType = 'batch_completed'
+              else if (normalizedEventType === 'processing_error') normalizedEventType = 'file_processing_failed'
+              else if (normalizedEventType === 'file_processing_complete') normalizedEventType = 'file_processed'
+              else if (normalizedEventType === 'file_processing_failed') normalizedEventType = 'file_processing_failed'
+              else if (normalizedEventType === 'job_created') normalizedEventType = 'job_created'
+              else if (normalizedEventType === 'job_creation_failed') normalizedEventType = 'job_creation_failed'
+
+              console.log('Normalized event type:', normalizedEventType)
+
+              switch (normalizedEventType) {
                 case 'processing_started':
                   setProcessingStatus('processing')
                   // Reset the processed files counter
@@ -341,7 +364,7 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
                   break
 
                 default:
-                  console.log('Unhandled event type:', event.event)
+                  console.log('Unhandled event type:', eventType)
                   break
               }
             } catch (e) {

@@ -245,3 +245,96 @@ class BulkJobCreator:
                     "failed_jobs": failed_count,
                     "error": str(e)
                 }) 
+
+    async def create_job(self, processed_job: ProcessedJobData) -> str:
+        """Create a single job from processed data
+        
+        Args:
+            processed_job: Processed job data
+            
+        Returns:
+            Job ID of the created job
+            
+        Raises:
+            Exception: If job creation fails
+        """
+        logger.info(f"Creating job from {processed_job.original_file}")
+        
+        try:
+            # Extract the job data
+            job_data = processed_job.extracted_data
+            
+            # Log the raw data for debugging
+            logger.debug(f"Raw job data: {json.dumps(job_data, indent=2)}")
+            
+            # Normalize the data
+            normalized_data = {
+                # Required fields with validation
+                "title": str(job_data.get("title", "")),
+                "description": str(job_data.get("description", "")),
+                "organization_id": str(job_data.get("organization_id", "")),
+                "job_type": "A_DETERMINER" if job_data.get("language") == "fr" else "TO_BE_DETERMINED",  # Default based on language
+                "language": str(job_data.get("language", "en")),
+                
+                # Location with empty string defaults
+                "location": {
+                    "city": str(job_data.get("location", {}).get("city", "")),
+                    "state": str(job_data.get("location", {}).get("state", "")),
+                    "country": str(job_data.get("location", {}).get("country", "")),
+                    "postal_code": str(job_data.get("location", {}).get("postal_code", ""))
+                },
+                
+                # Optional fields with proper defaults
+                "requirements": list(job_data.get("requirements", [])),
+                "skills": list(job_data.get("skills", [])),
+                "summary": str(job_data.get("summary", "")),
+                "remote": bool(job_data.get("remote", False)),
+                "salary_min": None,  # Always null if not specified
+                "salary_max": None,  # Always null if not specified
+                "salary_currency": "",  # Empty string when salary not specified
+                "is_mock": bool(job_data.get("is_mock", False)),
+                "status": str(job_data.get("status", "DRAFT"))
+            }
+            
+            # Log the normalized data for debugging
+            logger.debug(f"Normalized job data: {json.dumps(normalized_data, indent=2)}")
+            
+            # Make API request to create job
+            response = await self.api_client.post("/v1/jobs", json=normalized_data)
+            
+            # Check response status
+            if response.status != 200 and response.status != 201:
+                response_text = await response.text()
+                logger.error(f"API request failed with status {response.status}: {response_text}")
+                raise Exception(f"Failed to create job: {response_text}")
+            
+            # Parse response
+            response_json = await response.json()
+            
+            # Get job ID
+            job_id = response_json.get("id")
+            if not job_id:
+                logger.error(f"No job ID returned in response: {response_json}")
+                raise Exception("No job ID returned in response")
+            
+            # Track metrics
+            if self.metrics_service:
+                self.metrics_service.update_metrics("job_creation", {
+                    "success": True,
+                    "processing_time": processed_job.processing_time
+                })
+            
+            logger.info(f"Successfully created job {job_id} from {processed_job.original_file}")
+            return job_id
+            
+        except Exception as e:
+            logger.error(f"Error creating job: {str(e)}")
+            
+            # Track metrics
+            if self.metrics_service:
+                self.metrics_service.update_metrics("job_creation", {
+                    "success": False,
+                    "error": str(e)
+                })
+            
+            raise Exception(f"Failed to create job: {str(e)}") 

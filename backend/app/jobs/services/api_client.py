@@ -92,12 +92,14 @@ class APIClient:
         max_tries=3,
         giveup=lambda e: isinstance(e, aiohttp.ClientResponseError) and e.status >= 400
     )
-    async def post(self, endpoint: str, json: Optional[Dict[str, Any]] = None) -> aiohttp.ClientResponse:
+    async def post(self, endpoint: str, json: Optional[Dict[str, Any]] = None, files: Optional[Dict[str, Any]] = None, api_url: Optional[str] = None) -> aiohttp.ClientResponse:
         """Make a POST request
         
         Args:
             endpoint: API endpoint
             json: JSON payload
+            files: Files to upload
+            api_url: Override base URL
             
         Returns:
             Response object
@@ -105,21 +107,44 @@ class APIClient:
         Raises:
             aiohttp.ClientError: If request fails
         """
+        session_created = False
         if not self.session:
             self.session = aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=self.timeout),
                 connector=aiohttp.TCPConnector(verify_ssl=self.verify_ssl)
             )
-        
-        url = f"{self.base_url}{endpoint}"
+            session_created = True
+            
+        if not api_url: 
+            url = f"{self.base_url}{endpoint}"
+        else:
+            url = f"{api_url}{endpoint}"
         logger.debug(f"POST {url}")
         
         try:
-            response = await self.session.post(url, json=json)
+            if files:
+                # Handle file uploads
+                data = aiohttp.FormData()
+                for field_name, file_info in files.items():
+                    filename, content, content_type = file_info
+                    data.add_field(
+                        field_name,
+                        content,
+                        filename=filename,
+                        content_type=content_type
+                    )
+                response = await self.session.post(url, data=data)
+            else:
+                # Regular JSON request
+                response = await self.session.post(url, json=json)
             return response
         except Exception as e:
             logger.error(f"Error in POST request to {url}: {str(e)}")
             raise
+        finally:
+            if session_created:
+                await self.session.close()
+                self.session = None
     
     def test_connection(self) -> Dict[str, Any]:
         """Test connection to API and log diagnostics

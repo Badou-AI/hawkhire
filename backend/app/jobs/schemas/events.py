@@ -5,13 +5,17 @@ from datetime import datetime
 class JobProcessingEvent(BaseModel):
     """Event emitted during job processing"""
     
-    event: str = Field(..., description="Event type")
+    type: str = Field(..., description="Event type (PROCESSING_STARTED, FILE_EXTRACTED, FILE_PROCESSING, FILE_PROCESSED, FILE_FAILED, PROCESSING_COMPLETED, PROCESSING_ERROR)")
+    message: str = Field(..., description="Human-readable message about the event")
     total_files: int = Field(..., description="Total number of files")
     processed_count: int = Field(..., description="Number of processed files")
     failed_count: int = Field(..., description="Number of failed files")
-    file_name: Optional[str] = Field(None, description="Name of the current file")
+    processing_time: float = Field(..., description="Processing time in seconds")
+    unsupported_count: int = Field(0, description="Number of unsupported files")
+    current_file: Optional[str] = Field(None, description="Name of the current file")
     error: Optional[str] = Field(None, description="Error message if any")
-    processing_details: Optional[Dict[str, Any]] = Field(None, description="Additional processing details")
+    error_type: Optional[str] = Field(None, description="Type of error that occurred")
+    job_id: Optional[str] = Field(None, description="ID of the created job (for FILE_PROCESSED events)")
 
 class ProcessingEvent(BaseModel):
     """Base model for processing events"""

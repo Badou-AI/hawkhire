@@ -1394,6 +1394,7 @@ class JobStatus(str, Enum):
 
 class JobType(str, Enum):
     """Job type options"""
+    # English types
     FULL_TIME = "FULL_TIME"
     PART_TIME = "PART_TIME"
     CONTRACT = "CONTRACT"
@@ -1401,30 +1402,24 @@ class JobType(str, Enum):
     INTERNSHIP = "INTERNSHIP"
     VOLUNTEER = "VOLUNTEER"
     TO_BE_DETERMINED = "TO_BE_DETERMINED"
+    
+    # French types
+    TEMPS_PLEIN = "TEMPS_PLEIN"
+    TEMPS_PARTIEL = "TEMPS_PARTIEL"
+    CONTRAT = "CONTRAT"
+    STAGE = "STAGE"
+    BENEVOLAT = "BENEVOLAT"
+    A_DETERMINER = "A_DETERMINER"
+    CDI = "CDI"
+    CDD = "CDD"
+    ALTERNANCE = "ALTERNANCE"
 
-class LocalizedText(BaseModel):
-    """Model for multilingual text"""
-    en: str = Field(..., example="English text")
-    fr: str = Field(..., example="Texte français")
-
-class LocalizedLocation(BaseModel):
-    """Model for multilingual location fields"""
-    city: LocalizedText = Field(..., example={
-        "en": "New York",
-        "fr": "New York"
-    })
-    state: LocalizedText = Field(..., example={
-        "en": "New York",
-        "fr": "New York"
-    })
-    country: LocalizedText = Field(..., example={
-        "en": "United States",
-        "fr": "États-Unis"
-    })
-    postal_code: LocalizedText = Field(..., example={
-        "en": "10001",
-        "fr": "10001"
-    })
+class Location(BaseModel):
+    """Model for location fields"""
+    city: str = Field(..., description="City name", example="New York")
+    state: str = Field("", description="State/Province (use empty string for non-North American locations)", example="")
+    country: str = Field(..., description="Country name", example="Senegal")
+    postal_code: str = Field("", description="Postal/ZIP code (use empty string for non-North American locations)", example="")
 
 class JobBase(BaseModel):
     """Base model for job data"""
@@ -1433,38 +1428,31 @@ class JobBase(BaseModel):
         description="ID of the organization posting the job",
         example="f6560f9b-c8c4-45ae-8265-18d435a56202"
     )
-    title: LocalizedText = Field(
-        ..., 
-        description="Job title in English and French",
-        example={
-            "en": "Senior Software Engineer",
-            "fr": "Ingénieur Logiciel Senior"
-        }
+    language: str = Field(
+        default="en",
+        description="Language of the job posting",
+        example="en"
     )
-    description: LocalizedText = Field(
+    title: str = Field(
         ..., 
-        description="Job description in English and French",
-        example={
-            "en": "We are looking for a senior software engineer...",
-            "fr": "Nous recherchons un ingénieur logiciel senior..."
-        }
+        description="Job title",
+        example="Senior Software Engineer"
     )
-    requirements: Dict[str, List[str]] = Field(
-        default={"en": [], "fr": []},
-        description="Job requirements in English and French",
-        example={
-            "en": [
-                "5+ years of experience with Python",
-                "Strong knowledge of cloud services"
-            ],
-            "fr": [
-                "5+ ans d'expérience en Python",
-                "Solide connaissance des services cloud"
-            ]
-        }
+    description: str = Field(
+        ..., 
+        description="Job description",
+        example="We are looking for a senior software engineer..."
+    )
+    requirements: List[str] = Field(
+        default_factory=list,
+        description="Job requirements",
+        example=[
+            "5+ years of experience with Python",
+            "Strong knowledge of cloud services"
+        ]
     )
     skills: List[str] = Field(
-        default=[],
+        default_factory=list,
         description="Required skills (uppercase constants)",
         example=["PYTHON", "AWS", "DOCKER"]
     )
@@ -1473,7 +1461,7 @@ class JobBase(BaseModel):
         description="Job status",
         example="DRAFT"
     )
-    location: LocalizedLocation = Field(
+    location: Location = Field(
         ...,
         description="Job location details"
     )
@@ -1484,17 +1472,17 @@ class JobBase(BaseModel):
     )
     salary_min: Optional[int] = Field(
         None,
-        description="Minimum salary",
+        description="Minimum salary (null if not specified)",
         example=80000
     )
     salary_max: Optional[int] = Field(
         None,
-        description="Maximum salary",
+        description="Maximum salary (null if not specified)",
         example=120000
     )
     salary_currency: str = Field(
-        default="USD",
-        description="Salary currency code",
+        default="",
+        description="Salary currency code (use empty string when salary is not specified)",
         example="USD"
     )
     remote: bool = Field(
@@ -1517,13 +1505,10 @@ class JobBase(BaseModel):
         description="ID of the mock data batch",
         example="550e8400-e29b-41d4-a716-446655440000"
     )
-    text_blob: Optional[LocalizedText] = Field(
+    summary: Optional[str] = Field(
         None,
-        description="Markdown formatted job description in English and French",
-        example={
-            "en": "# Job Title\n\n## About Us\nWe are a leading company...\n\n## Requirements\n* 5+ years of experience\n* Strong communication skills",
-            "fr": "# Titre du Poste\n\n## À Propos de Nous\nNous sommes une entreprise leader...\n\n## Exigences\n* 5+ ans d'expérience\n* Solides compétences en communication"
-        }
+        description="Descriptive summary for the candidate to read",
+        example="We are looking for a software engineer to join our team..."
     )
 
 class JobCreate(JobBase):
@@ -1823,10 +1808,54 @@ async def search_jobs(
 async def create_job(job: JobCreate):
     """
     Create a new job posting
-    
+
     Parameters:
-    - job: Job data including title, description, organization_id, etc.
-    
+    - job: Job data including:
+        - organization_id: UUID of the organization
+        - title: Job title
+        - description: Job description
+        - language: Content language (e.g., "en" or "fr")
+        - location: {
+            city: string,
+            state: string (empty for non-North American),
+            country: string,
+            postal_code: string (empty for non-North American)
+        }
+        - job_type: One of the valid job types (e.g., "A_DETERMINER" for French jobs)
+        - requirements: List of strings
+        - skills: List of strings
+        - salary_min: number or null
+        - salary_max: number or null
+        - salary_currency: string (empty when salary not specified)
+        - remote: boolean
+        - status: "DRAFT" or "PUBLISHED"
+        - is_mock: boolean
+
+    Example request body:
+    ```json
+    {
+        "title": "Vendeur",
+        "language": "fr",
+        "description": "Description du poste...",
+        "requirements": ["Bac+2 en commerce", "2 ans d'expérience"],
+        "skills": ["Vente", "Communication"],
+        "location": {
+            "city": "Dakar",
+            "state": "",
+            "country": "Senegal",
+            "postal_code": ""
+        },
+        "job_type": "A_DETERMINER",
+        "remote": false,
+        "salary_min": null,
+        "salary_max": null,
+        "salary_currency": "",
+        "organization_id": "uuid-here",
+        "is_mock": false,
+        "status": "PUBLISHED"
+    }
+    ```
+
     Returns:
     - The created job data
     """
@@ -1951,8 +1980,13 @@ class OrganizationVerificationStatus(str, Enum):
 
 class OrganizationBase(BaseModel):
     """Base model for organization data"""
-    name: LocalizedText = Field(..., description="Organization name in English and French")
-    description: LocalizedText = Field(..., description="Organization description in English and French")
+    name: str = Field(..., description="Organization name")
+    description: str = Field(..., description="Organization description")
+    language: str = Field(
+        default="en",
+        description="Language of the organization data",
+        example="en"
+    )
     tier: OrganizationTier = Field(
         default=OrganizationTier.FREE,
         description="Organization subscription tier"
@@ -1987,11 +2021,11 @@ class OrganizationBase(BaseModel):
         default="/placeholders/organization-cover.png",
         description="URL to organization's cover image"
     )
-    primary_location: LocalizedLocation = Field(
+    primary_location: Dict[str, str] = Field(
         ...,
         description="Primary location of the organization"
     )
-    additional_locations: List[LocalizedLocation] = Field(
+    additional_locations: List[Dict[str, str]] = Field(
         default=[],
         description="Additional organization locations"
     )
@@ -3597,6 +3631,7 @@ async def extract_job_data(body: Dict = Body(...)):
         # Define the schema for job data extraction
         schema = {
             "title": {"type": "string", "required": True},
+            "language": {"type": "string", "required": True, "description": "The language of the job description. This should be a valid language code like 'en', 'fr', 'es', etc."},
             "description": {"type": "string", "required": True},
             "requirements": {"type": "array", "items": {"type": "string"}},
             "skills": {"type": "array", "items": {"type": "string"}},
@@ -3604,22 +3639,29 @@ async def extract_job_data(body: Dict = Body(...)):
             "location": {
                 "type": "object",
                 "properties": {
-                    "city": {"type": "string"},
-                    "state": {"type": "string"},
+                    "city": {"type": "string", "description": "Can be a single city or a comma delimited list of locations"},
+                    "state": {"type": "string", "description": "Only required if the detected country is the United States, Canada, or Mexico. Can be a single state or a comma delimited list of states. Should be null for other countries."},
                     "country": {"type": "string"},
-                    "postal_code": {"type": "string"}
-                }
+                    "postal_code": {"type": "string", "description": "Only required if the detected country is the United States, Canada, or Mexico. Should be null for other countries."}
+                },
+                "required": ["city", "country"]
             },
-            "job_type": {"type": "string"},
-            "remote": {"type": "boolean"},
-            "salary_min": {"type": "number"},
-            "salary_max": {"type": "number"},
-            "salary_currency": {"type": "string"}
+            "job_type": {"type": "string", "description": "Regardless of the language, escape all accent and special characters and return it as an all caps slug with an underscore as the delimiter."},
+            "remote": {"type": "boolean", "description": "Assess whether the job is remote or not based on the document language and if the remote keyword is present or implied."},
+            "salary_min": {"type": "number", "description": "Minimum salary. If not specified, should be null."},
+            "salary_max": {"type": "number", "description": "Maximum salary. If not specified, should be null."},
+            "salary_currency": {"type": "string", "description": "Currency code. Should only be provided if both salary_min and salary_max are specified, otherwise should be null."},
+            "questions": {"type": "array", "items": {"type": "object", "properties": {
+                "question": {"type": "string", "description": "The question to ask the candidate."},
+                "type": {"type": "string", "description": "The type of question to ask the candidate. This should be a valid question type like 'text', 'number', 'boolean', 'date', etc."},
+                "required": {"type": "boolean", "description": "Whether the question is required or not."}
+            }}}
         }
 
         # Extract job data using semantic service
-        extracted_data = await semantic_service.extract_knowledge(text, schema)
+        data = await semantic_service.extract_knowledge(text, schema)
         
+        extracted_data = data.get("data", None)
         if not extracted_data:
             raise ValueError("Failed to extract job data from text")
 

@@ -1,0 +1,180 @@
+# Fall back to local spaCy extraction
+                import spacy
+                try:
+                    nlp = spacy.load("en_core_web_sm")
+                except OSError:
+                    logger.warning("Spacy model not found. Downloading...")
+                    import subprocess
+                    subprocess.run([sys.executable, "-m", "spacy", "download", "en_core_web_sm"])
+                    nlp = spacy.load("en_core_web_sm")
+                
+                # Process text with spaCy
+                doc = nlp(text)
+                
+                # Extract title from first sentence
+                title = next((sent.text.strip() for sent in doc.sents), "Untitled Position")
+                
+                # Clean up the title - remove newlines and excessive spaces
+                title = re.sub(r'\n\s+', ' ', title)  # Replace newline+space with just space
+                title = re.sub(r'\s+', ' ', title)    # Normalize spaces (multiple spaces to single space)
+                title = title.strip()
+                
+                # Clean up the title - remove "Fiche de Poste" or similar prefixes
+                title_prefixes = ["fiche de poste", "fiche de poste :", "fiche poste", "poste :"]
+                title_lower = title.lower()
+                for prefix in title_prefixes:
+                    if title_lower.startswith(prefix):
+                        title = title[len(prefix):].strip()
+                        break
+                
+                # Extract location information
+                locations = [ent.text for ent in doc.ents if ent.label_ == "GPE"]
+                location = {
+                    "city": {"en": locations[0] if locations else "", "fr": ""},
+                    "state": {"en": locations[1] if len(locations) > 1 else "", "fr": ""},
+                    "country": {"en": locations[-1] if locations else "", "fr": ""},
+                    "postal_code": {"en": "", "fr": ""}
+                }
+                
+                # Check for multi-location patterns in the title or first part of text
+                multi_location_patterns = [
+                    r"\((.*?)\)",  # Text in parentheses
+                    r"à\s+([^\.;]+)",  # French "à" followed by location
+                    r"in\s+([^\.;]+)",  # English "in" followed by location
+                    r"location\s*:\s*([^\.;]+)",  # Location: format
+                    r"localisation\s*:\s*([^\.;]+)"  # Localisation: format
+                ]
+                
+                for pattern in multi_location_patterns:
+                    matches = re.findall(pattern, title + " " + text[:500], re.IGNORECASE)
+                    if matches:
+                        potential_locations = []
+                        for match in matches:
+                            # Clean up the match text
+                            match = re.sub(r'\n\s+', ' ', match)  # Replace newline+space with just space
+                            match = re.sub(r'\s+', ' ', match)    # Normalize spaces
+                            match = match.strip()
+                            
+                            # Split by commas or other separators
+                            parts = re.split(r'[,/]', match)
+                            parts = [part.strip() for part in parts if part.strip()]
+                            potential_locations.extend(parts)
+                        
+                        if potential_locations:
+                            # Update city with the first location
+                            location["city"]["en"] = potential_locations[0]
+                            location["city"]["fr"] = potential_locations[0]
+                            
+                            # If we have multiple locations, update state
+                            if len(potential_locations) > 1:
+                                location["state"]["en"] = potential_locations[1]
+                                location["state"]["fr"] = potential_locations[1]
+                            
+                            # If we have more than 2 locations, use the last one as country
+                            if len(potential_locations) > 2:
+                                location["country"]["en"] = potential_locations[-1]
+                                location["country"]["fr"] = potential_locations[-1]
+                
+                # Format the description better
+                # Remove the title from the beginning of the description
+                description = text
+                if title and description.startswith(title):
+                    description = description[len(title):].strip()
+                
+                # Clean up the description - remove excessive newlines
+                description = re.sub(r'\n\s+', ' ', description)  # Replace "\n " pattern with space
+                description = re.sub(r'\n{2,}', '\n\n', description)  # Replace multiple newlines with double newlines
+                
+                # Extract skills (technical terms and proper nouns)
+                skills = list(set([
+                    ent.text.upper() for ent in doc.ents 
+                    if ent.label_ in ["ORG", "PRODUCT"] 
+                    or (ent.text.isupper() and len(ent.text) > 1)
+                ]))
+                
+                # Extract requirements (bullet points or numbered lists)
+                requirements = []
+                for sent in doc.sents:
+                    sent_text = sent.text.strip()
+                    if any(char in sent_text for char in ["•", "-", "●", "•", "*"]) or sent_text.startswith(tuple("123456789")):
+                        # Clean up the requirement
+                        req = sent_text
+                        for prefix in ["•", "-", "●", "•", "*"]:
+                            if req.startswith(prefix):
+                                req = req[1:].strip()
+                        
+                        # Clean up newlines and excessive spaces
+                        req = re.sub(r'\n\s+', ' ', req)  # Replace newline+space with just space
+                        req = re.sub(r'\s+', ' ', req)    # Normalize spaces
+                        req = req.strip()
+                        
+                        requirements.append(req)
+                
+                # If we didn't find any requirements with bullet points, try to extract them from sections
+                if not requirements:
+                    requirement_sections = [
+                        r"requirements\s*:\s*(.*?)(?:\n\n|\Z)",
+                        r"qualifications\s*:\s*(.*?)(?:\n\n|\Z)",
+                        r"exigences\s*:\s*(.*?)(?:\n\n|\Z)",
+                        r"compétences\s*:\s*(.*?)(?:\n\n|\Z)"
+                    ]
+                    
+                    for pattern in requirement_sections:
+                        matches = re.findall(pattern, text, re.IGNORECASE | re.DOTALL)
+                        if matches:
+                            # Split by newlines and clean up
+                            req_text = matches[0]
+                            req_lines = []
+                            for line in req_text.split('\n'):
+                                if line.strip():
+                                    # Clean up newlines and excessive spaces
+                                    clean_line = re.sub(r'\n\s+', ' ', line)
+                                    clean_line = re.sub(r'\s+', ' ', clean_line)
+                                    clean_line = clean_line.strip()
+                                    req_lines.append(clean_line)
+                            requirements.extend(req_lines)
+                            break
+                
+                # Determine job type
+                job_types = {
+                    "full time": "FULL_TIME",
+                    "full-time": "FULL_TIME",
+                    "part time": "PART_TIME",
+                    "part-time": "PART_TIME",
+                    "contract": "CONTRACT",
+                    "freelance": "FREELANCE",
+                    "intern": "INTERNSHIP",
+                    "internship": "INTERNSHIP",
+                    "volunteer": "VOLUNTEER",
+                    "temps plein": "FULL_TIME",
+                    "temps partiel": "PART_TIME",
+                    "contrat": "CONTRACT",
+                    "stage": "INTERNSHIP",
+                    "bénévolat": "VOLUNTEER"
+                }
+                
+                job_type = "TO_BE_DETERMINED"
+                text_lower = text.lower()
+                for key, value in job_types.items():
+                    if key in text_lower:
+                        job_type = value
+                        break
+                
+                # Create structured response
+                extracted_data = {
+                    "title": {"en": title, "fr": title},
+                    "description": {"en": description, "fr": description},
+                    "location": location,
+                    "requirements": {"en": requirements, "fr": requirements},
+                    "skills": skills,
+                    "job_type": job_type,
+                    "remote": "remote" in text_lower or "télétravail" in text_lower or "à distance" in text_lower,
+                    "organization_id": organization_id,
+                    "status": "DRAFT",
+                    "is_mock": False,
+                    "summary": description[:500] + ("..." if len(description) > 500 else "")
+                }
+                
+                logger.info(f"Successfully extracted job data locally using spaCy for {file_name}")
+                return extracted_data
+            
