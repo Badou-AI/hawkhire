@@ -1,35 +1,35 @@
-"use client"
-
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
+"use client";
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
   CardDescription,
-} from "@/components/ui/card"
-import { Progress } from "@/components/ui/progress"
-import { Badge } from "@/components/ui/badge"
+} from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
-import { AlertCircle, CheckCircle2, XCircle, Timer, Database, Settings2, Plus } from 'lucide-react'
-import { cn } from "@/lib/utils"
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
-import Link from "next/link"
-import { useRouter, useSearchParams } from "next/navigation"
-import { useAuth } from "@/hooks/useAuth"
-import { getJobs, type ApiJob } from "@/app/api/jobs/client"
-import { useToast } from '@/hooks/use-toast'
+} from "@/components/ui/select";
+import { AlertCircle, CheckCircle2, XCircle, Timer, Database, Settings2, Plus } from 'lucide-react';
+import { cn } from "@/lib/utils";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import Link from "next/link";
+import { useRouter, useSearchParams, useParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import type { ApiJob } from "@/types/jobs";
+import { useToast } from '@/hooks/use-toast';
+import { useOrganization } from "@/lib/hooks/useOrganization";
 
 // Import data from shared data file
-import { transformApiResponseToUiFormat, getSkillColor } from "./data"
-import { FileDropzone } from "@/components/resume-evaluator/FileDropzone"
+import { transformApiResponseToUiFormat, getSkillColor } from "./data";
+import { FileDropzone } from "@/components/resume-evaluator/FileDropzone";
 
 // Add new types
 interface IndexStatus {
@@ -96,7 +96,8 @@ export default function ResumeProcessingPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const jobIdFromUrl = searchParams.get('jobId')
-  const { session } = useAuth()
+  const params = useParams();
+  const { organizationId } = useOrganization();
   const [selectedJob, setSelectedJob] = useState<ApiJob | null>(null)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [processingStatus, setProcessingStatus] = useState<'idle' | 'uploading' | 'processing' | 'completed' | 'error'>('idle')
@@ -117,21 +118,46 @@ export default function ResumeProcessingPage() {
 
   useEffect(() => {
     const fetchJobs = async () => {
+      setIsLoadingJobs(true);
       try {
-        const fetchedJobs = await getJobs();
-        setJobs(fetchedJobs);
+        const supabase = createClient();
+        
+        const { data: fetchedJobs, error: jobsError } = await supabase
+          .from('jobs')
+          .select(`
+            id,
+            title,
+            description
+          `)
+          .eq('organization_id', organizationId)
+          .eq('status', 'PUBLISHED')
+          .order('created_at', { ascending: false });
+        
+        if (jobsError) throw jobsError;
+        setJobs(fetchedJobs || []);
       } catch (error) {
         console.error('Error fetching jobs:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to fetch jobs',
-          variant: 'destructive',
-        });
+        setJobs([]);
+      } finally {
+        setIsLoadingJobs(false);
       }
     };
 
-    fetchJobs();
-  }, [toast]);
+    if (organizationId) {
+      fetchJobs();
+    }
+  }, [organizationId]);
+
+  // use the jobIdFromUrl to set the selectedJob
+  useEffect(() => {
+    if (jobIdFromUrl) {
+      setSelectedJob(jobs.find(job => job.id === jobIdFromUrl) || null);
+    }
+  }, [jobIdFromUrl, jobs]);
+
+  // Debug logs
+  console.log('Loading:', isLoadingJobs);
+  console.log('Jobs:', jobs);
 
   const handleFileUpload = async (file: File) => {
     if (!selectedJob) {
@@ -365,14 +391,18 @@ export default function ResumeProcessingPage() {
                 ) : jobs.length > 0 ? (
                   <Select 
                     value={selectedJob?.id} 
-                    onValueChange={(value) => setSelectedJob(jobs.find(job => job.id === value) || null)}
+                    onValueChange={(value) => {
+                      const selected = jobs.find(job => job.id === value);
+                      console.log('Selected job:', selected); // Debug log
+                      setSelectedJob(selected || null);
+                    }}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select job position" />
                     </SelectTrigger>
                     <SelectContent>
                       {jobs.map((job: ApiJob) => {
-                        const listJobTitle = String(job.title || '')
+                        const listJobTitle = String(job.title || '');
                         return (
                           <SelectItem key={job.id} value={job.id}>
                             {listJobTitle}
@@ -383,7 +413,11 @@ export default function ResumeProcessingPage() {
                   </Select>
                 ) : (
                   <div className="text-center p-4 border rounded-lg bg-muted">
-                    <p className="text-sm text-muted-foreground mb-4">No jobs available for resume processing</p>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      {organizationId 
+                        ? "No published jobs available for resume processing" 
+                        : "Please select an organization to view jobs"}
+                    </p>
                     <Link href="/organizations/jobs/create">
                       <Button className="gap-2">
                         <Plus className="h-4 w-4" />

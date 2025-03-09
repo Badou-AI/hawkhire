@@ -212,10 +212,10 @@ export function mapBackendJobToFrontend(backendJob: ApiJob): Job {
 }
 
 // API Client functions
-export async function getJobs(page: number = 0, pageSize: number = 15, language: string = 'en'): Promise<JobsResponse> {
+export async function getJobs(page: number = 0, pageSize: number = 15): Promise<JobsResponse> {
   try {
     const response = await fetch(
-      `${API_URL}/v1/jobs/with/organizations?page=${page}&page_size=${pageSize}&language=${language}`,
+      `${API_URL}/v1/jobs/with/organizations?page=${page}&page_size=${pageSize}`,
       {
         method: 'GET',
         headers: {
