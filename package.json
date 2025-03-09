@@ -8,7 +8,9 @@
     "pre:build": "npm run lint && npm run type-check",
     "start": "next start",
     "lint": "next lint",
-    "type-check": "tsc"
+    "type-check": "tsc",
+    "pre:start-backend": "cd backend && deactivate && source venv/bin/activate",
+    "start-backend": "uvicorn app.main:app --port 8080"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^16.5.0",

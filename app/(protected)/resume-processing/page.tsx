@@ -24,8 +24,8 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/hooks/useAuth"
-import { getJobs, type ApiJob, type LocalizedText } from "@/app/api/jobs/client"
-import { createClient } from "@/lib/supabase/client"
+import { getJobs, type ApiJob } from "@/app/api/jobs/client"
+import { useToast } from '@/hooks/use-toast'
 
 // Import data from shared data file
 import { transformApiResponseToUiFormat, getSkillColor } from "./data"
@@ -113,61 +113,25 @@ export default function ResumeProcessingPage() {
   const [jobs, setJobs] = useState<ApiJob[]>([])
   const [isLoadingJobs, setIsLoadingJobs] = useState(true)
   const [matches, setMatches] = useState<ReturnType<typeof transformApiResponseToUiFormat>>([])
+  const { toast } = useToast()
 
-  // Fetch jobs on component mount
   useEffect(() => {
     const fetchJobs = async () => {
       try {
-        setIsLoadingJobs(true)
-        
-        // First get the user's organization membership
-        const supabase = createClient()
-        if (!supabase) {
-          setError('Failed to create Supabase client')
-          setIsLoadingJobs(false)
-          return
-        }
-        
-        const { data: memberData } = await supabase
-          .from('organization_members')
-          .select('organization_id')
-          .eq('user_id', session?.user?.id)
-          .single()
-
-        if (!memberData) {
-          setError('You are not a member of any organization')
-          setIsLoadingJobs(false)
-          return
-        }
-
-        // Then fetch jobs for that organization
-        const response = await getJobs(0, 100) // Get up to 100 jobs
-        const filteredJobs = response.data.filter(job => 
-          job.status === 'PUBLISHED' && 
-          job.organizations?.id === memberData.organization_id
-        )
-        setJobs(filteredJobs)
-        
-        // If jobId is provided in URL, select that job
-        if (jobIdFromUrl) {
-          const jobFromUrl = filteredJobs.find(job => job.id === jobIdFromUrl)
-          if (jobFromUrl) {
-            setSelectedJob(jobFromUrl)
-          }
-        }
-        
-        setIsLoadingJobs(false)
+        const fetchedJobs = await getJobs();
+        setJobs(fetchedJobs);
       } catch (error) {
-        console.error('Error fetching jobs:', error)
-        setError('Failed to load jobs')
-        setIsLoadingJobs(false)
+        console.error('Error fetching jobs:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to fetch jobs',
+          variant: 'destructive',
+        });
       }
-    }
+    };
 
-    if (session) {
-      fetchJobs()
-    }
-  }, [session, jobIdFromUrl])
+    fetchJobs();
+  }, [toast]);
 
   const handleFileUpload = async (file: File) => {
     if (!selectedJob) {
@@ -184,14 +148,9 @@ export default function ResumeProcessingPage() {
     formData.append('file', file)
     formData.append('jobId', selectedJob.id)
     
-    // Handle title and description which could be strings or LocalizedText objects
-    const jobTitle = typeof selectedJob.title === 'string' 
-      ? selectedJob.title 
-      : (selectedJob.title as unknown as LocalizedText)?.fr || '';
-    
-    const jobDescription = typeof selectedJob.description === 'string'
-      ? selectedJob.description
-      : (selectedJob.description as unknown as LocalizedText)?.fr || '';
+    // Handle title and description
+    const jobTitle = String(selectedJob.title || '')
+    const jobDescription = String(selectedJob.description || '')
     
     formData.append('jobTitle', jobTitle)
     formData.append('jobDescription', jobDescription)
@@ -360,12 +319,8 @@ export default function ResumeProcessingPage() {
     };
 
     if (selectedJob) {
-      // Handle title which could be a string or LocalizedText object
-      const jobTitle = typeof selectedJob.title === 'string' 
-        ? selectedJob.title 
-        : (selectedJob.title as unknown as LocalizedText)?.fr || '';
-      
-      fetchIndexStatus(generateIndexName(selectedJob.id, jobTitle));
+      const indexJobTitle = String(selectedJob.title || '')
+      fetchIndexStatus(generateIndexName(selectedJob.id, indexJobTitle));
     }
   }, [selectedJob]);
 
@@ -416,13 +371,11 @@ export default function ResumeProcessingPage() {
                       <SelectValue placeholder="Select job position" />
                     </SelectTrigger>
                     <SelectContent>
-                      {jobs.map(job => {
-                        const jobTitle = typeof job.title === 'string' 
-                          ? job.title 
-                          : (job.title as unknown as LocalizedText)?.fr || '';
+                      {jobs.map((job: ApiJob) => {
+                        const listJobTitle = String(job.title || '')
                         return (
                           <SelectItem key={job.id} value={job.id}>
-                            {jobTitle}
+                            {listJobTitle}
                           </SelectItem>
                         );
                       })}
