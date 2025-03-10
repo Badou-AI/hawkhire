@@ -37,7 +37,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Pagination } from "@/components/shared/pagination";
-import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 // Job interface based on database schema
 interface Job {
@@ -110,12 +110,13 @@ export default function OrganizationJobsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
+  const { supabase } = useAuth();
+  
   // Fetch jobs for the organization
   useEffect(() => {
     async function fetchJobs() {
       try {
         setLoading(true);
-        const supabase = createClient();
         
         if (!supabase) {
           throw new Error("Supabase client not available");
@@ -222,7 +223,7 @@ export default function OrganizationJobsPage() {
     }
     
     fetchJobs();
-  }, [organizationId]);
+  }, [organizationId, supabase]);
   
   // Filter jobs based on search query
   const filteredJobs = jobs.filter(job => 

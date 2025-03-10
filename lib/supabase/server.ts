@@ -1,6 +1,12 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
-import { cookies } from 'next/headers'
-import { Database } from '@/types/supabase'
+import { createServerClient } from '@supabase/ssr';
+import { Database } from '@/types/supabase';
+
+const COOKIE_OPTIONS = {
+  path: '/',
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax' as const,
+  maxAge: 60 * 60 * 24 * 7 // 7 days
+};
 
 export const createClient = () => {
   return createServerClient<Database>(
@@ -8,58 +14,68 @@ export const createClient = () => {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        async get(name: string) {
-          try {
-            const cookieStore = await cookies()
-            const cookie = cookieStore.get(name)
-            return cookie?.value ?? ''
-          } catch {
-            return ''
-          }
+        get(name: string) {
+          return document.cookie
+            .split('; ')
+            .find((row) => row.startsWith(`${name}=`))
+            ?.split('=')[1] || '';
         },
-        async set(name: string, value: string, options: CookieOptions) {
-          try {
-            const cookieStore = await cookies()
-            cookieStore.set({
-              name,
-              value,
-              ...options,
-              path: '/',
-              sameSite: 'lax',
-              secure: process.env.NODE_ENV === 'production'
-            })
-          } catch {
-            // Silently handle cookie errors in non-Route Handler contexts
-            return
-          }
+        set(name: string, value: string, options: { path?: string; maxAge?: number }) {
+          document.cookie = `${name}=${value}; ${Object.entries({
+            ...COOKIE_OPTIONS,
+            ...options
+          }).map(([k, v]) => `${k}=${v}`).join('; ')}`;
         },
-        async remove(name: string, options: CookieOptions) {
-          try {
-            const cookieStore = await cookies()
-            cookieStore.delete({
-              name,
-              path: '/',
-              ...options
-            })
-          } catch {
-            // Silently handle cookie errors in non-Route Handler contexts
-            return
-          }
+        remove(name: string, options?: { path?: string }) {
+          document.cookie = `${name}=; ${Object.entries({
+            ...COOKIE_OPTIONS,
+            ...options,
+            maxAge: 0
+          }).map(([k, v]) => `${k}=${v}`).join('; ')}`;
         },
       },
       auth: {
         flowType: 'pkce',
         detectSessionInUrl: true,
         persistSession: true,
-        autoRefreshToken: true
-      },
-      global: {
-        headers: {
-          'X-Supabase-Host': '127.0.0.1'
+        autoRefreshToken: true,
+        storage: {
+          getItem: (key) => {
+            try {
+              const value = localStorage.getItem(key);
+              // Add validation for auth-related items
+              if (key.includes('auth.') && value) {
+                try {
+                  const parsed = JSON.parse(value);
+                  if (parsed.expires_at && new Date(parsed.expires_at) < new Date()) {
+                    localStorage.removeItem(key);
+                    return null;
+                   }
+                } catch {}
+              }
+              return value;
+            } catch {
+              return null;
+            }
+          },
+          setItem: (key, value) => {
+            try {
+              localStorage.setItem(key, value);
+            } catch (e) {
+              console.error('[Supabase] Error setting storage item:', e);
+            }
+          },
+          removeItem: (key) => {
+            try {
+              localStorage.removeItem(key);
+            } catch (e) {
+              console.error('[Supabase] Error removing storage item:', e);
+            }
+          }
         }
-      }
+      },
     }
-  )
+  );
 }
 
 // Add runtime directive for edge compatibility

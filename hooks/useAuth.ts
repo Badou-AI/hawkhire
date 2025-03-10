@@ -1,14 +1,22 @@
-'use client'
+'use client';
+import { useEffect, useState } from 'react';
+import { Session, SupabaseClient } from '@supabase/supabase-js';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 
-import { useEffect, useState } from 'react'
-import { Session } from '@supabase/supabase-js'
-import { supabase } from '@/lib/auth'
-import { useRouter } from 'next/navigation'
+// Add a type for our auth context value
+interface AuthState {
+  session: Session | null
+  loading: boolean
+  supabase: SupabaseClient
+  refreshSession: () => Promise<boolean>
+}
 
-export function useAuth() {
+export function useAuth(): AuthState {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
+  const supabase = createClient()
 
   // Add a function to handle session refresh
   const refreshSession = async () => {
@@ -54,29 +62,40 @@ export function useAuth() {
   }
 
   useEffect(() => {
+    console.log('[useAuth] Initializing...')
+    
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('[useAuth] Initial session:', session ? 'exists' : 'null')
       setSession(session)
       setLoading(false)
     })
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
+        console.log('[useAuth] Auth state change:', event, session ? 'session exists' : 'no session')
         setSession(session)
         
-        // Handle token errors
-        if (event === 'TOKEN_REFRESHED' && !session) {
-          console.warn('[useAuth] Token refresh failed, attempting to recover')
-          refreshSession().catch(console.error)
+        if (event === 'SIGNED_OUT') {
+          router.push('/sign-in')
+        } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          router.refresh() // Force a refresh to update server components
         }
       }
     )
 
     return () => {
+      console.log('[useAuth] Cleaning up subscription')
       subscription.unsubscribe()
     }
-  }, [])
+  }, [router, supabase.auth])
 
-  return { session, loading, refreshSession }
+  // Return the Supabase client along with other auth state
+  return { 
+    session, 
+    loading, 
+    supabase, // Expose the Supabase client
+    refreshSession 
+  }
 } 

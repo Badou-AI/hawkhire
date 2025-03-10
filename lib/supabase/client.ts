@@ -1,9 +1,18 @@
 import { createBrowserClient } from '@supabase/ssr';
+import { createClient as createServerClient } from './server';
 import { Database } from '@/types/supabase';
-import { AuthError, Session, SupabaseClient } from '@supabase/supabase-js';
+import { AuthError, Session } from '@supabase/supabase-js';
 
 // Singleton instance
 let browserClient: ReturnType<typeof createBrowserClient<Database>> | null = null;
+
+// Update cookie options to be more secure
+const COOKIE_OPTIONS = {
+  path: '/',
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax' as const,
+  maxAge: 60 * 60 * 24 * 7 // 7 days
+};
 
 // Simple function to clear auth state
 const clearAuthState = () => {
@@ -99,21 +108,16 @@ const validateStoredTokens = () => {
 
 export const createClient = () => {
   if (typeof window === 'undefined') {
-    // Return a dummy client for SSR
-    return {
-      auth: {
-        getSession: () => Promise.resolve({ data: { session: null }, error: null }),
-        signInWithPassword: () => Promise.resolve({ data: { session: null }, error: null }),
-      },
-    } as unknown as SupabaseClient<Database>;
+    return createServerClient();
   }
 
-  // Validate stored tokens before creating/returning client
-  validateStoredTokens();
-
-  // Return existing client if already initialized
+  // Validate stored tokens before returning existing client
   if (browserClient) {
-    return browserClient;
+    if (validateStoredTokens()) {
+      return browserClient;
+    }
+    // If validation fails, clear the existing client
+    browserClient = null;
   }
 
   console.log('[Supabase] Creating new client instance');
@@ -125,26 +129,41 @@ export const createClient = () => {
       cookies: {
         get(name: string) {
           try {
-            const cookie = document.cookie
+            const value = document.cookie
               .split('; ')
               .find((row) => row.startsWith(`${name}=`))
-            return cookie ? cookie.split('=')[1] : ''
-          } catch {
-            return ''
+              ?.split('=')[1];
+            console.log(`[Supabase] Getting cookie ${name}:`, value);
+            return value || '';
+          } catch (e) {
+            console.error(`[Supabase] Error getting cookie ${name}:`, e);
+            return '';
           }
         },
         set(name: string, value: string, options: { path?: string; maxAge?: number }) {
           try {
-            document.cookie = `${name}=${value}; path=${options.path || '/'}; max-age=${options.maxAge || 60 * 60 * 24 * 7}`
-          } catch {
-            console.warn('Failed to set cookie')
+            const cookieString = `${name}=${value}; ${Object.entries({
+              ...COOKIE_OPTIONS,
+              ...options
+            }).map(([k, v]) => `${k}=${v}`).join('; ')}`;
+            document.cookie = cookieString;
+            console.log(`[Supabase] Set cookie ${name}`);
+          } catch (e) {
+            console.error(`[Supabase] Error setting cookie ${name}:`, e);
           }
         },
         remove(name: string, options?: { path?: string }) {
           try {
-            document.cookie = `${name}=; path=${options?.path || '/'}; max-age=0`
-          } catch {
-            console.warn('Failed to remove cookie')
+            const cookieString = `${name}=; ${Object.entries({
+              ...COOKIE_OPTIONS,
+              ...options,
+              maxAge: 0,
+              expires: new Date(0).toUTCString()
+            }).map(([k, v]) => `${k}=${v}`).join('; ')}`;
+            document.cookie = cookieString;
+            console.log(`[Supabase] Removed cookie ${name}`);
+          } catch (e) {
+            console.error(`[Supabase] Error removing cookie ${name}:`, e);
           }
         },
       },
@@ -156,23 +175,28 @@ export const createClient = () => {
         storage: {
           getItem: (key) => {
             try {
-              return localStorage.getItem(key);
-            } catch {
+              const value = localStorage.getItem(key);
+              console.log(`[Supabase] Getting storage item ${key}:`, value ? 'exists' : 'null');
+              return value;
+            } catch (e) {
+              console.error(`[Supabase] Error getting storage item ${key}:`, e);
               return null;
             }
           },
           setItem: (key, value) => {
             try {
               localStorage.setItem(key, value);
-            } catch {
-              console.error('[Supabase] Error setting storage item');
+              console.log(`[Supabase] Set storage item ${key}`);
+            } catch (e) {
+              console.error(`[Supabase] Error setting storage item ${key}:`, e);
             }
           },
           removeItem: (key) => {
             try {
               localStorage.removeItem(key);
-            } catch {
-              console.error('[Supabase] Error removing storage item');
+              console.log(`[Supabase] Removed storage item ${key}`);
+            } catch (e) {
+              console.error(`[Supabase] Error removing storage item ${key}:`, e);
             }
           }
         }

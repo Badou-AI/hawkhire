@@ -7,23 +7,23 @@ import { useSidebarStore } from '@/lib/store/sidebar-store';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
-    Bell,
-    Menu,
-    X,
-    Users,
-    FileText,
-    BarChart,
-    Settings,
-    LogOut,
-    ChartNoAxesCombined, Briefcase
+  Bell,
+  Menu,
+  X,
+  Users,
+  FileText,
+  BarChart,
+  Settings,
+  LogOut,
+  ChartNoAxesCombined, Briefcase
 } from 'lucide-react';
 import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { createClient } from "@/lib/supabase/client";
+import { useAuth } from '@/hooks/useAuth';
 import { toast } from "sonner";
 import { useOrganization } from '@/lib/hooks/useOrganization';
 
@@ -32,7 +32,7 @@ export function Sidebar() {
   const [isMounted, setIsMounted] = useState(false);
   const { isCollapsed, setIsCollapsed } = useSidebarStore();
   const router = useRouter();
-  const supabase = createClient();
+  const { supabase } = useAuth();
   const { organizationId } = useOrganization();
 
   useEffect(() => {

@@ -16,6 +16,14 @@ interface DocumentItem {
   };
 }
 
+// Ensure API_URL has protocol
+const getValidUrl = (url: string) => {
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    return `http://${url}`;
+  }
+  return url;
+};
+
 // Add GET method to fetch resumes with John Doe filtering
 export async function GET() {
   try {
@@ -108,7 +116,8 @@ export async function POST(request: NextRequest) {
       apiFormData.append('job_title', jobTitle)
     }
 
-    const response = await fetch(`${API_URL}/process-zip`, {
+    const validApiUrl = getValidUrl(API_URL);
+    const response = await fetch(`${validApiUrl}/process-zip`, {
       method: 'POST',
       body: apiFormData
     })
@@ -147,7 +156,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error processing request:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Failed to process resumes' },
       { status: 500 }
     )
   }

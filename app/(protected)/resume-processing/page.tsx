@@ -1,5 +1,6 @@
-"use client";
+"use client";;
 import { useState, useEffect } from "react";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -21,10 +22,8 @@ import { AlertCircle, CheckCircle2, XCircle, Timer, Database, Settings2, Plus } 
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import Link from "next/link";
-import { useRouter, useSearchParams, useParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { ApiJob } from "@/types/jobs";
-import { useToast } from '@/hooks/use-toast';
 import { useOrganization } from "@/lib/hooks/useOrganization";
 
 // Import data from shared data file
@@ -96,7 +95,7 @@ export default function ResumeProcessingPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const jobIdFromUrl = searchParams.get('jobId')
-  const params = useParams();
+  // const params = useParams();
   const { organizationId } = useOrganization();
   const [selectedJob, setSelectedJob] = useState<ApiJob | null>(null)
   const [uploadProgress, setUploadProgress] = useState(0)
@@ -114,14 +113,13 @@ export default function ResumeProcessingPage() {
   const [jobs, setJobs] = useState<ApiJob[]>([])
   const [isLoadingJobs, setIsLoadingJobs] = useState(true)
   const [matches, setMatches] = useState<ReturnType<typeof transformApiResponseToUiFormat>>([])
-  const { toast } = useToast()
+  // const { toast } = useToast()
+  const { supabase } = useAuth();
 
   useEffect(() => {
     const fetchJobs = async () => {
       setIsLoadingJobs(true);
       try {
-        const supabase = createClient();
-        
         const { data: fetchedJobs, error: jobsError } = await supabase
           .from('jobs')
           .select(`
@@ -146,7 +144,7 @@ export default function ResumeProcessingPage() {
     if (organizationId) {
       fetchJobs();
     }
-  }, [organizationId]);
+  }, [organizationId, supabase]);
 
   // use the jobIdFromUrl to set the selectedJob
   useEffect(() => {

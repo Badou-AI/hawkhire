@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { JobDescription } from '@/components/jobs/job-description';
 
 interface JobDetail {
@@ -141,11 +141,12 @@ export default function JobDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
+  const { supabase } = useAuth();
+  
   useEffect(() => {
     async function fetchJobDetail() {
       try {
         setLoading(true);
-        const supabase = createClient();
         
         if (!supabase) {
           throw new Error("Supabase client not available");
@@ -331,7 +332,7 @@ export default function JobDetailPage() {
     if (jobId && organizationId) {
       fetchJobDetail();
     }
-  }, [jobId, organizationId]);
+  }, [jobId, organizationId, supabase]);
   
   // Handle back button click
   const handleBack = () => {
