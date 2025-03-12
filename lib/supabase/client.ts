@@ -106,6 +106,21 @@ const validateStoredTokens = () => {
   }
 };
 
+// Add a timeout to the token validation process
+const validateStoredTokensWithTimeout = async () => {
+  return new Promise((resolve) => {
+    const timeoutId = setTimeout(() => {
+      console.warn('[Supabase] Token validation timed out');
+      resolve(false);
+    }, 5000); // 5-second timeout
+
+    validateStoredTokens().then((result) => {
+      clearTimeout(timeoutId);
+      resolve(result);
+    });
+  });
+};
+
 export const createClient = () => {
   if (typeof window === 'undefined') {
     return createServerClient();
@@ -171,7 +186,7 @@ export const createClient = () => {
         flowType: 'pkce',
         detectSessionInUrl: true,
         persistSession: true,
-        autoRefreshToken: true,
+        autoRefreshToken: false,
         storage: {
           getItem: (key) => {
             try {

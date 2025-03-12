@@ -1,7 +1,6 @@
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { type Job } from '@/app/types/job'
-import { formatDistanceToNow } from 'date-fns'
 import { Building2, MapPin } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -56,7 +55,7 @@ export function JobCard({ job }: JobCardProps) {
                 </div>
               )}
               <div className="text-sm text-muted-foreground">
-                Posted {formatDistanceToNow(new Date(job.created_at), { addSuffix: true })}
+                {/* Posted {formatDistanceToNow(new Date(job.created_at), { addSuffix: true })} */}
               </div>
             </div>
           </div>

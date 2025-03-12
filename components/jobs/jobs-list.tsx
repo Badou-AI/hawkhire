@@ -48,7 +48,8 @@ export function JobsList() {
           postedAt: job.created_at,
           skills: job.skills || [],
           remote: job.remote,
-          industry: job.organizations?.industry || 'Technology'
+          industry: job.organizations?.industry || 'Technology',
+          summary: job.summary
         })))
         setTotalJobs(response.total)
         setError(null)

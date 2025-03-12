@@ -9,7 +9,7 @@ export async function GET(request: Request) {
     console.log('searchParams', searchParams);
     // Check if we're fetching a single job
     const jobId = searchParams.get('id')
-    const language = searchParams.get('language') || 'en'
+    const language = searchParams.get('language') || 'fr'
     if (jobId) {
       const response = await fetch(`${API_URL}/v1/jobs/with/organizations/${jobId}?language=${language}`, {
         method: 'GET',

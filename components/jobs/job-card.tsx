@@ -25,7 +25,7 @@ interface JobCardProps {
 
 export function JobCard({ job }: JobCardProps) {
   return (
-    <Link href={`/jobs/${job.id}`} className="block h-full">
+    <Link href={`/job-board/${job.id}`} className="block h-full">
       <Card className="flex h-full flex-col p-6 transition-colors hover:border-primary">
         <div className="flex items-start gap-4">
           <div className="h-12 w-12 flex-shrink-0">

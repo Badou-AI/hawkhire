@@ -235,7 +235,7 @@ export async function getJobs(page: number = 0, pageSize: number = 15): Promise<
   }
 }
 
-export async function getJob(id: string, language: string = 'en'): Promise<Job | null> {
+export async function getJob(id: string, language: string = 'fr'): Promise<Job | null> {
   if (!id) throw new Error('Job ID is required')
   
   try {

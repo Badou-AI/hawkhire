@@ -1421,6 +1421,29 @@ class Location(BaseModel):
     country: str = Field(..., description="Country name", example="Senegal")
     postal_code: str = Field("", description="Postal/ZIP code (use empty string for non-North American locations)", example="")
 
+class Organization(BaseModel):
+    """Model for organization details"""
+    id: UUID4 = Field(..., description="Organization's unique identifier")
+    name: Dict[str, str] = Field(..., description="Organization name in different languages", example={"en": "Company Name", "fr": "Nom de l'entreprise"})
+    tier: str = Field(..., description="Organization's subscription tier", example="FREE")
+    is_mock: bool = Field(False, description="Whether this is a mock organization")
+    industry: str = Field(..., description="Organization's industry sector", example="OTHER")
+    logo_url: Optional[str] = Field(None, description="URL to organization's logo image")
+    languages: List[str] = Field(..., description="Supported languages", example=["en", "fr"])
+    created_at: datetime = Field(..., description="Organization creation timestamp")
+    size_range: str = Field(..., description="Organization size range", example="1001-5000")
+    updated_at: datetime = Field(..., description="Last update timestamp")
+    description: Dict[str, str] = Field(..., description="Organization description in different languages")
+    website_url: Optional[str] = Field(None, description="Organization's website URL")
+    company_type: str = Field(..., description="Type of company", example="CORPORATION")
+    founded_year: Optional[int] = Field(None, description="Year organization was founded")
+    mock_batch_id: Optional[str] = Field(None, description="Batch ID if this is mock data")
+    cover_image_url: Optional[str] = Field(None, description="URL to organization's cover image")
+    primary_location: Dict[str, Dict[str, str]] = Field(..., description="Organization's primary location with translations")
+    verification_status: str = Field(..., description="Organization verification status", example="PENDING")
+    additional_locations: List = Field(default_factory=list, description="Additional organization locations")
+
+
 class JobBase(BaseModel):
     """Base model for job data"""
     organization_id: UUID4 = Field(
@@ -1510,6 +1533,11 @@ class JobBase(BaseModel):
         description="Descriptive summary for the candidate to read",
         example="We are looking for a software engineer to join our team..."
     )
+    organizations: Optional[Any] = Field(
+        None,
+        description="Organization details"
+    )
+    
 
 class JobCreate(JobBase):
     """Model for creating a new job"""

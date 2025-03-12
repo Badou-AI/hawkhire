@@ -1,8 +1,14 @@
 import { NextResponse } from 'next/server';
 import { getJob } from '../../client';
 import { createClient } from '@/lib/supabase/server';
+import { cache } from 'react';
 
 const REMOTE_API_URL = process.env.NEXT_PUBLIC_REMOTE_API_URL || 'http://147.93.44.131:8000'
+
+const cachedFetch = cache(async (url: string, options: RequestInit) => {
+  const response = await fetch(url, options);
+  return response.json();
+});
 
 // Define types for the document structure
 interface DocumentItem {
@@ -33,13 +39,13 @@ export async function GET(
   request: Request,
   context: { params: { id: string } }
 ) {
-  const { id } = context.params
+  const { id } = await context.params
 
   try {
     const { searchParams } = new URL(request.url)
     const excludeFields = searchParams.get('exclude_fields')
     const offset = searchParams.get('offset') || '0'
-    const size = searchParams.get('size') || '5000'
+    const size = searchParams.get('size') || '100'
     const updateStats = searchParams.get('update_stats') !== 'false' // Default to true
 
     // Get the job first to generate the correct index name
@@ -55,8 +61,8 @@ export async function GET(
     const titleSlug = job.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')
     const indexName = `job-${titleSlug}-${id}`
 
-    // Make the request to the remote API
-    const response = await fetch(
+    // Replace the fetch call with the cached version
+    const data = await cachedFetch(
       `${REMOTE_API_URL}/v1/index/${indexName}/document?offset=${offset}&size=${size}${excludeFields ? `&exclude_fields=${excludeFields}` : ''}`,
       {
         headers: {
@@ -64,28 +70,27 @@ export async function GET(
         }
       }
     )
-
-    if (!response.ok) {
+    if (!data.documents) {
       // If the index doesn't exist, return empty results instead of an error
-      if (response.status === 404) {
+      if (data.status === 404) {
         return NextResponse.json({
           documents: [],
           total: 0
         })
       }
-      throw new Error(`Remote API returned ${response.status}`)
+      throw new Error(`Remote API returned ${data.status}`)
     }
 
-    const data = await response.json()
+    const dataJson = data;
     
     // Filter out John Doe entries if data contains documents
-    if (data && data.documents && Array.isArray(data.documents)) {
-      console.log(`Processing ${data.documents.length} documents from job matches API`);
+    if (dataJson && dataJson.documents && Array.isArray(dataJson.documents)) {
+      console.log(`Processing ${dataJson.documents.length} documents from job matches API`);
       
-      const originalCount = data.documents.length;
+      const originalCount = dataJson.documents.length;
       
       // Filter out John Doe entries
-      data.documents = data.documents.filter((doc: DocumentItem) => {
+      dataJson.documents = dataJson.documents.filter((doc: DocumentItem) => {
         // Check if document has valid profile data
         const hasValidProfile = doc.item_data?.content?.profile?.first_name && 
                                doc.item_data?.content?.profile?.last_name;
@@ -108,18 +113,18 @@ export async function GET(
         return hasValidProfile && !isJohnDoe;
       });
       
-      const filteredCount = originalCount - data.documents.length;
+      const filteredCount = originalCount - dataJson.documents.length;
       if (filteredCount > 0) {
         console.log(`API route: Filtered out ${filteredCount} John Doe entries from job matches`);
         
         // Update total count if it exists
-        if (data.total) {
-          data.total = data.documents.length;
+        if (dataJson.total) {
+          dataJson.total = dataJson.documents.length;
         }
       }
       
       // Update job processed data in the database if requested
-      if (updateStats && data.documents.length > 0) {
+      if (updateStats && dataJson.documents.length > 0) {
         try {
           const supabase = createClient();
           
@@ -128,7 +133,7 @@ export async function GET(
           const skillsCount: Record<string, { count: number, totalScore: number }> = {};
           
           // Process documents to extract statistics
-          data.documents.forEach((doc: DocumentItem) => {
+          dataJson.documents.forEach((doc: DocumentItem) => {
             // Add to total score if available
             if (doc.item_data?.matching_score?.data?.score?.value) {
               totalScore += doc.item_data.matching_score.data.score.value;
@@ -149,7 +154,7 @@ export async function GET(
           });
           
           // Calculate average score
-          const averageScore = data.documents.length > 0 ? totalScore / data.documents.length : 0;
+          const averageScore = dataJson.documents.length > 0 ? totalScore / dataJson.documents.length : 0;
           
           // Get top skills
           const topSkills = Object.entries(skillsCount)
@@ -167,7 +172,7 @@ export async function GET(
             .update({
               processed: {
                 index_name: indexName,
-                total_applicants: data.documents.length,
+                total_applicants: dataJson.documents.length,
                 last_processed_at: new Date().toISOString(),
                 processing_status: 'completed',
                 average_match_score: averageScore,
@@ -180,7 +185,7 @@ export async function GET(
           if (error) {
             console.error('Error updating job processed data:', error);
           } else {
-            console.log(`Updated processed data for job ${id} with ${data.documents.length} applicants`);
+            console.log(`Updated processed data for job ${id} with ${dataJson.documents.length} applicants`);
           }
         } catch (error) {
           console.error('Error updating job processed data:', error);
@@ -189,11 +194,11 @@ export async function GET(
       }
     } else {
       // If no documents, return empty array
-      data.documents = [];
-      data.total = 0;
+      dataJson.documents = [];
+      dataJson.total = 0;
     }
     
-    return NextResponse.json(data)
+    return NextResponse.json(dataJson)
   } catch (error) {
     console.error('Error fetching job matches:', error)
     return NextResponse.json(
