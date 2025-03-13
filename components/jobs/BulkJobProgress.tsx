@@ -30,32 +30,28 @@ export function BulkJobProgress({
   organizationId,
   onClose
 }: BulkJobProgressProps) {
-  // Ensure we have valid stats even if they're passed as undefined or null
-  const safeStats = {
-    totalFiles: stats?.totalFiles || 0,
-    processedCount: stats?.processedCount || 0,
-    failedCount: stats?.failedCount || 0,
-    processingTime: stats?.processingTime || 0,
-    unsupportedCount: stats?.unsupportedCount || 0
-  };
-  
-  // For completed state, if all stats are 0 but we have a processing time > 0,
-  // this likely means we processed at least one file successfully
   const displayStats = React.useMemo(() => {
+    const safeStats = {
+      totalFiles: stats?.totalFiles || 0,
+      processedCount: stats?.processedCount || 0,
+      failedCount: stats?.failedCount || 0,
+      processingTime: stats?.processingTime || 0,
+      unsupportedCount: stats?.unsupportedCount || 0
+    };
+
     if (processingStatus === 'completed' && 
         safeStats.processedCount === 0 && 
         safeStats.failedCount === 0 && 
         safeStats.unsupportedCount === 0 && 
         safeStats.processingTime > 0) {
-      // If we have a processing time but no stats, assume at least one file was processed
       return {
         ...safeStats,
-        processedCount: 1, // Assume at least one file was processed
-        totalFiles: 1      // Assume at least one file was processed
+        processedCount: 1,
+        totalFiles: 1
       };
     }
     return safeStats;
-  }, [safeStats, processingStatus]);
+  }, [stats, processingStatus]);
   
   const progress = displayStats.totalFiles > 0 
     ? ((displayStats.processedCount + displayStats.failedCount + displayStats.unsupportedCount) / displayStats.totalFiles) * 100

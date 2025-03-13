@@ -107,19 +107,19 @@ const validateStoredTokens = () => {
 };
 
 // Add a timeout to the token validation process
-const validateStoredTokensWithTimeout = async () => {
-  return new Promise((resolve) => {
-    const timeoutId = setTimeout(() => {
-      console.warn('[Supabase] Token validation timed out');
-      resolve(false);
-    }, 5000); // 5-second timeout
+// const validateStoredTokensWithTimeout = async () => {
+//   return new Promise((resolve) => {
+//     const timeoutId = setTimeout(() => {
+//       console.warn('[Supabase] Token validation timed out');
+//       resolve(false);
+//     }, 5000); // 5-second timeout
 
-    validateStoredTokens().then((result) => {
-      clearTimeout(timeoutId);
-      resolve(result);
-    });
-  });
-};
+//     validateStoredTokens().then((result) => {
+//       clearTimeout(timeoutId);
+//       resolve(result);
+//     });
+//   });
+// };
 
 export const createClient = () => {
   if (typeof window === 'undefined') {

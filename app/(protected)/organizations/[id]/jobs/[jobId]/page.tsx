@@ -24,7 +24,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/hooks/useAuth";
-import { JobDescription } from '@/components/jobs/job-description';
+import JobDescription from '@/components/jobs/job-description';
 
 interface JobDetail {
   id: string;
@@ -132,8 +132,6 @@ interface OrgData {
 export default function JobDetailPage() {
   const params = useParams();
   const router = useRouter();
-  // Use a hardcoded locale since we're in a server component
-  const locale = 'en';
   const organizationId = params.id as string;
   const jobId = params.jobId as string;
   
@@ -446,7 +444,7 @@ export default function JobDetailPage() {
                   <JobDescription 
                     summary={job.summary}
                     fallbackDescription={job.description}
-                    locale={locale}
+                    className="mt-2"
                   />
                 </div>
                 

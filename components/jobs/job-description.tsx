@@ -1,3 +1,5 @@
+'use client';
+
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useTranslation } from 'react-i18next';
@@ -14,7 +16,7 @@ interface JobDescriptionProps {
  * Component for rendering job descriptions with Markdown formatting
  * Uses the summary field if available, otherwise falls back to the regular description
  */
-export const JobDescription: React.FC<JobDescriptionProps> = ({
+const JobDescription: React.FC<JobDescriptionProps> = ({
   summary,
   fallbackDescription = '',
   className = '',
