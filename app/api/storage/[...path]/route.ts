@@ -5,14 +5,15 @@ import { existsSync } from 'fs';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { path: string[] } }
+  { params }: { params: Promise<{ path: string[] }> }
 ) {
   try {
     // Log the raw request URL for debugging
     console.log('Raw request URL:', request.url);
     
     // Get path segments and clean them
-    const pathSegments = await Promise.resolve(params.path);
+    const resolvedParams = await params;
+    const pathSegments = resolvedParams.path;
     console.log('Raw path segments:', pathSegments);
 
     // Clean the last segment (filename) by trimming spaces and ensuring single .pdf extension

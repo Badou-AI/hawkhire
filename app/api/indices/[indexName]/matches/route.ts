@@ -16,16 +16,17 @@ interface DocumentItem {
 
 export async function GET(
   request: Request,
-  { params }: { params: { indexName: string } }
+  { params }: { params: Promise<{ indexName: string }> }
 ) {
   try {
+    const resolvedParams = await params;
     const { searchParams } = new URL(request.url)
     const offset = searchParams.get('offset') || '0'
     const size = searchParams.get('size') || '5000'
     const excludeFields = searchParams.get('exclude_fields')
 
     // Ensure we have the indexName before proceeding
-    if (!params?.indexName) {
+    if (!resolvedParams?.indexName) {
       return NextResponse.json(
         { error: 'Index name is required' },
         { status: 400 }
@@ -33,7 +34,7 @@ export async function GET(
     }
 
     const response = await fetch(
-      `${serviceUrl}/v1/index/${params.indexName}/document?offset=${offset}&size=${size}${excludeFields ? `&exclude_fields=${excludeFields}` : ''}`,
+      `${serviceUrl}/v1/index/${resolvedParams.indexName}/document?offset=${offset}&size=${size}${excludeFields ? `&exclude_fields=${excludeFields}` : ''}`,
       {
         headers: {
           'accept': 'application/json',

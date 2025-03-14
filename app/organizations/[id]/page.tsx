@@ -6,12 +6,15 @@ import { type OrganizationMember } from '@/types/organization'
 import Link from 'next/link'
 import { type Job } from '@/types/job'
 
+type Params = Promise<{ id: string }>
+
 interface PageProps {
-  params: { id: string }
+  params: Params
 }
 
 export default async function OrganizationPage({ params }: PageProps) {
-  const id = await Promise.resolve(params.id)
+  const resolvedParams = await params;
+  const id = resolvedParams.id;
   
   // Fetch organization data from our API route
   const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/v1/organizations/${id}`)

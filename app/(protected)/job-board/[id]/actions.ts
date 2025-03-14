@@ -3,12 +3,9 @@ export async function getSimilarJobs(jobId: string) {
       if (!jobId) {
         throw new Error('Job ID is required')
       }
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || ''
       // Use absolute URL with IPv4 address
-      const response = await fetch(`http://127.0.0.1:${process.env.PORT || 3000}/api/jobs`, {
-        headers: {
-          'Host': '127.0.0.1'
-        }
-      })
+      const response = await fetch(`${baseUrl}/api/jobs`, {})
   
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)

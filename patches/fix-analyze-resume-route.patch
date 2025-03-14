@@ -1,0 +1,7 @@
+--- a/app/api/analyze-resume/route.ts
++++ b/app/api/analyze-resume/route.ts
+@@ -1,5 +1,6 @@
+ // Use environment variable for API URL with fallback to local address
+-const API_URL = process.env.PYTHON_API_URL || 'http://127.0.0.1:8080';
++const isDev = process.env.NODE_ENV === 'development';
++const API_URL = process.env.PYTHON_API_URL || (isDev ? 'http://127.0.0.1:8080' : '/api');

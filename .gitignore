@@ -33,6 +33,13 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# deployment configuration
+.deploy.conf
+backend/.env.*
+!backend/.env.example
+.env.*
+!.env.example
+
 # venv folder
 /backend/venv
 /backend/venv/*

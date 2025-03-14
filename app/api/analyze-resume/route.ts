@@ -1,7 +1,8 @@
 import { NextRequest } from 'next/server';
 
 // Use environment variable for API URL with fallback to local address
-const API_URL = process.env.PYTHON_API_URL || 'http://127.0.0.1:8080';
+const isDev = process.env.NODE_ENV === 'development';
+const API_URL = process.env.PYTHON_API_URL || (isDev ? 'http://127.0.0.1:8080' : '/api');
 
 export async function POST(req: NextRequest) {
   try {

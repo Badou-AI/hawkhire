@@ -179,7 +179,7 @@ export default function SettingsPage() {
           id: job.id,
           title: job.title,
           organization_id: job.organization_id,
-          organization_name: job.organizations?.name?.fr || 'Unknown Organization',
+          organization_name: job.organizations?.[0]?.name || 'Unknown Organization',
           status: job.status,
           created_at: job.created_at,
           updated_at: job.updated_at,

@@ -1,11 +1,12 @@
-import { createClient } from "@/lib/supabase/server"
-import { NextResponse } from "next/server"
+import { createClient } from "@/lib/supabase/server";
+import { NextResponse } from "next/server";
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const resolvedParams = await params;
     const supabase = createClient()
     
     // Get current user (optional for public view)
@@ -13,7 +14,7 @@ export async function GET(
 
     // Fetch from FastAPI backend
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/v1/organizations/${params.id}`,
+      `${process.env.NEXT_PUBLIC_API_URL}/v1/organizations/${resolvedParams.id}`,
       {
         headers: {
           "Content-Type": "application/json",

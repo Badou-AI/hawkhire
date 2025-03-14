@@ -7,9 +7,9 @@ import { type Job } from '@/types/job'
 import Link from 'next/link'
 import JobDescription from '@/components/jobs/job-description'
 
-type PageParams = {
+type PageParams = Promise<{
   id: string;
-};
+}>;
 
 export default async function JobPage({ 
   params 
@@ -18,7 +18,8 @@ export default async function JobPage({
 }) {
   try {
     // Ensure params.id exists before using it
-    const jobId = params?.id
+    const resolvedParams = await params;
+    const jobId = resolvedParams.id;
     if (!jobId) {
       return notFound()
     }

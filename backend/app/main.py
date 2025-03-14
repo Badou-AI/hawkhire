@@ -56,16 +56,26 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Configure CORS
+# Get CORS origins from environment variable
+def get_cors_origins() -> List[str]:
+    """Get CORS origins from environment variable"""
+    # Default frontend URL
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    
+    # Additional CORS origins
+    additional_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000,https://hawkhire.com,https://beta.hawkhire.com")
+    
+    # Combine default and additional origins
+    all_origins = [frontend_url]
+    all_origins.extend(additional_origins.split(","))
+    
+    # return unique origins
+    return list(set(all_origins))
+
+# Configure CORS with dynamic origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000", 
-        "http://127.0.0.1:3000", 
-        "https://hawkhire.com", 
-        "https://beta.hawkhire.com",
-        FRONTEND_URL
-    ],
+    allow_origins=get_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

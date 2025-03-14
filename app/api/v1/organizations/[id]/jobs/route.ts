@@ -1,11 +1,12 @@
-import { createClient } from "@/lib/supabase/server"
-import { NextResponse } from "next/server"
+import { createClient } from "@/lib/supabase/server";
+import { NextResponse } from "next/server";
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const resolvedParams = await params;
     const supabase = createClient()
     
     // Get current user
@@ -19,7 +20,7 @@ export async function POST(
 
     // Get job data from request and ensure organization_id matches
     const jobData = await request.json()
-    jobData.organization_id = params.id // Ensure organization_id matches URL param
+    jobData.organization_id = resolvedParams.id // Ensure organization_id matches URL param
 
     // Forward to FastAPI backend with correct endpoint
     const response = await fetch(

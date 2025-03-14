@@ -9,14 +9,15 @@ import Link from 'next/link'
 type Params = Promise<{ id: string }>
 
 export default async function JobPage({
-  params,
-}: {
-  params: Params
-}) {
+    params,
+  }: {
+    params: Params
+  }): Promise<React.ReactElement> {
   try {
     // Ensure params.id exists before using it
     const resolvedParams = await params;
     const jobId = resolvedParams.id;
+    
     if (!jobId) {
       return notFound()
     }

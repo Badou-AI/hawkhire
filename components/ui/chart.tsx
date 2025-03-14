@@ -291,7 +291,10 @@ const ChartLegendContent = React.forwardRef<
         {payload.map((entry, index) => {
           const key = entry.value || entry.dataKey || ""
           const itemConfig = getPayloadConfigFromPayload(config, entry, key)
-          const indicatorColor = entry.payload?.fill || entry.color
+          // Handle the payload type properly
+          const indicatorColor = entry.payload && typeof entry.payload === 'object' && 'fill' in entry.payload 
+            ? entry.payload.fill 
+            : entry.color
 
           return (
             <div
@@ -351,5 +354,4 @@ export {
   ChartLegendContent,
   ChartTooltip,
   ChartTooltipContent,
-  type ChartConfig,
 }

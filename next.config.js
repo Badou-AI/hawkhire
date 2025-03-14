@@ -14,12 +14,14 @@ const nextConfig = {
       },
     ],
   },
+  // Only ignore specific directories that contain third-party components
+  eslint: {
+    // Only ignore the UI components directory which contains shadcn components
+    dirs: ['app', 'lib', 'hooks', 'components', '!components/ui'],
+  },
   typescript: {
-    // !! WARN !!
-    // Dangerously allow production builds to successfully complete even if
-    // your project has type errors.
-    // !! WARN !!
-    ignoreBuildErrors: true,
+    // We don't want to ignore all type errors, just handle them properly
+    ignoreBuildErrors: false,
   },
 }
 

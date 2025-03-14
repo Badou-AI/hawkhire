@@ -1,0 +1,16 @@
+--- a/app/(protected)/job-board/[id]/actions.ts
++++ b/app/(protected)/job-board/[id]/actions.ts
+@@ -3,9 +3,8 @@
+       if (!jobId) {
+         throw new Error('Job ID is required')
+       }
+-      // Use absolute URL with IPv4 address
+-      const response = await fetch(`http://127.0.0.1:${process.env.PORT || 3000}/api/jobs`, {
+-        headers: {
+-          'Host': '127.0.0.1'
+-        }
++      // Use environment variables for API URL or fallback to relative path
++      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || '';
++      const response = await fetch(`${baseUrl}/api/jobs`, {
++        // No need for Host header when using relative or environment-based URLs
+       })

@@ -3,17 +3,19 @@ import { BulkCreateDialog } from "./bulk-create-dialog"
 import { createClient } from "@/lib/supabase/server"
 import { notFound } from "next/navigation"
 
+type Params = Promise<{
+  id?: string
+}>
+
 interface PageProps {
-  params: {
-    id?: string
-  }
+  params: Params
 }
 
 export default async function CreateJobPage({ params }: PageProps) {
   // Defensive parameter handling
   let organizationId = null
   if (params) {
-    const resolvedParams = await params // Await the params
+    const resolvedParams = await params
     if (typeof resolvedParams.id === 'string') {
       organizationId = resolvedParams.id
     }

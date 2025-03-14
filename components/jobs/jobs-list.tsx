@@ -1,9 +1,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getJobs, type ApiJob, type JobsResponse } from '@/app/api/jobs/client'
+import { getJobs, type ApiJob, type JobsResponse, type LocalizedText } from '@/app/api/jobs/client'
 import { Pagination } from '@/components/shared/pagination'
 import { JobCard } from '@/components/jobs/job-card'
+
+// Helper function to extract string from LocalizedText
+const getLocalizedText = (text: string | LocalizedText): string => {
+  if (typeof text === 'string') return text;
+  return text.fr || text.en || '';
+};
 
 interface DisplayJob {
   id: string
@@ -33,24 +39,34 @@ export function JobsList() {
     async function fetchJobs() {
       try {
         const response: JobsResponse = await getJobs(currentPage - 1, pageSize)
-        setJobs(response.data.map((job: ApiJob) => ({
-          id: job.id,
-          title: job.title,
-          company: job.organizations?.name.fr || 'Company Name?',
-          location: `${job.location.city.fr}, ${job.location.state.fr}`,
-          type: job.job_type.replace('_', ' ').toLowerCase(),
-          rating: job.rating || 4.5,
-          logo: job.organizations?.logo_url || '/company-logos/placeholder.png',
-          description: job.description,
-          salary: job.salary_min && job.salary_max 
-            ? `$${job.salary_min/1000}k - $${job.salary_max/1000}k ${job.salary_currency}`
-            : 'Competitive',
-          postedAt: job.created_at,
-          skills: job.skills || [],
-          remote: job.remote,
-          industry: job.organizations?.industry || 'Technology',
-          summary: job.summary
-        })))
+        setJobs(response.data.map((job: ApiJob) => {
+          // Handle potentially complex nested structures
+          const organizationName = job.organizations?.name 
+            ? getLocalizedText(job.organizations.name)
+            : 'Company Name?';
+            
+          const cityName = job.location?.city ? getLocalizedText(job.location.city) : '';
+          const stateName = job.location?.state ? getLocalizedText(job.location.state) : '';
+          
+          return {
+            id: job.id,
+            title: getLocalizedText(job.title),
+            company: organizationName,
+            location: `${cityName}, ${stateName}`,
+            type: job.job_type.replace('_', ' ').toLowerCase(),
+            rating: job.rating || 4.5,
+            logo: job.organizations?.logo_url || '/company-logos/placeholder.png',
+            description: getLocalizedText(job.description),
+            salary: job.salary_min && job.salary_max 
+              ? `$${job.salary_min/1000}k - $${job.salary_max/1000}k ${job.salary_currency}`
+              : 'Competitive',
+            postedAt: job.created_at,
+            skills: job.skills || [],
+            remote: job.remote,
+            industry: job.organizations?.industry || 'Technology',
+            summary: job.summary
+          }
+        }))
         setTotalJobs(response.total)
         setError(null)
       } catch (err) {
