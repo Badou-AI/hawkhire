@@ -3,13 +3,13 @@
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
 } from "@/components/ui/dialog"
 import { Upload, AlertCircle } from "lucide-react"
 import { Label } from "@/components/ui/label"
@@ -17,7 +17,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { FileDropzone } from "@/components/resume-evaluator/FileDropzone"
 import { useAuth } from "@/hooks/useAuth"
 import { toast } from "sonner"
-import { BulkJobProgress } from "@/components/jobs/BulkJobProgress"
+import { BulkJobProgress } from "./bulk-job-progress"
 
 interface BulkCreateDialogProps {
   organizationId: string
@@ -50,7 +50,6 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
   const [unsupportedFiles, setUnsupportedFiles] = useState<Array<{name: string, type: string, reason: string}>>([])
   const [currentFile, setCurrentFile] = useState<string>("")
   const [isOpen, setIsOpen] = useState(false)
-  // Add a ref to track the number of processed files
   const processedFilesRef = useRef<{
     processed: number;
     failed: number;
@@ -61,7 +60,6 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
     total: 0
   });
 
-  // Add useEffect for debugging
   useEffect(() => {
     console.log('Current state:', {
       processingStatus,
@@ -85,19 +83,15 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
     })
   }
 
-  // Reset function to clear state when dialog is closed
   const handleClose = () => {
     setIsOpen(false)
   }
 
-  // Reset function when dialog is opened
   const handleOpen = (open: boolean) => {
     setIsOpen(open);
     
-    // If dialog is being closed, don't reset anything
     if (!open) return;
     
-    // Don't reset the stats if we're in completed state
     if (processingStatus !== 'completed') {
       setFile(null);
       setError("");
@@ -111,7 +105,6 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
         unsupportedCount: 0
       });
     } else {
-      // Log the current stats for debugging
       console.log('Dialog reopened with completed stats:', stats);
     }
   }
@@ -159,10 +152,6 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
         throw new Error(`Failed to process jobs: ${response.status} ${response.statusText}`)
       }
 
-      console.log('Response headers:', Object.fromEntries(response.headers.entries()))
-      console.log('Response status:', response.status)
-
-      // Handle streaming response
       const reader = response.body?.getReader()
       if (!reader) {
         throw new Error('No reader available')
@@ -181,7 +170,6 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
         }
 
         const chunk = decoder.decode(value, { stream: true })
-        console.log('Received chunk:', chunk)
         buffer += chunk
         const lines = buffer.split('\n\n')
         
@@ -190,27 +178,20 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
           if (line.startsWith('data: ')) {
             try {
               const eventData = line.slice(6)
-              console.log('Raw event data:', eventData)
               const event = JSON.parse(eventData)
-              console.log('Parsed event:', event)
-
-              // Normalize event type - backend might send 'event' or 'type'
               const eventType = event.event || event.type
+
               if (!eventType) {
                 console.log('Event has no type or event field:', event)
                 return
               }
 
-              // Always update the file name if present
               if (event.file_name && event.file_name !== 'null') {
-                console.log('Processing file:', event.file_name)
                 setCurrentFile(event.file_name)
               } else if (event.current_file && event.current_file !== 'null') {
-                console.log('Processing file:', event.current_file)
                 setCurrentFile(event.current_file)
               }
 
-              // Map backend event types to frontend event types
               let normalizedEventType = eventType.toLowerCase()
               if (normalizedEventType === 'processing_started') normalizedEventType = 'processing_started'
               else if (normalizedEventType === 'file_processed') normalizedEventType = 'file_processed'
@@ -221,12 +202,9 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
               else if (normalizedEventType === 'job_created') normalizedEventType = 'job_created'
               else if (normalizedEventType === 'job_creation_failed') normalizedEventType = 'job_creation_failed'
 
-              console.log('Normalized event type:', normalizedEventType)
-
               switch (normalizedEventType) {
                 case 'processing_started':
                   setProcessingStatus('processing')
-                  // Reset the processed files counter
                   processedFilesRef.current = {
                     processed: 0,
                     failed: 0,
@@ -243,72 +221,31 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
                   break
 
                 case 'file_processed':
-                  // Keep track of processed files count
                   processedFilesRef.current.processed += 1;
-                  const newProcessedCount = Math.max(event.processed_count || 0, stats.processedCount, processedFilesRef.current.processed);
-                  const newFailedCount = Math.max(event.failed_count || 0, stats.failedCount, processedFilesRef.current.failed);
-                  
-                  console.log(`File processed: ${event.file_name}, processed: ${newProcessedCount}, failed: ${newFailedCount}, ref: ${processedFilesRef.current.processed}`);
-                  
                   setStats(prev => ({
                     ...prev,
-                    processedCount: newProcessedCount,
-                    failedCount: newFailedCount,
-                    processingTime: (Date.now() - startTime) / 1000
-                  }))
-                  break
-
-                case 'file_processing_complete':
-                case 'file_processing_failed':
-                case 'job_created':
-                case 'job_creation_failed':
-                  setStats(prev => ({
-                    ...prev,
-                    processedCount: Math.max(event.processed_count || 0, prev.processedCount),
-                    failedCount: Math.max(event.failed_count || 0, prev.failedCount),
+                    processedCount: Math.max(event.processed_count || 0, prev.processedCount, processedFilesRef.current.processed),
+                    failedCount: Math.max(event.failed_count || 0, prev.failedCount, processedFilesRef.current.failed),
                     processingTime: (Date.now() - startTime) / 1000
                   }))
                   break
 
                 case 'batch_completed':
-                  console.log('Received batch_completed event with data:', event);
-                  console.log('Processed files ref:', processedFilesRef.current);
-                  
-                  // Store the final stats in a more reliable way
-                  // If the server reports 0 processed but we know jobs were created, use our tracked count
-                  const actualProcessedCount = event.processed_count > 0 
-                    ? event.processed_count 
-                    : Math.max(stats.processedCount, processedFilesRef.current.processed);
-                    
-                  const actualFailedCount = event.failed_count > 0
-                    ? event.failed_count
-                    : Math.max(stats.failedCount, processedFilesRef.current.failed);
-                  
-                  // Force update the stats directly with setState instead of using the functional update
-                  // This ensures the state is immediately updated with the correct values
                   const finalStats = {
                     totalFiles: event.total_files || stats.totalFiles || processedFilesRef.current.total,
-                    processedCount: actualProcessedCount,
-                    failedCount: actualFailedCount,
+                    processedCount: event.processed_count > 0 
+                      ? event.processed_count 
+                      : Math.max(stats.processedCount, processedFilesRef.current.processed),
+                    failedCount: event.failed_count > 0
+                      ? event.failed_count
+                      : Math.max(stats.failedCount, processedFilesRef.current.failed),
                     processingTime: event.processing_details?.total_time || (Date.now() - startTime) / 1000,
                     unsupportedCount: event.unsupported_files?.length || stats.unsupportedCount || 0
                   };
                   
-                  console.log('Setting final stats:', finalStats);
-                  
-                  // Set processing status first
                   setProcessingStatus('completed');
-                  
-                  // Then update stats with the final values - use direct setState instead of functional update
                   setStats(finalStats);
-                  
-                  // Force a re-render by updating a dummy state
                   setCurrentFile('');
-                  
-                  // Log the stats after the update
-                  setTimeout(() => {
-                    console.log('Stats after batch completion:', stats);
-                  }, 0);
                   
                   if (finalStats.processedCount > 0) {
                     toast.success(`Successfully processed ${finalStats.processedCount} jobs`);
@@ -319,46 +256,11 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
                   break
 
                 case 'file_processing_failed':
-                  // Keep track of failed files count
                   processedFilesRef.current.failed += 1;
-                  const updatedFailedCount = Math.max(event.failed_count || 0, stats.failedCount, processedFilesRef.current.failed);
-                  
-                  console.log(`File processing failed: ${event.file_name}, failed: ${updatedFailedCount}, ref: ${processedFilesRef.current.failed}`);
-                  
                   setStats(prev => ({
                     ...prev,
                     processedCount: Math.max(event.processed_count || 0, prev.processedCount, processedFilesRef.current.processed),
-                    failedCount: updatedFailedCount,
-                    processingTime: (Date.now() - startTime) / 1000
-                  }))
-                  break
-
-                case 'job_created':
-                  // Keep track of processed files count for job creation
-                  processedFilesRef.current.processed += 1;
-                  const updatedProcessedCount = Math.max(event.processed_count || 0, stats.processedCount, processedFilesRef.current.processed);
-                  
-                  console.log(`Job created: ${event.file_name}, processed: ${updatedProcessedCount}, ref: ${processedFilesRef.current.processed}`);
-                  
-                  setStats(prev => ({
-                    ...prev,
-                    processedCount: updatedProcessedCount,
                     failedCount: Math.max(event.failed_count || 0, prev.failedCount, processedFilesRef.current.failed),
-                    processingTime: (Date.now() - startTime) / 1000
-                  }))
-                  break
-
-                case 'job_creation_failed':
-                  // Keep track of failed files count for job creation
-                  processedFilesRef.current.failed += 1;
-                  const updatedJobFailedCount = Math.max(event.failed_count || 0, stats.failedCount, processedFilesRef.current.failed);
-                  
-                  console.log(`Job creation failed: ${event.file_name}, failed: ${updatedJobFailedCount}, ref: ${processedFilesRef.current.failed}`);
-                  
-                  setStats(prev => ({
-                    ...prev,
-                    processedCount: Math.max(event.processed_count || 0, prev.processedCount, processedFilesRef.current.processed),
-                    failedCount: updatedJobFailedCount,
                     processingTime: (Date.now() - startTime) / 1000
                   }))
                   break
@@ -374,7 +276,6 @@ export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
         }
         buffer = lines[lines.length - 1]
       }
-      console.log('Upload process completed.')
     } catch (error) {
       console.error("Error uploading jobs:", error)
       setProcessingStatus('error')

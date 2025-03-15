@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-export const JobType = z.enum(["FULL_TIME", "PART_TIME", "CONTRACT", "INTERNSHIP"])
+export const JobType = z.enum(["FULL_TIME", "PART_TIME", "CONTRACT", "INTERNSHIP", "TO_BE_DETERMINED"])
 export type JobType = z.infer<typeof JobType>
 
 export const JobStatus = z.enum(["DRAFT", "PUBLISHED", "CLOSED", "ARCHIVED"])
@@ -23,9 +23,9 @@ export type LocalizedStringArray = z.infer<typeof LocalizedStringArray>
 // New single-language location structure
 export const JobLocationSingle = z.object({
   city: z.string(),
-  state: z.string(),
-  country: z.string(),
-  postal_code: z.string()
+  state: z.string().optional(),
+  country: z.string().optional(),
+  postal_code: z.string().optional()
 })
 export type JobLocationSingle = z.infer<typeof JobLocationSingle>
 
@@ -97,9 +97,9 @@ export const jobFormSchema = z.object({
   requirements: z.string().optional(),
   skills: z.array(z.string()).default([]),
   city: z.string().min(1),
-  state: z.string().min(1),
-  country: z.string().min(1),
-  postalCode: z.string().min(1),
+  state: z.string().optional(),
+  country: z.string().optional(),
+  postalCode: z.string().optional(),
   jobType: JobType,
   salaryMin: z.number().min(0),
   salaryMax: z.number().min(0),

@@ -19,8 +19,11 @@ interface BulkJobProgressProps {
     unsupportedCount?: number;
   };
   processingStatus?: 'idle' | 'uploading' | 'processing' | 'completed' | 'error';
+  currentFile?: string;
   error?: string;
-  unsupportedFiles?: string[];
+  unsupportedFiles?: Array<{name: string, type: string, reason: string}>;
+  organizationId: string;
+  onClose?: () => void;
 }
 
 const ProgressCard = ({ icon, label, value, total, color, explanation }: ProgressCardProps) => (
@@ -47,8 +50,7 @@ const ProgressCard = ({ icon, label, value, total, color, explanation }: Progres
   </div>
 )
 
-// Update the main component to use these cards consistently
-export const BulkJobProgress = ({ stats }: BulkJobProgressProps) => {
+export const BulkJobProgress = ({ stats, processingStatus, currentFile, error, unsupportedFiles }: BulkJobProgressProps) => {
   const getFailureExplanations = () => {
     if (stats.failedCount === 0) return ["No failed files"]
     return [
@@ -66,28 +68,56 @@ export const BulkJobProgress = ({ stats }: BulkJobProgressProps) => {
   }
 
   return (
-    <div className="grid grid-cols-3 gap-4">
-      <ProgressCard
-        icon={<CheckCircle2 className="h-5 w-5 text-green-500" />}
-        label="Processed"
-        value={stats.processedCount}
-        total={stats.totalFiles}
-        color="border-green-100"
-      />
-      <ProgressCard
-        icon={<XCircle className="h-5 w-5 text-red-500" />}
-        label="Failed"
-        value={stats.failedCount}
-        color="border-red-100"
-        explanation={getFailureExplanations()}
-      />
-      <ProgressCard
-        icon={<AlertTriangle className="h-5 w-5 text-yellow-500" />}
-        label="Unsupported"
-        value={stats.unsupportedCount || 0}
-        color="border-yellow-100"
-        explanation={explanations.unsupported}
-      />
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-4">
+        <ProgressCard
+          icon={<CheckCircle2 className="h-5 w-5 text-green-500" />}
+          label="Processed"
+          value={stats.processedCount}
+          total={stats.totalFiles}
+          color="border-green-100"
+        />
+        <ProgressCard
+          icon={<XCircle className="h-5 w-5 text-red-500" />}
+          label="Failed"
+          value={stats.failedCount}
+          color="border-red-100"
+          explanation={getFailureExplanations()}
+        />
+        <ProgressCard
+          icon={<AlertTriangle className="h-5 w-5 text-yellow-500" />}
+          label="Unsupported"
+          value={stats.unsupportedCount || 0}
+          color="border-yellow-100"
+          explanation={explanations.unsupported}
+        />
+      </div>
+
+      {currentFile && processingStatus !== 'completed' && (
+        <div className="text-sm text-muted-foreground">
+          Processing: {currentFile}
+        </div>
+      )}
+
+      {error && (
+        <div className="text-sm text-red-500">
+          Error: {error}
+        </div>
+      )}
+
+      {unsupportedFiles && unsupportedFiles.length > 0 && (
+        <div className="mt-4">
+          <h4 className="text-sm font-medium mb-2">Unsupported Files:</h4>
+          <ul className="text-sm text-muted-foreground">
+            {unsupportedFiles.map((file, index) => (
+              <li key={index} className="flex items-start gap-1">
+                <span>•</span>
+                <span>{file.name} ({file.reason})</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   )
 } 

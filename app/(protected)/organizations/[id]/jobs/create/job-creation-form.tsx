@@ -1,35 +1,43 @@
 "use client"
 
-import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { toast } from "sonner"
+import { useForm } from "react-hook-form"
 import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 import { useState } from "react"
-import { jobFormSchema, type JobFormData, transformFormToRequestSingle } from "./types"
+
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
 import {
-    Form,
-    FormControl,
-    FormDescription,
-    FormField,
-    FormItem,
-    FormLabel,
-    FormMessage,
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  FormDescription,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Checkbox } from "@/components/ui/checkbox"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Card } from "@/components/ui/card"
-import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { cn } from "@/lib/utils"
-import { format } from "date-fns"
-import { CalendarIcon } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+import { DatePicker } from "@/components/ui/date-picker"
+import { SkillsInput } from "@/components/skills-input"
+
+import { JobType, jobFormSchema, type JobFormData, transformFormToRequestSingle } from "./types"
 
 interface JobCreationFormProps {
   organizationId: string
 }
+
+const jobTypes = Object.values(JobType.Values)
+const currencies = ["USD", "EUR", "GBP", "CAD", "AUD", "JPY", "CNY", "INR"]
 
 export function JobCreationForm({ organizationId }: JobCreationFormProps) {
   const router = useRouter()
@@ -38,38 +46,64 @@ export function JobCreationForm({ organizationId }: JobCreationFormProps) {
   const form = useForm<JobFormData>({
     resolver: zodResolver(jobFormSchema),
     defaultValues: {
-      remote: false,
+      title: "",
+      description: "",
+      requirements: "",
       skills: [],
+      city: "",
+      state: undefined,
+      country: undefined,
+      postalCode: undefined,
+      jobType: "FULL_TIME",
+      salaryMin: 0,
+      salaryMax: 0,
+      salaryCurrency: "USD",
+      remote: false,
       status: "DRAFT",
-      show_contact_info: false,
-      language: "en"
-    }
+      language: "en",
+      summary: undefined,
+      opening_date: undefined,
+      closing_date: undefined,
+      contact_person: undefined,
+      contact_email: undefined,
+      contact_phone: undefined,
+      show_contact_info: false
+    },
+    mode: "onChange"
   })
 
-  const onSubmit = async (data: JobFormData) => {
+  async function onSubmit(data: JobFormData) {
     try {
       setIsSubmitting(true)
-      const jobData = transformFormToRequestSingle(data, organizationId)
+      form.clearErrors()
 
-      const response = await fetch(`/api/v1/organizations/${organizationId}/jobs`, {
-        method: 'POST',
+      const jobData = transformFormToRequestSingle(data, organizationId)
+      console.log("Submitting job data:", jobData)
+
+      const response = await fetch("/api/v1/jobs", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
+          "Accept": "application/json",
         },
         body: JSON.stringify(jobData),
       })
 
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.message || 'Failed to create job')
+        const error = await response.json().catch(() => ({ message: response.statusText }))
+        throw new Error(error.message || `Failed to create job: ${response.status}`)
       }
 
       const job = await response.json()
-      toast.success('Job created successfully')
-      router.push(`/jobs/${job.id}`)
+
+      // Show success message
+      toast.success("Job created successfully!")
+
+      // Redirect to job details
+      router.push(`/organizations/${organizationId}/jobs/${job.id}`)
     } catch (error) {
-      console.error('Error creating job:', error)
-      toast.error(error instanceof Error ? error.message : 'Failed to create job')
+      console.error("Error creating job:", error)
+      toast.error(error instanceof Error ? error.message : "Failed to create job")
     } finally {
       setIsSubmitting(false)
     }
@@ -77,549 +111,371 @@ export function JobCreationForm({ organizationId }: JobCreationFormProps) {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6">
-          {/* Left Column */}
-          <div className="space-y-6">
-            {/* Basic Information Section */}
-            <Card className="shadow-none border-none">
-              <div className="space-y-2">
-                <h2 className="text-lg font-semibold">Basic Information</h2>
-                <p className="text-sm text-muted-foreground">
-                  Core details about the position
-                </p>
-              </div>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {/* Basic Information */}
+        <Card className="col-span-1 p-6">
+          <h2 className="text-lg font-semibold mb-6">Basic Information</h2>
 
-              <div className="space-y-4 mt-4">
-                <FormField
-                  control={form.control}
-                  name="title"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Job Title</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g. Senior Software Engineer" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+          <FormField
+            control={form.control}
+            name="title"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Job Title</FormLabel>
+                <FormControl>
+                  <Input placeholder="Enter job title" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Job Description</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Describe the role and responsibilities..."
-                          className="min-h-[200px]"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="jobType"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Job Type</FormLabel>
-                      <FormControl>
-                        <RadioGroup
-                          onValueChange={field.onChange}
-                          defaultValue={field.value}
-                          className="flex flex-wrap space-x-1"
-                        >
-                          <FormItem className="flex items-center space-x-3 space-y-0">
-                            <FormControl>
-                              <RadioGroupItem value="FULL_TIME" />
-                            </FormControl>
-                            <FormLabel className="font-normal">
-                              Full Time
-                            </FormLabel>
-                          </FormItem>
-                          <FormItem className="flex items-center space-x-3 space-y-0">
-                            <FormControl>
-                              <RadioGroupItem value="PART_TIME" />
-                            </FormControl>
-                            <FormLabel className="font-normal">
-                              Part Time
-                            </FormLabel>
-                          </FormItem>
-                          <FormItem className="flex items-center space-x-3 space-y-0">
-                            <FormControl>
-                              <RadioGroupItem value="CONTRACT" />
-                            </FormControl>
-                            <FormLabel className="font-normal">
-                              Contract
-                            </FormLabel>
-                          </FormItem>
-                          <FormItem className="flex items-center space-x-3 space-y-0">
-                            <FormControl>
-                              <RadioGroupItem value="INTERNSHIP" />
-                            </FormControl>
-                            <FormLabel className="font-normal">
-                              Internship
-                            </FormLabel>
-                          </FormItem>
-                          {/* <FormItem className="flex items-center space-x-3 space-y-0">
-                            <FormControl>
-                              <RadioGroupItem value="VOLUNTEER" />
-                            </FormControl>
-                            <FormLabel className="font-normal">
-                              Volunteer
-                            </FormLabel>
-                          </FormItem> */}
-                          <FormItem className="flex items-center space-x-3 space-y-0">
-                            <FormControl>
-                              <RadioGroupItem value="TO_BE_DETERMINED" />
-                            </FormControl>
-                            <FormLabel className="font-normal">
-                              To be determined
-                            </FormLabel>
-                          </FormItem>
-                        </RadioGroup>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="language"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Language</FormLabel>
-                      <FormControl>
-                        <select
-                          className="w-full p-2 border rounded"
-                          {...field}
-                        >
-                          <option value="en">English</option>
-                          <option value="fr">French</option>
-                        </select>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="summary"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Summary</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Provide a brief summary of the job..."
-                          className="min-h-[100px]"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="city"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>City</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+          <FormField
+            control={form.control}
+            name="description"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Description</FormLabel>
+                <FormControl>
+                  <Textarea
+                    placeholder="Enter job description"
+                    className="resize-none"
+                    rows={8}
+                    {...field}
                   />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-                  <FormField
-                    control={form.control}
-                    name="state"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>State/Province</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+          <FormField
+            control={form.control}
+            name="requirements"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Requirements</FormLabel>
+                <FormControl>
+                  <Textarea
+                    placeholder="Enter job requirements (one per line)"
+                    className="resize-none"
+                    rows={6}
+                    {...field}
                   />
+                </FormControl>
+                <FormDescription>
+                  Enter each requirement on a new line
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-                  <FormField
-                    control={form.control}
-                    name="country"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Country</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+          <FormField
+            control={form.control}
+            name="skills"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Required Skills</FormLabel>
+                <FormControl>
+                  <SkillsInput
+                    value={field.value}
+                    onChange={field.onChange}
+                    placeholder="Add required skills"
                   />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </Card>
 
-                  <FormField
-                    control={form.control}
-                    name="postalCode"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Postal Code</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+        {/* Additional Details */}
+        <Card className="col-span-1 p-6">
+          <h2 className="text-lg font-semibold mb-6">Additional Details</h2>
 
-                <FormField
-                  control={form.control}
-                  name="remote"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel>Remote Position</FormLabel>
-                        <FormDescription>
-                          Check if this position can be performed remotely
-                        </FormDescription>
-                      </div>
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </Card>
+          <FormField
+            control={form.control}
+            name="jobType"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Job Type</FormLabel>
+                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select job type" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {jobTypes.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {type.replace(/_/g, " ")}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-            {/* Dates and Status Section */}
-            <Card className="shadow-none border-none">
-              <div className="space-y-2">
-                <h2 className="text-lg font-semibold">Important Dates</h2>
-                <p className="text-sm text-muted-foreground">
-                  Set the vacancy timeline
-                </p>
-              </div>
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="salaryMin"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Minimum Salary</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      min={0}
+                      {...field}
+                      onChange={(e) => field.onChange(parseInt(e.target.value))}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-              <div className="space-y-4 mt-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="opening_date"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-col">
-                        <FormLabel>Opening Date</FormLabel>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button
-                                variant={"outline"}
-                                className={cn(
-                                  "w-full pl-3 text-left font-normal",
-                                  !field.value && "text-muted-foreground"
-                                )}
-                              >
-                                {field.value ? (
-                                  format(new Date(field.value), "PPP")
-                                ) : (
-                                  <span>Pick a date</span>
-                                )}
-                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={field.value ? new Date(field.value) : undefined}
-                              onSelect={(date) => field.onChange(date?.toISOString())}
-                              disabled={(date) =>
-                                date < new Date()
-                              }
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="closing_date"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-col">
-                        <FormLabel>Closing Date</FormLabel>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button
-                                variant={"outline"}
-                                className={cn(
-                                  "w-full pl-3 text-left font-normal",
-                                  !field.value && "text-muted-foreground"
-                                )}
-                              >
-                                {field.value ? (
-                                  format(new Date(field.value), "PPP")
-                                ) : (
-                                  <span>Pick a date</span>
-                                )}
-                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={field.value ? new Date(field.value) : undefined}
-                              onSelect={(date) => field.onChange(date?.toISOString())}
-                              disabled={(date) =>
-                                date < new Date()
-                              }
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
-            </Card>
+            <FormField
+              control={form.control}
+              name="salaryMax"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Maximum Salary</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      min={0}
+                      {...field}
+                      onChange={(e) => field.onChange(parseInt(e.target.value))}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </div>
 
-          {/* Right Column */}
-          <div className="space-y-6">
-            {/* Requirements Section */}
-            <Card className="shadow-none border-none">
-              <div className="space-y-2">
-                <h2 className="text-lg font-semibold">Requirements</h2>
-                <p className="text-sm text-muted-foreground">
-                  Qualifications and skills needed for the role
-                </p>
-              </div>
+          <FormField
+            control={form.control}
+            name="salaryCurrency"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Salary Currency</FormLabel>
+                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select currency" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {currencies.map((currency) => (
+                      <SelectItem key={currency} value={currency}>
+                        {currency}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-              <div className="space-y-4 mt-4">
-                <FormField
-                  control={form.control}
-                  name="requirements"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Requirements</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Enter requirements (one per line)..."
-                          className="min-h-[150px]"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Enter each requirement on a new line
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="skills"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Required Skills</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Enter skills (one per line)..."
-                          className="min-h-[150px]"
-                          value={field.value?.join("\n") || ""}
-                          onChange={(e) =>
-                            field.onChange(
-                              e.target.value
-                                .split("\n")
-                                .map((line) => line.trim())
-                                .filter(Boolean)
-                            )
-                          }
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Enter each skill on a new line
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </Card>
-
-            {/* Compensation Section */}
-            <Card className="shadow-none border-none">
-              <div className="space-y-2">
-                <h2 className="text-lg font-semibold">Compensation</h2>
-                <p className="text-sm text-muted-foreground">
-                  Salary and benefits information
-                </p>
-              </div>
-
-              <div className="space-y-4 mt-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="salaryMin"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Minimum Salary</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            {...field}
-                            onChange={(e) => field.onChange(Number(e.target.value))}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="salaryMax"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Maximum Salary</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            {...field}
-                            onChange={(e) => field.onChange(Number(e.target.value))}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="salaryCurrency"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Currency</FormLabel>
-                        <FormControl>
-                          <Input {...field} placeholder="e.g. USD" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+          <FormField
+            control={form.control}
+            name="remote"
+            render={({ field }) => (
+              <FormItem className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <FormLabel>Remote Work</FormLabel>
+                  <FormDescription>
+                    Is this a remote position?
+                  </FormDescription>
                 </div>
-              </div>
-            </Card>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
 
-            {/* Contact Information Section */}
-            <Card className="shadow-none border-none">
-              <div className="space-y-2">
-                <h2 className="text-lg font-semibold">Contact Information</h2>
-                <p className="text-sm text-muted-foreground">
-                  Details for applicant inquiries
-                </p>
-              </div>
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="opening_date"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Opening Date</FormLabel>
+                  <FormControl>
+                    <DatePicker
+                      value={field.value ? new Date(field.value) : undefined}
+                      onChange={(date: Date | undefined) => field.onChange(date?.toISOString())}
+                      placeholder="Select opening date"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-              <div className="space-y-4 mt-4">
-                <FormField
-                  control={form.control}
-                  name="contact_person"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Contact Person</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Full name" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="contact_phone"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Contact Phone</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Phone number" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="contact_email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Contact Email</FormLabel>
-                      <FormControl>
-                        <Input type="email" placeholder="Email address" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="show_contact_info"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel>Show Contact Information</FormLabel>
-                        <FormDescription>
-                          Display contact information publicly on the job posting
-                        </FormDescription>
-                      </div>
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </Card>
+            <FormField
+              control={form.control}
+              name="closing_date"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Closing Date</FormLabel>
+                  <FormControl>
+                    <DatePicker
+                      value={field.value ? new Date(field.value) : undefined}
+                      onChange={(date: Date | undefined) => field.onChange(date?.toISOString())}
+                      placeholder="Select closing date"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </div>
-        </div>
+        </Card>
 
-        <div className="sticky bottom-0 flex justify-end space-x-4 p-6 bg-background border-t">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => router.back()}
-            disabled={isSubmitting}
-          >
+        {/* Location Information */}
+        <Card className="col-span-2 p-6">
+          <h2 className="text-lg font-semibold mb-6">Location Information</h2>
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="city"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>City</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Enter city (required)" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="state"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>State/Province (Optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Enter state/province" {...field} value={field.value || ''} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="country"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Country (Optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Enter country" {...field} value={field.value || ''} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="postalCode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Postal Code (Optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Enter postal code" {...field} value={field.value || ''} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </Card>
+
+        {/* Contact Information */}
+        <Card className="col-span-2 p-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Contact Information</h2>
+            <FormField
+              control={form.control}
+              name="show_contact_info"
+              render={({ field }) => (
+                <FormItem className="flex items-center space-x-2">
+                  <FormLabel>Show Contact Info</FormLabel>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <FormField
+              control={form.control}
+              name="contact_person"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Contact Person</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Enter contact name" {...field} value={field.value || ''} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="contact_email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Contact Email</FormLabel>
+                  <FormControl>
+                    <Input type="email" placeholder="Enter contact email" {...field} value={field.value || ''} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="contact_phone"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Contact Phone</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Enter contact phone" {...field} value={field.value || ''} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </Card>
+
+        {/* Form Actions */}
+        <div className="col-span-1 md:col-span-2 flex justify-end space-x-4 border-t pt-6">
+          <Button type="button" variant="outline" onClick={() => router.back()}>
             Cancel
           </Button>
           <Button type="submit" disabled={isSubmitting}>
@@ -628,5 +484,5 @@ export function JobCreationForm({ organizationId }: JobCreationFormProps) {
         </div>
       </form>
     </Form>
-  )
+  );
 } 
