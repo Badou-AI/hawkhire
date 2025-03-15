@@ -23,6 +23,7 @@
 # misc
 .DS_Store
 *.pem
+/branchesDiff
 
 # debug
 npm-debug.log*
