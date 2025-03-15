@@ -1,158 +1,22 @@
 // Types
-// Legacy interfaces for backward compatibility
-export interface LocalizedText {
-  en: string
-  fr: string
-  [key: string]: string // Add index signature to allow string indexing
-}
-
-export interface LocalizedLocation {
-  city: LocalizedText
-  state: LocalizedText
-  country: LocalizedText
-  postal_code: LocalizedText
-}
-
-export interface Organization {
-  id: string
-  name: LocalizedText
-  logo_url: string
-  industry: string
-  tier: string
-  is_mock: boolean
-  languages: string[]
-  created_at: string
-  size_range: string
-  updated_at: string
-  description: LocalizedText
-  website_url: string
-  company_type: string
-  founded_year: number
-  mock_batch_id: string | null
-  cover_image_url: string
-  primary_location: LocalizedLocation
-  verification_status: string
-  additional_locations: LocalizedLocation[]
-}
-
-// Updated ApiJob interface to support both legacy and new format
-export interface ApiJob {
-  id: string
-  title: string | LocalizedText
-  organizations: Organization
-  location: {
-    city: string | LocalizedText
-    state: string | LocalizedText
-    country?: string | LocalizedText
-    postal_code?: string | LocalizedText
-  } | Record<string, string>
-  job_type: string
-  rating: number | null
-  description: string | LocalizedText
-  salary_min: number | null
-  salary_max: number | null
-  salary_currency: string
-  created_at: string
-  updated_at: string
-  skills: string[]
-  remote: boolean
-  is_mock: boolean
-  mock_batch_id: string | null
-  status: string
-  language?: string
-  summary?: string
-  requirements: string[] | {
-    en: string[]
-    fr: string[]
-  }
-  processed?: {
-    index_name: string
-    total_applicants: number
-    last_processed_at: string
-    processing_status: string
-    average_match_score?: number
-    top_skills?: Array<{
-      skill: string
-      count: number
-      average_score: number
-    }>
-    error_message?: string
-    processing_duration?: number
-  }
-}
-
-export interface JobsResponse {
-  data: ApiJob[]
-  page: number
-  page_size: number
-  total: number
-}
-
-import { ProcessedJob } from '@/types/job'
-
-export interface Job {
-  id: string;
-  title: string;
-  company: string;
-  location: string;
-  type: string;
-  rating: number;
-  logo: string;
-  description: string;
-  salary: string;
-  postedAt: string;
-  skills: string[];
-  remote: boolean;
-  language?: string;
-  summary?: string;
-  organization?: {
-    industry: string;
-    size_range: string;
-    founded_year: number;
-    company_type: string;
-  };
-  processed?: ProcessedJob;
-}
+import {
+  Job,
+  ApiJob,
+  JobsResponse
+} from '@/types';
 
 // Get API URL from environment variable or use default
 const API_URL = typeof window !== 'undefined' 
   ? process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8080'
   : process.env.PYTHON_API_URL || 'http://127.0.0.1:8080'
 
-// Helper function to check if a value is a localized text object
-function isLocalizedText(value: unknown): value is LocalizedText {
-  return value !== null && typeof value === 'object' && ('en' in value || 'fr' in value);
-}
-
-// Helper function to extract text from potentially localized fields
-function extractText(field: string | LocalizedText | Record<string, string> | undefined, preferredLanguage: string = 'en'): string {
-  if (!field) return '';
-  
-  // If it's already a string, return it
-  if (typeof field === 'string') return field;
-  
-  // If it's a localized text object
-  if (isLocalizedText(field)) {
-    // Try to get the preferred language
-    if (field[preferredLanguage]) return field[preferredLanguage];
-    // Fallback to any available language
-    return field.en || field.fr || '';
-  }
-  
-  // If it's another type of object, try to stringify it
-  return JSON.stringify(field);
-}
-
 // Helper function to map backend job response to frontend Job type
 export function mapBackendJobToFrontend(backendJob: ApiJob): Job {
-  // Determine the language to use
-  const language = backendJob.language || 'en';
-  
   // Extract location
   let locationString = '';
   if (typeof backendJob.location === 'object') {
-    const city = extractText(backendJob.location.city, language);
-    const state = extractText(backendJob.location.state, language);
+    const city = backendJob.location?.city;
+    const state = backendJob.location?.state;
     locationString = `${city}, ${state}`;
   }
 
@@ -160,44 +24,35 @@ export function mapBackendJobToFrontend(backendJob: ApiJob): Job {
     ? `$${backendJob.salary_min/1000}k - $${backendJob.salary_max/1000}k ${backendJob.salary_currency}`
     : 'Competitive';
 
-  // Handle organization fields that might be localized JSON strings
-  const parseLocalizedField = (field: string | LocalizedText | Record<string, string> | undefined): string => {
-    return extractText(field, language);
-  }
 
   // Extract title
-  const title = extractText(backendJob.title, language);
+  const title = backendJob.title;
 
   // Extract company name
   let company = 'Company Name';
   if (backendJob.organizations) {
-    company = extractText(backendJob.organizations.name, language);
+    company = backendJob.organizations.name;
   }
 
   // Extract description
-  const description = extractText(backendJob.description, language);
+  const description = backendJob.description;
 
   return {
     id: backendJob.id,
     title,
     company,
     location: locationString,
-    type: backendJob.job_type.replace('_', ' ').toLowerCase(),
+    type: backendJob?.job_type?.replace('_', ' ').toLowerCase() || '',
     rating: backendJob.rating || 4.5,
     logo: backendJob.organizations?.logo_url || '/company-logos/placeholder.png',
     description,
     salary: salaryString,
-    postedAt: backendJob.created_at,
+    postedAt: backendJob.created_at || '',
     skills: backendJob.skills || [],
-    remote: backendJob.remote,
-    language: backendJob.language,
-    summary: backendJob.summary,
-    organization: backendJob.organizations ? {
-      industry: parseLocalizedField(backendJob.organizations.industry),
-      size_range: parseLocalizedField(backendJob.organizations.size_range),
-      founded_year: backendJob.organizations.founded_year,
-      company_type: parseLocalizedField(backendJob.organizations.company_type)
-    } : undefined,
+    remote: backendJob.remote || false,
+    language: backendJob.language || '',
+    summary: backendJob.summary || '',
+    organization: backendJob.organizations ? {...backendJob.organizations} : undefined,
     processed: backendJob.processed ? {
       index_name: backendJob.processed.index_name,
       total_applicants: backendJob.processed.total_applicants,
@@ -334,10 +189,10 @@ export async function getSimilarJobs(jobId: string, limit = 4): Promise<Job[]> {
         let score = 0
         
         // Score based on matching skills
-        const matchingSkills = job.skills.filter(skill => 
+        const matchingSkills = job.skills?.filter(skill => 
           currentJob.skills.includes(skill)
         )
-        score += (matchingSkills.length / currentJob.skills.length) * 10
+        score += (matchingSkills?.length || 0 / currentJob.skills.length) * 10
 
         // Score based on industry match
         if (job.organizations?.industry === currentJob.organization?.industry) {

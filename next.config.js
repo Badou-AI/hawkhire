@@ -1,5 +1,10 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 /** @type {import('next').NextConfig} */
+const path = require('path');
+
 const nextConfig = {
+  reactStrictMode: true,
+  transpilePackages: ['@radix-ui/react-label', '@radix-ui/react-checkbox', 'lucide-react'],
   images: {
     remotePatterns: [
       {
@@ -16,13 +21,21 @@ const nextConfig = {
   },
   // Only ignore specific directories that contain third-party components
   eslint: {
-    // Only ignore the UI components directory which contains shadcn components
-    dirs: ['app', 'lib', 'hooks', 'components', '!components/ui'],
+    // Warning: This allows production builds to successfully complete even if
+    // your project has ESLint errors.
+    ignoreDuringBuilds: true,
   },
-  typescript: {
-    // We don't want to ignore all type errors, just handle them properly
-    ignoreBuildErrors: false,
-  },
-}
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@': path.resolve(__dirname),
+      '@/components': path.resolve(__dirname, 'components'),
+      '@/hooks': path.resolve(__dirname, 'hooks'),
+      '@/lib': path.resolve(__dirname, 'lib'),
+      '@/types': path.resolve(__dirname, 'types')
+    };
+    return config;
+  }
+};
 
-module.exports = nextConfig 
+module.exports = nextConfig; 

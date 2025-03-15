@@ -3,94 +3,33 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import {
-    Card,
-    CardContent,
-    CardHeader,
-    CardTitle,
-    CardDescription,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { AlertCircle, CheckCircle2, XCircle, Timer, Database, Settings2, Plus } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-// Define LocalizedText and ApiJob types locally to avoid import issues
-interface LocalizedText {
-  en: string
-  fr: string
-  [key: string]: string
-}
-
-interface LocalizedLocation {
-  city: LocalizedText
-  state: LocalizedText
-  country: LocalizedText
-  postal_code: LocalizedText
-}
-
-interface Organization {
-  id: string
-  name: LocalizedText
-  logo_url: string
-  industry: string
-  tier: string
-  is_mock: boolean
-  languages: string[]
-  created_at: string
-  size_range: string
-  updated_at: string
-  description: LocalizedText
-  website_url: string
-  company_type: string
-  founded_year: number
-  mock_batch_id: string | null
-  cover_image_url: string
-  primary_location: LocalizedLocation
-  verification_status: string
-  additional_locations: LocalizedLocation[]
-}
-
-interface ApiJob {
-  id: string
-  title: string | LocalizedText
-  description: string | LocalizedText
-  organizations?: Organization
-  location?: {
-    city: string | LocalizedText
-    state: string | LocalizedText
-    country?: string | LocalizedText
-    postal_code?: string | LocalizedText
-  } | Record<string, string>
-  job_type?: string
-  rating?: number | null
-  salary_min?: number | null
-  salary_max?: number | null
-  salary_currency?: string
-  created_at?: string
-  updated_at?: string
-  skills?: string[]
-  remote?: boolean
-  is_mock?: boolean
-  mock_batch_id?: string | null
-  // Add any other fields that might be in the fetched data
-  organization_id?: string
-  status?: string
-}
-
+import { ApiJob } from "@/types";
 import { useOrganization } from "@/lib/hooks/useOrganization";
 
 // Import data from shared data file
 import { transformApiResponseToUiFormat, getSkillColor } from "./data";
 import { FileDropzone } from "@/components/resume-evaluator/FileDropzone";
+
 
 // Add new types
 interface IndexStatus {

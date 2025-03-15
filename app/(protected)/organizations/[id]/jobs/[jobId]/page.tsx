@@ -63,36 +63,7 @@ interface JobDetail {
   };
 }
 
-// Helper function to safely extract text from potentially localized objects
-const getLocalizedText = (value: unknown): string => {
-  if (value === null || value === undefined) {
-    return "";
-  }
-  
-  if (typeof value === 'string') {
-    return value;
-  }
-  
-  if (typeof value === 'object') {
-    // Try to extract English text first, then any other language
-    const obj = value as Record<string, unknown>;
-    if (obj.fr && typeof obj.fr === 'string') return obj.fr;
-    //if (obj.en_US && typeof obj.en_US === 'string') return obj.en_US;
-    
-    // If no English version, take the first available text
-    const firstValue = Object.values(obj)[0];
-    if (typeof firstValue === 'string') {
-      return firstValue;
-    }
-  }
-  
-  // Fallback: convert to string or return empty
-  try {
-    return String(value);
-  } catch {
-    return "";
-  }
-};
+
 
 // Status badge variants
 const getStatusVariant = (status: string) => {
@@ -265,8 +236,8 @@ export default function JobDetailPage() {
         // Transform the data to match our JobDetail interface
         const jobDetail: JobDetail = {
           id: jobData.id,
-          title: getLocalizedText(jobData.title),
-          description: getLocalizedText(jobData.description),
+          title: jobData.title,
+          description: jobData.description,
           requirements: requirementsArray,
           department: orgData.industry,
           level,
@@ -275,7 +246,7 @@ export default function JobDetailPage() {
           mode: jobData.remote ? "Remote" : "On-site",
           salary: `$${jobData.salary_min/1000}k - $${jobData.salary_max/1000}k ${jobData.salary_currency}`,
           location: typeof jobData.location === 'object' 
-            ? getLocalizedText(jobData.location.city) + ', ' + getLocalizedText(jobData.location.state)
+            ? jobData.location.city + ', ' + jobData.location.state
             : jobData.location || "Remote",
           applicants: applicantCount,
           status: jobData.status,
@@ -283,7 +254,7 @@ export default function JobDetailPage() {
           summary: jobData.summary,
           organization: {
             id: orgData.id,
-            name: getLocalizedText(orgData.name),
+            name: orgData.name,
             industry: orgData.industry,
             size: orgData.size_range,
             size_range: orgData.size_range,

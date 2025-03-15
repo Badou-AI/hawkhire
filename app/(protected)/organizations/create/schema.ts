@@ -1,42 +1,24 @@
-import { z } from "zod"
-
-const localizedStringSchema = z.object({
-  en: z.string().min(1, "English text is required"),
-  fr: z.string().optional(),
-})
-
-const localizedLocationSchema = z.object({
-  city: localizedStringSchema,
-  state: localizedStringSchema,
-  country: localizedStringSchema,
-  postal_code: localizedStringSchema,
-})
-
-export const organizationTiers = [
-  "FREE",
-  "PROFESSIONAL",
-  "ENTERPRISE",
-] as const
+import * as z from "zod"
 
 export const organizationIndustries = [
   "TECHNOLOGY",
   "HEALTHCARE",
-  "EDUCATION",
   "FINANCE",
+  "EDUCATION",
   "RETAIL",
   "MANUFACTURING",
   "SERVICES",
-  "OTHER",
+  "OTHER"
 ] as const
 
 export const organizationCompanyTypes = [
-  "CORPORATION",
-  "LLC",
-  "PARTNERSHIP",
-  "SOLE_PROPRIETORSHIP",
+  "PUBLIC_COMPANY",
+  "PRIVATE_COMPANY",
+  "STARTUP",
   "NONPROFIT",
   "GOVERNMENT",
-  "OTHER",
+  "EDUCATIONAL",
+  "OTHER"
 ] as const
 
 export const organizationSizeRanges = [
@@ -46,24 +28,26 @@ export const organizationSizeRanges = [
   "201-500",
   "501-1000",
   "1001-5000",
-  "5000+",
+  "5001-10000",
+  "10000+"
 ] as const
 
 export const organizationCreationSchema = z.object({
-  name: localizedStringSchema,
-  description: localizedStringSchema,
-  tier: z.enum(organizationTiers).default("FREE"),
+  name: z.string().min(1, "Name is required"),
+  description: z.string().min(1, "Description is required"),
+  tier: z.enum(["FREE", "PREMIUM", "ENTERPRISE"]).default("FREE"),
   industry: z.enum(organizationIndustries),
   company_type: z.enum(organizationCompanyTypes),
-  founded_year: z.number().min(1800).max(new Date().getFullYear()),
+  founded_year: z.number().min(1800).max(new Date().getFullYear()).optional(),
   size_range: z.enum(organizationSizeRanges),
-  website_url: z.string().url(),
-  logo_url: z.string().optional(),
-  cover_image_url: z.string().optional(),
-  primary_location: localizedLocationSchema,
-  additional_locations: z.array(localizedLocationSchema).optional().default([]),
-  languages: z.array(z.string()).min(1).default(["en"]),
+  website_url: z.string().url().optional(),
+  logo_url: z.string().url().optional(),
+  cover_image_url: z.string().url().optional(),
+  city: z.string().min(1, "City is required"),
+  state: z.string().optional(),
+  country: z.string().optional(),
+  postal_code: z.string().optional(),
   verification_status: z.enum(["PENDING", "VERIFIED", "REJECTED"]).default("PENDING"),
   is_mock: z.boolean().default(false),
-  mock_batch_id: z.string().uuid().nullable(),
+  mock_batch_id: z.string().nullable().default(null),
 }) 

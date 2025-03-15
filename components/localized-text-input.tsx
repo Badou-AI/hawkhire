@@ -5,7 +5,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 interface LocalizedText {
-  en: string
+  en?: string
   fr?: string
 }
 
@@ -13,8 +13,8 @@ interface LocalizedTextInputProps {
   value: LocalizedText
   onChange: (value: LocalizedText) => void
   placeholder?: {
-    en: string
-    fr: string
+    en?: string
+    fr?: string
   }
   multiline?: boolean
 }

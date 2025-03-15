@@ -4,15 +4,15 @@ import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 interface LocalizedText {
-  en: string
+  en?: string
   fr?: string
 }
 
 interface LocalizedLocation {
-  city: LocalizedText
-  state: LocalizedText
-  country: LocalizedText
-  postal_code: LocalizedText
+  city?: LocalizedText
+  state?: LocalizedText
+  country?: LocalizedText
+  postal_code?: LocalizedText
 }
 
 interface LocalizedLocationInputProps {

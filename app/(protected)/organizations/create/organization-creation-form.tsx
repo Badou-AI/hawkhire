@@ -1,52 +1,41 @@
-"use client"
+"use client";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import * as z from "zod";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { useState } from "react";
 
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
-import * as z from "zod"
-import { useRouter } from "next/navigation"
-import { toast } from "sonner"
-import { useState } from "react"
-
-import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import {
-    Form,
-    FormControl,
-    FormField,
-    FormItem,
-    FormLabel,
-    FormMessage,
-    FormDescription,
-} from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  FormDescription,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select"
-import { LocalizedTextInput } from "@/components/localized-text-input"
-import { LocalizedLocationInput } from "@/components/localized-location-input"
-import { ImageUpload } from "@/components/image-upload"
-import { uploadImage } from "@/app/api/upload/client"
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ImageUpload } from "@/components/image-upload";
+import { uploadImage } from "@/app/api/upload/client";
 
 import {
-    organizationCreationSchema,
-    organizationIndustries,
-    organizationCompanyTypes,
-    organizationSizeRanges,
-} from "./schema"
+  organizationCreationSchema,
+  organizationIndustries,
+  organizationCompanyTypes,
+  organizationSizeRanges,
+} from "./schema";
 
 type FormValues = z.infer<typeof organizationCreationSchema>
-
-const defaultLocalizedText = { en: "", fr: "" }
-const defaultLocalizedLocation = {
-  city: { en: "", fr: "" },
-  state: { en: "", fr: "" },
-  country: { en: "", fr: "" },
-  postal_code: { en: "", fr: "" }
-}
 
 export function OrganizationCreationForm() {
   const router = useRouter()
@@ -57,8 +46,8 @@ export function OrganizationCreationForm() {
   const form = useForm<FormValues>({
     resolver: zodResolver(organizationCreationSchema),
     defaultValues: {
-      name: defaultLocalizedText,
-      description: defaultLocalizedText,
+      name: "",
+      description: "",
       tier: "FREE",
       industry: undefined,
       company_type: undefined,
@@ -67,9 +56,10 @@ export function OrganizationCreationForm() {
       website_url: "",
       logo_url: undefined,
       cover_image_url: undefined,
-      primary_location: defaultLocalizedLocation,
-      additional_locations: [],
-      languages: ["en"],
+      city: "",
+      state: undefined,
+      country: undefined,
+      postal_code: undefined,
       verification_status: "PENDING",
       is_mock: false,
       mock_batch_id: null,
@@ -148,13 +138,9 @@ export function OrganizationCreationForm() {
               <FormItem>
                 <FormLabel>Organization Name</FormLabel>
                 <FormControl>
-                  <LocalizedTextInput
-                    value={field.value}
-                    onChange={field.onChange}
-                    placeholder={{
-                      en: "Enter organization name in English",
-                      fr: "Enter organization name in French (optional)",
-                    }}
+                  <Input
+                    placeholder="Enter organization name"
+                    {...field}
                   />
                 </FormControl>
                 <FormMessage />
@@ -169,14 +155,9 @@ export function OrganizationCreationForm() {
               <FormItem>
                 <FormLabel>Description</FormLabel>
                 <FormControl>
-                  <LocalizedTextInput
-                    value={field.value}
-                    onChange={field.onChange}
-                    multiline
-                    placeholder={{
-                      en: "Enter organization description in English",
-                      fr: "Enter organization description in French (optional)",
-                    }}
+                  <Input
+                    placeholder="Enter organization description"
+                    {...field}
                   />
                 </FormControl>
                 <FormMessage />
@@ -367,22 +348,63 @@ export function OrganizationCreationForm() {
         <Card className="col-span-2 space-y-6 p-6">
           <h2 className="text-lg font-semibold">Location Information</h2>
 
-          <FormField
-            control={form.control}
-            name="primary_location"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Primary Location</FormLabel>
-                <FormControl>
-                  <LocalizedLocationInput
-                    value={field.value}
-                    onChange={field.onChange}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="city"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>City</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Enter city (required)" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="state"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>State/Province (Optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Enter state/province" {...field} value={field.value || ''} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="country"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Country (Optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Enter country" {...field} value={field.value || ''} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="postal_code"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Postal Code (Optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Enter postal code" {...field} value={field.value || ''} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
         </Card>
 
         {/* Form Actions */}
@@ -396,5 +418,5 @@ export function OrganizationCreationForm() {
         </div>
       </form>
     </Form>
-  )
+  );
 } 

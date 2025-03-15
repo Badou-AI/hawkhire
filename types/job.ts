@@ -1,3 +1,5 @@
+import { Organization } from "./organization"
+
 export interface Job {
   id: string
   title: string
@@ -13,12 +15,7 @@ export interface Job {
   remote: boolean
   language?: string
   summary?: string
-  organization?: {
-    industry: string
-    size_range: string
-    founded_year: number
-    company_type: string
-  }
+  organization?: Organization
   processed?: ProcessedJob
 }
 
@@ -42,11 +39,41 @@ export interface ProcessedJob {
   processing_duration?: number
 }
 
-/**
- * Represents text content in multiple languages
- */
-export interface LocalizedText {
-  en?: string
-  fr?: string
-  [key: string]: string | undefined
-} 
+export interface JobLocation {
+  city: string
+  state?: string
+  country?: string
+  postal_code?: string
+}
+
+export interface ApiJob {
+  id: string
+  title: string
+  description: string
+  language?: string | null
+  summary?: string | null
+  organizations?: Organization
+  location?: JobLocation | null
+  job_type?: string | null
+  rating?: number | null
+  salary_min?: number | null
+  salary_max?: number | null
+  salary_currency?: string | null
+  created_at?: string
+  updated_at?: string
+  skills?: string[]
+  remote?: boolean
+  is_mock?: boolean
+  mock_batch_id?: string | null
+  // Add any other fields that might be in the fetched data
+  organization_id?: string
+  status?: string
+  processed?: ProcessedJob
+}
+
+export interface JobsResponse {
+  data: ApiJob[]
+  page: number
+  page_size: number
+  total: number
+}

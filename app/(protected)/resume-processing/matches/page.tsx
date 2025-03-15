@@ -6,38 +6,38 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import {
-    Sheet,
-    SheetContent,
-    SheetHeader,
-    SheetTitle,
-    SheetDescription,
-    SheetTrigger,
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetTrigger,
 } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import {
-    ChevronLeft,
-    Calendar,
-    Clock,
-    Users,
-    Star,
-    CheckCircle2,
-    Send,
-    Bot,
-    Plus,
-    Printer,
-    Grid,
-    List,
-    Search,
-    X,
+  ChevronLeft,
+  Calendar,
+  Clock,
+  Users,
+  Star,
+  CheckCircle2,
+  Send,
+  Bot,
+  Plus,
+  Printer,
+  Grid,
+  List,
+  Search,
+  X,
 } from 'lucide-react';
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
@@ -46,7 +46,8 @@ import { usePipelineStore } from '@/lib/store/pipeline-store';
 import { PipelineStatus } from '@/components/pipeline-status';
 import { useSearchParams } from "next/navigation";
 import { Pagination } from '@/components/shared/pagination';
-import { getJob, type ApiJob, LocalizedText } from "@/app/api/jobs/client";
+import { getJob } from "@/app/api/jobs/client";
+import { type ApiJob } from "@/types";
 import dynamic from 'next/dynamic';
 import type { PDFViewerProps } from '@/components/pdf-viewer';
 
@@ -123,11 +124,11 @@ declare global {
   }
 }
 
-// Helper function to extract string from LocalizedText
-const getLocalizedText = (text: string | LocalizedText | undefined, defaultValue: string = ''): string => {
+// Helper function to extract string from ValueText
+const getValueText = (text: string | undefined, defaultValue: string = ''): string => {
   if (!text) return defaultValue;
   if (typeof text === 'string') return text;
-  return text.en || text.fr || defaultValue;
+  return defaultValue;
 };
 
 export default function MatchesPage() {
@@ -555,7 +556,7 @@ export default function MatchesPage() {
             <span className="sr-only">Back</span>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">{getLocalizedText(currentJob?.title, 'Job Matches')}</h1>
+            <h1 className="text-2xl font-bold tracking-tight">{getValueText(currentJob?.title, 'Job Matches')}</h1>
             <p className="text-sm text-muted-foreground">
               {jobStats ? `${jobStats.totalCandidates} candidates, ${jobStats.shortlisted} shortlisted` : 'Loading...'}
             </p>
@@ -661,7 +662,7 @@ export default function MatchesPage() {
 
       {/* Print-only header - only visible when printing */}
       <div className="hidden print:block print:text-left print:mb-5 print:pb-3 print:border-b print:border-gray-200">
-        <h1 className="print:text-2xl print:font-bold print:mb-1">{getLocalizedText(currentJob?.title, 'Job Matches')}</h1>
+        <h1 className="print:text-2xl print:font-bold print:mb-1">{getValueText(currentJob?.title, 'Job Matches')}</h1>
         <p className="print:text-sm print:text-gray-600">Generated on {new Date().toLocaleDateString()}</p>
         {showShortlisted && <p className="print:text-sm print:text-gray-600">Showing shortlisted candidates only ({shortlistThreshold}%+ match)</p>}
         
@@ -1132,7 +1133,7 @@ export default function MatchesPage() {
       <div className="hidden print:block print:mb-8">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="print:text-2xl print:font-bold print:mb-1">{getLocalizedText(currentJob?.title, 'Job Matches')}</h1>
+            <h1 className="print:text-2xl print:font-bold print:mb-1">{getValueText(currentJob?.title, 'Job Matches')}</h1>
             <div className="print:text-sm print:text-gray-600">
               {jobStats ? `${jobStats.totalCandidates} candidates, ${jobStats.shortlisted} shortlisted` : ''}
             </div>
