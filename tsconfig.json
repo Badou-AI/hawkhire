@@ -22,7 +22,10 @@
     "paths": {
       "@/*": ["./*"],
       "@/components/*": ["./components/*"],
-      "@/types/*": ["./types/*"]
+      "@/types/*": ["./types/*"],
+      "@/types/job": ["./types/job"],
+      "@/types/organization": ["./types/organization"],
+      "@/types/ApiJob": ["./types/job/ApiJob"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

@@ -5,6 +5,9 @@ import {
   JobsResponse
 } from '@/types';
 
+// Re-export types for convenience
+export type { Job, ApiJob, JobsResponse };
+
 // Get API URL from environment variable or use default
 const API_URL = typeof window !== 'undefined' 
   ? process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8080'

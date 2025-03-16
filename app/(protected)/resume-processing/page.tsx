@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ApiJob } from "@/types";
+import { type ApiJob } from "@/types/job";
 import { useOrganization } from "@/lib/hooks/useOrganization";
 
 // Import data from shared data file

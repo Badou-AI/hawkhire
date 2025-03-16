@@ -65,7 +65,6 @@ export interface ApiJob {
   remote?: boolean
   is_mock?: boolean
   mock_batch_id?: string | null
-  // Add any other fields that might be in the fetched data
   organization_id?: string
   status?: string
   processed?: ProcessedJob

@@ -7,6 +7,19 @@
 
 set -e  # Exit on error
 
+# Ensure we're in the correct directory
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+if [[ ! -d "${SCRIPT_DIR}/types" ]] || [[ ! -d "${SCRIPT_DIR}/app" ]]; then
+    echo "Error: Script must be run from the project root directory"
+    echo "Current directory: $(pwd)"
+    echo "Script directory: ${SCRIPT_DIR}"
+    echo "Please run: cd /c/Users/adyto/Code/hawkhire && ./deploy.sh [frontend|backend|all]"
+    exit 1
+fi
+
+# Change to the project directory
+cd "${SCRIPT_DIR}"
+
 # Load configuration from config file if it exists
 CONFIG_FILE=".deploy.conf"
 if [[ -f "$CONFIG_FILE" ]]; then
@@ -65,6 +78,75 @@ check_ssh_connection() {
     if ! ssh -q "$VPS_USER@$VPS_IP" exit; then
         error "SSH connection failed. Please check your credentials and connection."
     fi
+}
+
+# Validate types before deployment
+validate_types() {
+    log "Validating TypeScript types..."
+    
+    # Check if types directory exists
+    if [ ! -d "types" ]; then
+        error "Types directory not found!"
+    fi
+    
+    # Check for required type files
+    REQUIRED_TYPE_FILES=("job.ts" "index.ts" "organization.ts" "supabase.ts")
+    for file in "${REQUIRED_TYPE_FILES[@]}"; do
+        if [ ! -f "types/$file" ]; then
+            error "Required type file types/$file not found!"
+        fi
+    done
+    
+    # Validate critical component files
+    log "Validating component files..."
+    if [ ! -f "components/jobs/jobs-list.tsx" ]; then
+        error "Critical component file components/jobs/jobs-list.tsx not found!"
+    fi
+    
+    # Check imports in jobs-list.tsx
+    if grep -q "import.*{.*ApiJob.*}.*from.*@/app/api/jobs/client" "components/jobs/jobs-list.tsx"; then
+        error "Invalid import in jobs-list.tsx: ApiJob should be imported from @/types"
+    fi
+    
+    # Validate job.ts content
+    if ! grep -q "export interface ApiJob" "types/job.ts"; then
+        error "ApiJob interface not found in types/job.ts"
+    fi
+    
+    if ! grep -q "export interface JobLocation" "types/job.ts"; then
+        error "JobLocation interface not found in types/job.ts"
+    fi
+    
+    # Debug: Show file content with line numbers and special characters
+    log "Debug: Content of types/index.ts with special characters:"
+    cat -A "types/index.ts"
+    
+    # Debug: Try different grep patterns
+    log "Debug: Testing different grep patterns..."
+    
+    log "1. Simple pattern:"
+    grep "ApiJob" "types/index.ts" || echo "Not found"
+    
+    log "2. Pattern with export:"
+    grep "export.*ApiJob" "types/index.ts" || echo "Not found"
+    
+    log "3. Pattern with type:"
+    grep "export type.*ApiJob" "types/index.ts" || echo "Not found"
+    
+    # Convert Windows line endings to Unix and try again
+    log "Debug: Converting line endings and trying again..."
+    tr -d '\r' < "types/index.ts" > "types/index.unix.ts"
+    
+    if grep -q "ApiJob" "types/index.unix.ts"; then
+        log "Found ApiJob after converting line endings"
+        rm "types/index.unix.ts"
+    else
+        log "Still not found after converting line endings"
+        rm "types/index.unix.ts"
+        error "ApiJob export not found in types/index.ts"
+    fi
+    
+    log "TypeScript types validation completed successfully"
 }
 
 # Check if rsync is available, otherwise use scp
@@ -154,26 +236,90 @@ deploy_frontend() {
         done
     fi
     
+    # Copy types directory explicitly
+    log "Copying types directory..."
+    if [[ "$COPY_METHOD" == "rsync" ]]; then
+        rsync -av --progress \
+            --exclude='*.test.ts' \
+            --exclude='*.spec.ts' \
+            ./types/ \
+            "$VPS_USER@$VPS_IP:$FRONTEND_DIR/types/"
+    else
+        # Create a temporary tar file for types
+        tar --exclude='*.test.ts' --exclude='*.spec.ts' -czf types_temp.tar.gz ./types/
+        
+        # Copy and extract the tar file
+        ssh "$VPS_USER@$VPS_IP" "mkdir -p $FRONTEND_DIR/types"
+        scp types_temp.tar.gz "$VPS_USER@$VPS_IP:$FRONTEND_DIR/"
+        ssh "$VPS_USER@$VPS_IP" "cd $FRONTEND_DIR && tar -xzf types_temp.tar.gz && rm types_temp.tar.gz"
+        
+        # Clean up local temp file
+        rm types_temp.tar.gz
+    fi
+    
     # Copy components directory
     if [ -d "./components" ]; then
         log "Copying components..."
+        
+        # More thorough cleanup of any incorrect component structures
+        ssh "$VPS_USER@$VPS_IP" << EOF
+            cd $FRONTEND_DIR
+            
+            # Remove any existing components directory completely
+            rm -rf components
+            
+            # Create fresh components directory
+            mkdir -p components
+            
+            # Debug: Show current structure before copy
+            echo "Directory structure before copy:"
+            find . -name "components" -type d -ls
+EOF
+        
         if [[ "$COPY_METHOD" == "rsync" ]]; then
             rsync -av --progress \
                 --exclude='node_modules' \
+                --exclude='components/components' \
                 ./components/ \
                 "$VPS_USER@$VPS_IP:$FRONTEND_DIR/components/"
         else
-            # Create a temporary tar file
-            tar --exclude='node_modules' -czf components_temp.tar.gz ./components/
+            # Create a temporary tar file with explicit path handling
+            tar --exclude='node_modules' \
+                --exclude='components/components' \
+                -czf components_temp.tar.gz \
+                -C ./components . 
             
-            # Copy and extract the tar file
-            ssh "$VPS_USER@$VPS_IP" "mkdir -p $FRONTEND_DIR/components"
-            scp components_temp.tar.gz "$VPS_USER@$VPS_IP:$FRONTEND_DIR/"
-            ssh "$VPS_USER@$VPS_IP" "cd $FRONTEND_DIR && tar -xzf components_temp.tar.gz && rm components_temp.tar.gz"
+            # Copy and extract the tar file with explicit path
+            scp components_temp.tar.gz "$VPS_USER@$VPS_IP:$FRONTEND_DIR/components/"
+            ssh "$VPS_USER@$VPS_IP" "cd $FRONTEND_DIR/components && tar -xzf components_temp.tar.gz && rm components_temp.tar.gz"
             
             # Clean up local temp file
             rm components_temp.tar.gz
         fi
+        
+        # Verify and fix the structure after copy
+        ssh "$VPS_USER@$VPS_IP" << EOF
+            cd $FRONTEND_DIR
+            
+            # Check for and fix any nested components
+            if [ -d "components/components" ]; then
+                echo "Found nested components directory, fixing..."
+                mv components/components/* components/
+                rm -rf components/components
+            fi
+            
+            # Verify final structure
+            echo "Final components directory structure:"
+            find components -type d -ls
+            
+            # Verify specific component files exist
+            if [ ! -f "components/jobs/jobs-list.tsx" ]; then
+                echo "ERROR: Critical component file components/jobs/jobs-list.tsx not found!"
+                exit 1
+            fi
+            
+            echo "Components directory structure verified successfully"
+EOF
     fi
     
     # Copy hooks directory if it exists
@@ -245,6 +391,29 @@ deploy_frontend() {
     
     # Setup frontend on the server
     setup_frontend
+    
+    # Verify critical files after setup
+    log "Verifying deployment..."
+    ssh "$VPS_USER@$VPS_IP" << EOF
+        cd $FRONTEND_DIR
+        
+        # Check for critical type files
+        if [ ! -f "types/job.ts" ] || [ ! -f "types/index.ts" ]; then
+            echo "ERROR: Critical type files are missing!"
+            exit 1
+        fi
+        
+        # Compare type files content length as basic validation
+        local_job_size=\$(wc -l < types/job.ts)
+        if [ "\$local_job_size" -lt 50 ]; then
+            echo "WARNING: types/job.ts seems incomplete (less than 50 lines)"
+            echo "Content of types/job.ts:"
+            cat types/job.ts
+            exit 1
+        fi
+        
+        echo "Type files verification completed successfully"
+EOF
 }
 
 # Deploy backend
@@ -352,9 +521,24 @@ setup_frontend() {
             sed -i 's|@/hooks/useAuth|../../../hooks/useAuth|g' "app/(auth)/sign-in/page.tsx"
         fi
         
-        # Install dependencies with legacy-peer-deps flag
-        echo "Installing dependencies..."
-        npm install --legacy-peer-deps
+        # Clean up previous build artifacts and caches
+        echo "Cleaning up previous build..."
+        rm -rf .next
+        rm -rf node_modules
+        rm -rf .cache
+        npm cache clean --force
+        
+        # Clean up any incorrect directory structures
+        echo "Cleaning up incorrect directory structures..."
+        if [ -d "components/components" ]; then
+            echo "Found double-nested components directory, fixing..."
+            mv components/components/* components/
+            rm -rf components/components
+        fi
+        
+        # Fresh install of dependencies
+        echo "Performing fresh install of dependencies..."
+        npm install --legacy-peer-deps --force
         
         # Check for missing dependencies for UI components
         echo "Installing necessary UI component dependencies..."
@@ -430,6 +614,26 @@ TSCONFIG
         
         # Try to build with the updated configuration
         NEXT_TELEMETRY_DISABLED=1 NEXT_SKIP_TYPE_CHECK=true npx next build --no-lint
+        
+        # Verify the production build
+        echo "Verifying production build..."
+        if [ ! -d ".next" ]; then
+            echo "ERROR: Production build directory .next not found!"
+            exit 1
+        fi
+        
+        # Check for critical build files
+        if [ ! -f ".next/types/app/api/jobs/client.d.ts" ]; then
+            echo "WARNING: TypeScript definitions for jobs client not found in build"
+            echo "This might indicate type generation issues"
+        fi
+        
+        # Display any type errors in the build log
+        if [ -f ".next/build-error.log" ]; then
+            echo "Build produced errors:"
+            cat .next/build-error.log
+            exit 1
+        fi
         
         # If build still fails, try a more extreme approach
         if [ $? -ne 0 ]; then
@@ -558,6 +762,9 @@ show_help() {
 main() {
     # Check SSH connection first
     check_ssh_connection
+    
+    # Validate types before proceeding
+    validate_types
     
     DEPLOY_TARGET=${1:-"all"}
     

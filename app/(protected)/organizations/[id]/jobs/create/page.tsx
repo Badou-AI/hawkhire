@@ -4,14 +4,15 @@ import { cookies } from "next/headers"
 import { JobCreationForm } from "./job-creation-form"
 import { BulkCreateDialog } from "./bulk-create-dialog"
 
-interface CreateJobPageProps {
-  params: {
-    id: string
-  }
-}
+type Params = Promise<{ id: string }>
 
-export default async function CreateJobPage({ params }: CreateJobPageProps) {
-  const organizationId = params.id
+export default async function CreateJobPage({
+  params,
+}: {
+  params: Params
+}): Promise<React.ReactElement> {
+  const resolvedParams = await params;
+  const organizationId = resolvedParams.id;
 
   if (!organizationId || organizationId === "[id]") {
     return notFound()

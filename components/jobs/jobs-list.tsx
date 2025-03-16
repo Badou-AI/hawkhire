@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { getJobs } from '@/app/api/jobs/client'
-import { type ApiJob, type JobsResponse, } from '@/types'
+import { type ApiJob, type JobsResponse } from '@/types'
 import { Pagination } from '@/components/shared/pagination'
 import { JobCard } from '@/components/jobs/job-card'
 

@@ -47,7 +47,7 @@ import { PipelineStatus } from '@/components/pipeline-status';
 import { useSearchParams } from "next/navigation";
 import { Pagination } from '@/components/shared/pagination';
 import { getJob } from "@/app/api/jobs/client";
-import { type ApiJob } from "@/types";
+import type { ApiJob } from "@/types/job";
 import dynamic from 'next/dynamic';
 import type { PDFViewerProps } from '@/components/pdf-viewer';
 

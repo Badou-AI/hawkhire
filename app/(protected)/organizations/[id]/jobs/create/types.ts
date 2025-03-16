@@ -31,10 +31,10 @@ export type JobLocationSingle = z.infer<typeof JobLocationSingle>
 
 // For backward compatibility
 export const JobLocation = z.object({
-  city: LocalizedString,
-  state: LocalizedString,
-  country: LocalizedString,
-  postal_code: LocalizedString
+  city: z.string(),
+  state: z.string().optional(),
+  country: z.string().optional(),
+  postal_code: z.string().optional()
 })
 export type JobLocation = z.infer<typeof JobLocation>
 
@@ -68,9 +68,9 @@ export type JobCreationRequestSingle = z.infer<typeof JobCreationRequestSingle>
 // For backward compatibility
 export const JobCreationRequest = z.object({
   organization_id: z.string().uuid(),
-  title: LocalizedString,
-  description: LocalizedString,
-  requirements: LocalizedStringArray,
+  title: z.string(),
+  description: z.string(),
+  requirements: z.array(z.string()),
   skills: z.array(z.string()),
   status: JobStatus,
   location: JobLocation,
@@ -160,37 +160,16 @@ export function transformFormToRequest(
 ): JobCreationRequest {
   return {
     organization_id: organizationId,
-    title: {
-      en: formData.title,
-      fr: formData.title // TODO: Add translation support
-    },
-    description: {
-      en: formData.description,
-      fr: formData.description // TODO: Add translation support
-    },
-    requirements: {
-      en: formData.requirements?.split('\n').filter(Boolean) || [],
-      fr: [] // TODO: Add translation support
-    },
+    title: formData.title,
+    description: formData.description,
+    requirements: formData.requirements?.split('\n').filter(Boolean) || [],
     skills: formData.skills,
     status: formData.status,
     location: {
-      city: {
-        en: formData.city,
-        fr: formData.city
-      },
-      state: {
-        en: formData.state,
-        fr: formData.state
-      },
-      country: {
-        en: formData.country,
-        fr: formData.country
-      },
-      postal_code: {
-        en: formData.postalCode,
-        fr: formData.postalCode
-      }
+      city: formData.city || "",
+      state: formData.state || "",
+      country: formData.country || "",      
+      postal_code: formData.postalCode || "",
     },
     job_type: formData.jobType,
     salary_min: formData.salaryMin,
