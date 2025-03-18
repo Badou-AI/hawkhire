@@ -25,7 +25,6 @@ from slugify import slugify
 from supabase import create_client, Client
 from pydantic import BaseModel, Field, UUID4, HttpUrl, constr
 from fastapi.encoders import jsonable_encoder
-from sentence_transformers import SentenceTransformer
 from pydantic import ValidationError
 from asyncio import Semaphore
 import traceback
@@ -118,24 +117,6 @@ class EmbeddingInputType(str, Enum):
     CLASSIFICATION = 'classification'
     IMAGE = 'image'
 
-class JobEmbeddingService:
-    """Service for handling job embeddings using sentence-transformers"""
-    def __init__(self):
-        try:
-            from sentence_transformers import SentenceTransformer
-            self.model = SentenceTransformer('all-MiniLM-L6-v2')
-        except ImportError:
-            print("Please install sentence-transformers: pip install sentence-transformers")
-            raise
-
-    async def generate_embedding(self, text: str) -> List[float]:
-        """Generate embedding vector for text using local model"""
-        # Convert to tensor, then to list for JSON serialization
-        embedding = self.model.encode(text, convert_to_tensor=False)
-        return embedding.tolist()
-
-# Initialize the job embedding service
-job_embedding_service = JobEmbeddingService()
 
 class MockSemanticService:
     """Mock service for local development and testing"""
@@ -303,61 +284,9 @@ class SemanticService:
         response.raise_for_status()
         return response.json()
 
-    # async def index_document(self, index_name: str, doc_id: str, document: Dict) -> Dict:
-    #     """Index a document in the semantic search index"""
-    #     try:
-    #         url = f"{self.base_url}/v1/index/{index_name}/document/{doc_id}"
-    #         print(f"\n=== Indexing Document ===")
-    #         print(f"Service Mode: {'MOCK' if self.use_mock else 'REMOTE'}")
-    #         print(f"URL: {url}")
-    #         print(f"Document ID: {doc_id}")
-    #         print(f"Document structure:")
-    #         print(json.dumps(document, indent=2))
-            
-    #         if self.use_mock:
-    #             print("Using mock service - document will not be actually indexed")
-    #             return {"status": "mocked", "message": "Document indexed in mock mode"}
-            
-    #         response = await self.client.post(url, json=document)
-    #         print(f"Response Status: {response.status_code}")
-    #         print(f"Response Headers: {dict(response.headers)}")
-            
-    #         try:
-    #             response.raise_for_status()
-    #             return response.json()
-    #         except httpx.HTTPStatusError as e:
-    #             print(f"HTTP Error Response Body: {response.text}")
-    #             raise
-                
-    #     except Exception as e:
-    #         print(f"\n=== Error in index_document ===")
-    #         print(f"Error type: {type(e).__name__}")
-    #         print(f"Error message: {str(e)}")
-    #         if isinstance(e, httpx.HTTPError):
-    #             print(f"HTTP Error details: {e.response.text if hasattr(e, 'response') else 'No response'}")
-    #         traceback.print_exc()
-    #         raise
-
-
 
 # Initialize the semantic service
 semantic_service = SemanticService()
-
-class LocalEmbeddingService:
-    """Local service for generating embeddings using sentence-transformers"""
-    def __init__(self):
-        try:
-            from sentence_transformers import SentenceTransformer
-            self.model = SentenceTransformer('all-MiniLM-L6-v2')
-        except ImportError:
-            print("Please install sentence-transformers: pip install sentence-transformers")
-            raise
-
-    async def generate_embedding(self, text: str) -> List[float]:
-        """Generate embedding vector for text using local model"""
-        # Convert to tensor, then to list
-        embedding = self.model.encode(text)
-        return embedding.tolist()
 
 async def create_semantic_index(index_name: str) -> Dict:
     """Create a new semantic search index with the specified configuration"""
@@ -2731,161 +2660,6 @@ async def create_vector_similarity_function():
         print(f"Error setting up vector similarity: {str(e)}")
         # Don't raise - allow service to start without vector search
 
-@app.post("/v1/jobs/generate-embeddings", tags=["Jobs"])
-async def generate_job_embeddings(
-    batch_size: int = Query(50, ge=1, le=100, description="Number of jobs to process per batch"),
-    force_update: bool = Query(False, description="Whether to update jobs that already have embeddings")
-):
-    """
-    Generate embeddings for existing jobs that don't have them.
-    Can be run multiple times safely - will only process jobs without embeddings unless force_update=true.
-    """
-    try:
-        start_time = time.time()
-        total_processed = 0
-        total_updated = 0
-        total_failed = 0
-        failed_jobs = []
-        
-        # First verify the service is accessible
-        try:
-            test_embedding = await job_embedding_service.generate_embedding("test")
-            print("Job embedding service connection test successful")
-        except Exception as e:
-            print(f"Error connecting to job embedding service: {str(e)}")
-            return {
-                "message": "Failed to connect to job embedding service",
-                "error": str(e)
-            }
-        
-        # Get jobs without embeddings (or all jobs if force_update)
-        query = supabase.table('jobs').select('id,title,description')
-        if not force_update:
-            query = query.is_('embedding', 'null')
-            
-        response = query.execute()
-        jobs_to_process = response.data
-        total_jobs = len(jobs_to_process)
-        
-        if not total_jobs:
-            return {
-                "message": "No jobs found that need embedding generation",
-                "total_jobs": 0,
-                "jobs_processed": 0,
-                "jobs_updated": 0,
-                "jobs_failed": 0,
-                "time_taken": 0
-            }
-            
-        print(f"Found {total_jobs} jobs that need embedding generation")
-        
-        # Process in batches
-        for i in range(0, total_jobs, batch_size):
-            batch = jobs_to_process[i:i + batch_size]
-            batch_updates = []
-            
-            for job in batch:
-                try:
-                    # Extract text content
-                    title = job.get('title', {})
-                    description = job.get('description', {})
-                    
-                    # Handle both string and dict formats for title/description
-                    if isinstance(title, str):
-                        try:
-                            title = json.loads(title)
-                        except:
-                            title = {'en': title}
-                    if isinstance(description, str):
-                        try:
-                            description = json.loads(description)
-                        except:
-                            description = {'en': description}
-                            
-                    # Combine title and description for embedding
-                    job_text = f"{title.get('en', '')} {description.get('en', '')}"
-                    if not job_text.strip():
-                        print(f"Skipping job {job['id']} - no text content")
-                        total_failed += 1
-                        failed_jobs.append({
-                            'id': job['id'],
-                            'reason': 'No text content'
-                        })
-                        continue
-                        
-                    # Generate embedding
-                    print(f"Generating embedding for job {job['id']}")
-                    embedding = await job_embedding_service.generate_embedding(job_text)
-                    
-                    if not embedding:
-                        print(f"No embedding generated for job {job['id']}")
-                        total_failed += 1
-                        failed_jobs.append({
-                            'id': job['id'],
-                            'reason': 'No embedding generated'
-                        })
-                        continue
-                    
-                    # Add to batch updates
-                    batch_updates.append({
-                        'id': job['id'],
-                        'embedding': embedding
-                    })
-                    
-                    total_processed += 1
-                    print(f"Successfully processed job {job['id']}")
-                    
-                except Exception as e:
-                    error_msg = f"Error processing job {job['id']}: {str(e)}"
-                    print(error_msg)
-                    total_failed += 1
-                    failed_jobs.append({
-                        'id': job['id'],
-                        'reason': str(e)
-                    })
-                    continue
-            
-            # Update batch in database
-            if batch_updates:
-                try:
-                    update_response = supabase.table('jobs').upsert(batch_updates).execute()
-                    total_updated += len(update_response.data)
-                    print(f"Updated {len(update_response.data)} jobs with embeddings")
-                except Exception as e:
-                    error_msg = f"Error updating batch: {str(e)}"
-                    print(error_msg)
-                    total_failed += len(batch_updates)
-                    for job in batch_updates:
-                        failed_jobs.append({
-                            'id': job['id'],
-                            'reason': f'Batch update failed: {str(e)}'
-                        })
-            
-            # Progress update
-            progress = (i + len(batch)) / total_jobs * 100
-            print(f"Progress: {progress:.1f}% - Processed: {total_processed}, Updated: {total_updated}, Failed: {total_failed}")
-            
-        time_taken = time.time() - start_time
-        
-        return {
-            "message": "Embedding generation completed",
-            "total_jobs": total_jobs,
-            "jobs_processed": total_processed,
-            "jobs_updated": total_updated,
-            "jobs_failed": total_failed,
-            "time_taken": f"{time_taken:.2f} seconds",
-            "failed_jobs": failed_jobs
-        }
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, 
-            detail={
-                "message": "Error generating embeddings",
-                "error": str(e)
-            }
-        )
-
 # Add webhook handler for new/updated jobs
 @app.post("/v1/jobs/webhook", tags=["Jobs"])
 async def handle_job_webhook(
@@ -2960,37 +2734,6 @@ async def reset_job_embeddings():
                 "error": str(e)
             }
         )
-
-class EmbeddingService:
-    """Service for generating embeddings using a local model"""
-    def __init__(self):
-        try:
-            from sentence_transformers import SentenceTransformer
-            self.model = SentenceTransformer('all-MiniLM-L6-v2')
-        except ImportError:
-            print("Please install sentence-transformers: pip install sentence-transformers")
-            raise
-
-    async def generate_embedding(self, text: str) -> List[float]:
-        """Generate embedding vector for text using local model"""
-        # Convert to tensor, then to list for JSON serialization
-        embedding = self.model.encode(text, convert_to_tensor=False)
-        return embedding.tolist()
-
-async def test_local_embedding_service():
-    """Test function to verify local embedding service"""
-    try:
-        embedding_service = EmbeddingService()
-        test_text = "This is a test sentence for embedding generation."
-        embedding = await embedding_service.generate_embedding(test_text)
-        print("Test embedding generated successfully:", embedding[:5])  # Print first 5 values for brevity
-    except Exception as e:
-        print("Error testing local embedding service:", str(e))
-
-# Call the test function during startup
-@app.on_event("startup")
-async def startup_event():
-    await test_local_embedding_service()
 
 class OrganizationMemberRole(str, Enum):
     """Organization member role options"""

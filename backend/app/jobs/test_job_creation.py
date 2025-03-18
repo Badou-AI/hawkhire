@@ -10,7 +10,7 @@ from app.jobs.schemas.job_models import ProcessedJobData
 async def test_french_job_creation():
     """Test creating a job with French data"""
     # Initialize API client
-    local_api_url = os.getenv("LOCAL_API_URL", "http://127.0.0.1:8080")
+    local_api_url = os.getenv("LOCAL_API_URL", "http://backend:8080")
     api_client = APIClient(base_url=local_api_url)
 
     # Create a test organization first

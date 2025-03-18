@@ -17,6 +17,22 @@ const nextConfig = {
         hostname: 'hebbkx1anhila5yf.public.blob.vercel-storage.com',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'lh3.googleusercontent.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'avatars.githubusercontent.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'hawkhire-dev.s3.amazonaws.com',
+      },
     ],
   },
   // Only ignore specific directories that contain third-party components
@@ -35,7 +51,8 @@ const nextConfig = {
       '@/types': path.resolve(__dirname, 'types')
     };
     return config;
-  }
+  },
+  output: 'standalone',  // Enable standalone output for Docker
 };
 
 module.exports = nextConfig; 

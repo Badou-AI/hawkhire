@@ -10,8 +10,8 @@ export type { Job, ApiJob, JobsResponse };
 
 // Get API URL from environment variable or use default
 const API_URL = typeof window !== 'undefined' 
-  ? process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8080'
-  : process.env.PYTHON_API_URL || 'http://127.0.0.1:8080'
+  ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080').replace('backend', 'localhost')
+  : process.env.PYTHON_API_URL || 'http://backend:8080'
 
 // Helper function to map backend job response to frontend Job type
 export function mapBackendJobToFrontend(backendJob: ApiJob): Job {
