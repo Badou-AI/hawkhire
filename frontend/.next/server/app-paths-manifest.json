@@ -1,7 +1,0 @@
-{
-  "/(protected)/organizations/[id]/jobs/page": "app/(protected)/organizations/[id]/jobs/page.js",
-  "/(protected)/resume-processing/page": "app/(protected)/resume-processing/page.js",
-  "/(protected)/dashboard/page": "app/(protected)/dashboard/page.js",
-  "/(protected)/applicants/page": "app/(protected)/applicants/page.js",
-  "/(protected)/organizations/[id]/jobs/create/page": "app/(protected)/organizations/[id]/jobs/create/page.js"
-}

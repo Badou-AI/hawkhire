@@ -23,7 +23,8 @@
 # misc
 .DS_Store
 /frontend/node_modules
-/frontend/.next
+/frontend/.next/
+/frontend/.next/*
 /frontend/out
 /frontend/build
 /frontend/dist
