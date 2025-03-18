@@ -13,7 +13,8 @@ services:
     networks:
       - hawkhire-network
     depends_on:
-      - backend
+      - backend:
+          condition: service_healthy
 
   backend:
     build:
@@ -24,9 +25,30 @@ services:
       - PYTHONPATH=/app
       - ENVIRONMENT=production
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     networks:
       - hawkhire-network
 
+  nginx:
+    image: nginx:latest
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+      - /etc/letsencrypt:/etc/letsencrypt
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - hawkhire-network
+      
 networks:
   hawkhire-network:
     driver: bridge 
