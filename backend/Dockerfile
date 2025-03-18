@@ -1,13 +1,13 @@
 # Use Python 3.12 slim image
 FROM python:3.12-slim as builder
 
-# Set working directory
-WORKDIR /app
-
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
 
 # Create and activate virtual environment
 RUN python -m venv venv
@@ -20,6 +20,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Final stage
 FROM python:3.12-slim
 
+# Install curl for healthcheck
+RUN apt-get update && apt-get install -y curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Add non-root user
+RUN useradd --gid root --create-home khidma
+
+# Set working directory
 WORKDIR /app
 
 # Copy virtual environment from builder
@@ -28,6 +36,12 @@ ENV PATH="/app/venv/bin:$PATH"
 
 # Copy application code
 COPY . .
+
+# Set proper permissions
+RUN chown -R khidma:root /app
+
+# Switch to non-root user
+USER khidma
 
 # Expose port
 EXPOSE 8080
