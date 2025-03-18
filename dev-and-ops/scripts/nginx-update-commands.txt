@@ -1,0 +1,139 @@
+# Commands to update Nginx configuration for Next.js static assets
+
+# Create a backup of the current configuration
+cp /etc/nginx/sites-available/beta.hawkhire.ai /etc/nginx/sites-available/beta.hawkhire.ai.bak
+
+# Create the updated configuration
+cat > /etc/nginx/sites-available/beta.hawkhire.ai << 'EOF'
+server {
+    server_name beta.hawkhire.ai;
+    
+    # Include security headers
+    include /etc/nginx/snippets/security-headers.conf;
+   
+    # Important: Add this location block to properly handle Next.js static assets
+    location /_next/static {
+        alias /var/www/beta.hawkhire.ai/.next/static;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+    
+    # Handle other static files
+    location /static {
+        alias /var/www/beta.hawkhire.ai/public/static;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+    
+    # Handle public files
+    location /public {
+        alias /var/www/beta.hawkhire.ai/public;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+    
+    # Handle favicon and other root files
+    location ~ ^/(favicon\.ico|robots\.txt|sitemap\.xml)$ {
+        root /var/www/beta.hawkhire.ai/public;
+    }
+    
+    # Proxy all other requests to the Next.js server
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    listen 443 ssl; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/www.hawkhire.ai/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/www.hawkhire.ai/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+}
+
+server {
+    if ($host = beta.hawkhire.ai) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+    listen 80;
+    server_name beta.hawkhire.ai;
+    return 404; # managed by Certbot
+}
+EOF
+
+# Test Nginx configuration
+nginx -t
+
+# If the test is successful, restart Nginx
+systemctl restart nginx
+
+# Create a test HTML file to verify CSS is working
+cat > /var/www/beta.hawkhire.ai/public/test-css.html << 'EOF'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CSS Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f5f5f5;
+    }
+    
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      margin-top: 50px;
+    }
+    
+    h1 {
+      color: #333;
+      font-size: 24px;
+      margin-bottom: 20px;
+    }
+    
+    p {
+      color: #666;
+      line-height: 1.6;
+    }
+    
+    .button {
+      display: inline-block;
+      background-color: #4f46e5;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 4px;
+      text-decoration: none;
+      font-weight: bold;
+      margin-top: 20px;
+      cursor: pointer;
+      border: none;
+    }
+    
+    .button:hover {
+      background-color: #4338ca;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Test Page with Inline CSS</h1>
+    <p>This is a test page with CSS styles defined inline to check if CSS is working properly.</p>
+    <button class="button">Test Button</button>
+  </div>
+</body>
+</html>
+EOF
+
+echo "Nginx configuration updated. Please check https://beta.hawkhire.ai/test-css.html to verify CSS is working." 

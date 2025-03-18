@@ -1,0 +1,22 @@
+feat: Remove text_blob field and use summary field instead
+
+This commit removes the text_blob field from the job data model and replaces it
+with the summary field. The changes include:
+
+1. Updated LLM integration to:
+   - Remove text_blob field from extracted job data
+   - Set summary field with a truncated version of the description
+   - Ensure summary field is properly validated and normalized
+
+2. Updated frontend components:
+   - Modified JobDescription component to use summary instead of text_blob
+   - Updated job detail page to pass summary to JobDescription
+   - Removed text_blob from Job interface and added summary field
+
+These changes simplify the job data model by removing the multilingual markdown
+text_blob field and using a single-language summary field instead. This aligns
+with our approach to use a PDF viewer for detailed job views rather than
+rendering markdown content.
+
+The summary field provides a concise overview of the job, while the PDF viewer
+will be used to display the full job description when needed. 

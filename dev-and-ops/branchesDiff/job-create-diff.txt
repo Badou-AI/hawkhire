@@ -1,0 +1,1576 @@
+diff --git a/app/(protected)/organizations/[id]/jobs/create/bulk-create-dialog.tsx b/app/(protected)/organizations/[id]/jobs/create/bulk-create-dialog.tsx
+new file mode 100644
+index 0000000..4877edd
+--- /dev/null
++++ b/app/(protected)/organizations/[id]/jobs/create/bulk-create-dialog.tsx
+@@ -0,0 +1,476 @@
++"use client"
++
++import { useState, useEffect, useRef } from "react"
++import { Button } from "@/components/ui/button"
++import {
++  Dialog,
++  DialogContent,
++  DialogDescription,
++  DialogFooter,
++  DialogHeader,
++  DialogTitle,
++  DialogTrigger,
++} from "@/components/ui/dialog"
++import { Upload, AlertCircle } from "lucide-react"
++import { Label } from "@/components/ui/label"
++import { Checkbox } from "@/components/ui/checkbox"
++import { FileDropzone } from "@/components/resume-evaluator/FileDropzone"
++import { useAuth } from "@/hooks/useAuth"
++import { toast } from "sonner"
++import { BulkJobProgress } from "@/components/jobs/BulkJobProgress"
++
++interface BulkCreateDialogProps {
++  organizationId: string
++}
++
++interface ProcessingStats {
++  totalFiles: number;
++  processedCount: number;
++  failedCount: number;
++  processingTime: number;
++  unsupportedCount?: number;
++}
++
++type ProcessingStatus = 'idle' | 'uploading' | 'processing' | 'completed' | 'error';
++
++export function BulkCreateDialog({ organizationId }: BulkCreateDialogProps) {
++  const { session } = useAuth()
++  const [file, setFile] = useState<File | null>(null)
++  const [isMock, setIsMock] = useState(false)
++  const [isPublished, setIsPublished] = useState(false)
++  const [processingStatus, setProcessingStatus] = useState<ProcessingStatus>('idle')
++  const [stats, setStats] = useState<ProcessingStats>({
++    totalFiles: 0,
++    processedCount: 0,
++    failedCount: 0,
++    processingTime: 0,
++    unsupportedCount: 0
++  })
++  const [error, setError] = useState<string>("")
++  const [unsupportedFiles, setUnsupportedFiles] = useState<Array<{name: string, type: string, reason: string}>>([])
++  const [currentFile, setCurrentFile] = useState<string>("")
++  const [isOpen, setIsOpen] = useState(false)
++  // Add a ref to track the number of processed files
++  const processedFilesRef = useRef<{
++    processed: number;
++    failed: number;
++    total: number;
++  }>({
++    processed: 0,
++    failed: 0,
++    total: 0
++  });
++
++  // Add useEffect for debugging
++  useEffect(() => {
++    console.log('Current state:', {
++      processingStatus,
++      stats,
++      currentFile,
++      error
++    })
++  }, [processingStatus, stats, currentFile, error])
++
++  const handleFileSelect = (selectedFile: File) => {
++    setFile(selectedFile)
++    setError("")
++    setCurrentFile("")
++    setProcessingStatus('idle')
++    setStats({
++      totalFiles: 0,
++      processedCount: 0,
++      failedCount: 0,
++      processingTime: 0,
++      unsupportedCount: 0
++    })
++  }
++
++  // Reset function to clear state when dialog is closed
++  const handleClose = () => {
++    setIsOpen(false)
++  }
++
++  // Reset function when dialog is opened
++  const handleOpen = (open: boolean) => {
++    setIsOpen(open);
++    
++    // If dialog is being closed, don't reset anything
++    if (!open) return;
++    
++    // Don't reset the stats if we're in completed state
++    if (processingStatus !== 'completed') {
++      setFile(null);
++      setError("");
++      setCurrentFile("");
++      setProcessingStatus('idle');
++      setStats({
++        totalFiles: 0,
++        processedCount: 0,
++        failedCount: 0,
++        processingTime: 0,
++        unsupportedCount: 0
++      });
++    } else {
++      // Log the current stats for debugging
++      console.log('Dialog reopened with completed stats:', stats);
++    }
++  }
++
++  const handleUpload = async () => {
++    if (!file) {
++      toast.error("Please select a file to upload")
++      return
++    }
++
++    if (!session) {
++      toast.error("You must be logged in to upload files")
++      return
++    }
++
++    try {
++      console.log('Starting upload process...')
++      setProcessingStatus('uploading')
++      const formData = new FormData()
++      formData.append('file', file)
++      formData.append('organization_id', organizationId)
++      formData.append('is_mock', String(isMock))
++      formData.append('status', isPublished ? 'PUBLISHED' : 'DRAFT')
++
++      console.log('Sending request to /api/jobs/process-zip with form data:', {
++        organizationId,
++        isMock,
++        status: isPublished ? 'PUBLISHED' : 'DRAFT',
++        fileSize: file.size,
++        fileName: file.name
++      })
++
++      const response = await fetch("/api/jobs/process-zip", {
++        method: "POST",
++        body: formData,
++      })
++
++      if (!response.ok) {
++        const errorText = await response.text()
++        console.error('Error response:', {
++          status: response.status,
++          statusText: response.statusText,
++          body: errorText
++        })
++        throw new Error(`Failed to process jobs: ${response.status} ${response.statusText}`)
++      }
++
++      console.log('Response headers:', Object.fromEntries(response.headers.entries()))
++      console.log('Response status:', response.status)
++
++      // Handle streaming response
++      const reader = response.body?.getReader()
++      if (!reader) {
++        throw new Error('No reader available')
++      }
++
++      const decoder = new TextDecoder()
++      let buffer = ''
++      const startTime = Date.now()
++
++      console.log('Starting to read stream...')
++      while (true) {
++        const { done, value } = await reader.read()
++        if (done) {
++          console.log('Stream complete')
++          break
++        }
++
++        const chunk = decoder.decode(value, { stream: true })
++        console.log('Received chunk:', chunk)
++        buffer += chunk
++        const lines = buffer.split('\n\n')
++        
++        for (let i = 0; i < lines.length - 1; i++) {
++          const line = lines[i].trim()
++          if (line.startsWith('data: ')) {
++            try {
++              const eventData = line.slice(6)
++              console.log('Raw event data:', eventData)
++              const event = JSON.parse(eventData)
++              console.log('Parsed event:', event)
++
++              // Normalize event type - backend might send 'event' or 'type'
++              const eventType = event.event || event.type
++              if (!eventType) {
++                console.log('Event has no type or event field:', event)
++                return
++              }
++
++              // Always update the file name if present
++              if (event.file_name && event.file_name !== 'null') {
++                console.log('Processing file:', event.file_name)
++                setCurrentFile(event.file_name)
++              } else if (event.current_file && event.current_file !== 'null') {
++                console.log('Processing file:', event.current_file)
++                setCurrentFile(event.current_file)
++              }
++
++              // Map backend event types to frontend event types
++              let normalizedEventType = eventType.toLowerCase()
++              if (normalizedEventType === 'processing_started') normalizedEventType = 'processing_started'
++              else if (normalizedEventType === 'file_processed') normalizedEventType = 'file_processed'
++              else if (normalizedEventType === 'processing_completed') normalizedEventType = 'batch_completed'
++              else if (normalizedEventType === 'processing_error') normalizedEventType = 'file_processing_failed'
++              else if (normalizedEventType === 'file_processing_complete') normalizedEventType = 'file_processed'
++              else if (normalizedEventType === 'file_processing_failed') normalizedEventType = 'file_processing_failed'
++              else if (normalizedEventType === 'job_created') normalizedEventType = 'job_created'
++              else if (normalizedEventType === 'job_creation_failed') normalizedEventType = 'job_creation_failed'
++
++              console.log('Normalized event type:', normalizedEventType)
++
++              switch (normalizedEventType) {
++                case 'processing_started':
++                  setProcessingStatus('processing')
++                  // Reset the processed files counter
++                  processedFilesRef.current = {
++                    processed: 0,
++                    failed: 0,
++                    total: event.total_files || 0
++                  };
++                  setStats(prev => ({
++                    ...prev,
++                    totalFiles: event.total_files || prev.totalFiles,
++                    unsupportedCount: event.unsupported_files?.length || prev.unsupportedCount || 0
++                  }))
++                  if (event.unsupported_files?.length) {
++                    setUnsupportedFiles(event.unsupported_files)
++                  }
++                  break
++
++                case 'file_processed':
++                  // Keep track of processed files count
++                  processedFilesRef.current.processed += 1;
++                  const newProcessedCount = Math.max(event.processed_count || 0, stats.processedCount, processedFilesRef.current.processed);
++                  const newFailedCount = Math.max(event.failed_count || 0, stats.failedCount, processedFilesRef.current.failed);
++                  
++                  console.log(`File processed: ${event.file_name}, processed: ${newProcessedCount}, failed: ${newFailedCount}, ref: ${processedFilesRef.current.processed}`);
++                  
++                  setStats(prev => ({
++                    ...prev,
++                    processedCount: newProcessedCount,
++                    failedCount: newFailedCount,
++                    processingTime: (Date.now() - startTime) / 1000
++                  }))
++                  break
++
++                case 'file_processing_complete':
++                case 'file_processing_failed':
++                case 'job_created':
++                case 'job_creation_failed':
++                  setStats(prev => ({
++                    ...prev,
++                    processedCount: Math.max(event.processed_count || 0, prev.processedCount),
++                    failedCount: Math.max(event.failed_count || 0, prev.failedCount),
++                    processingTime: (Date.now() - startTime) / 1000
++                  }))
++                  break
++
++                case 'batch_completed':
++                  console.log('Received batch_completed event with data:', event);
++                  console.log('Processed files ref:', processedFilesRef.current);
++                  
++                  // Store the final stats in a more reliable way
++                  // If the server reports 0 processed but we know jobs were created, use our tracked count
++                  const actualProcessedCount = event.processed_count > 0 
++                    ? event.processed_count 
++                    : Math.max(stats.processedCount, processedFilesRef.current.processed);
++                    
++                  const actualFailedCount = event.failed_count > 0
++                    ? event.failed_count
++                    : Math.max(stats.failedCount, processedFilesRef.current.failed);
++                  
++                  // Force update the stats directly with setState instead of using the functional update
++                  // This ensures the state is immediately updated with the correct values
++                  const finalStats = {
++                    totalFiles: event.total_files || stats.totalFiles || processedFilesRef.current.total,
++                    processedCount: actualProcessedCount,
++                    failedCount: actualFailedCount,
++                    processingTime: event.processing_details?.total_time || (Date.now() - startTime) / 1000,
++                    unsupportedCount: event.unsupported_files?.length || stats.unsupportedCount || 0
++                  };
++                  
++                  console.log('Setting final stats:', finalStats);
++                  
++                  // Set processing status first
++                  setProcessingStatus('completed');
++                  
++                  // Then update stats with the final values - use direct setState instead of functional update
++                  setStats(finalStats);
++                  
++                  // Force a re-render by updating a dummy state
++                  setCurrentFile('');
++                  
++                  // Log the stats after the update
++                  setTimeout(() => {
++                    console.log('Stats after batch completion:', stats);
++                  }, 0);
++                  
++                  if (finalStats.processedCount > 0) {
++                    toast.success(`Successfully processed ${finalStats.processedCount} jobs`);
++                  }
++                  if (finalStats.failedCount > 0) {
++                    toast.error(`Failed to process ${finalStats.failedCount} jobs`);
++                  }
++                  break
++
++                case 'file_processing_failed':
++                  // Keep track of failed files count
++                  processedFilesRef.current.failed += 1;
++                  const updatedFailedCount = Math.max(event.failed_count || 0, stats.failedCount, processedFilesRef.current.failed);
++                  
++                  console.log(`File processing failed: ${event.file_name}, failed: ${updatedFailedCount}, ref: ${processedFilesRef.current.failed}`);
++                  
++                  setStats(prev => ({
++                    ...prev,
++                    processedCount: Math.max(event.processed_count || 0, prev.processedCount, processedFilesRef.current.processed),
++                    failedCount: updatedFailedCount,
++                    processingTime: (Date.now() - startTime) / 1000
++                  }))
++                  break
++
++                case 'job_created':
++                  // Keep track of processed files count for job creation
++                  processedFilesRef.current.processed += 1;
++                  const updatedProcessedCount = Math.max(event.processed_count || 0, stats.processedCount, processedFilesRef.current.processed);
++                  
++                  console.log(`Job created: ${event.file_name}, processed: ${updatedProcessedCount}, ref: ${processedFilesRef.current.processed}`);
++                  
++                  setStats(prev => ({
++                    ...prev,
++                    processedCount: updatedProcessedCount,
++                    failedCount: Math.max(event.failed_count || 0, prev.failedCount, processedFilesRef.current.failed),
++                    processingTime: (Date.now() - startTime) / 1000
++                  }))
++                  break
++
++                case 'job_creation_failed':
++                  // Keep track of failed files count for job creation
++                  processedFilesRef.current.failed += 1;
++                  const updatedJobFailedCount = Math.max(event.failed_count || 0, stats.failedCount, processedFilesRef.current.failed);
++                  
++                  console.log(`Job creation failed: ${event.file_name}, failed: ${updatedJobFailedCount}, ref: ${processedFilesRef.current.failed}`);
++                  
++                  setStats(prev => ({
++                    ...prev,
++                    processedCount: Math.max(event.processed_count || 0, prev.processedCount, processedFilesRef.current.processed),
++                    failedCount: updatedJobFailedCount,
++                    processingTime: (Date.now() - startTime) / 1000
++                  }))
++                  break
++
++                default:
++                  console.log('Unhandled event type:', eventType)
++                  break
++              }
++            } catch (e) {
++              console.error('Error parsing event:', line.slice(6), e)
++            }
++          }
++        }
++        buffer = lines[lines.length - 1]
++      }
++      console.log('Upload process completed.')
++    } catch (error) {
++      console.error("Error uploading jobs:", error)
++      setProcessingStatus('error')
++      setError(error instanceof Error ? error.message : String(error))
++    }
++  }
++
++  return (
++    <Dialog open={isOpen} onOpenChange={handleOpen}>
++      <DialogTrigger asChild>
++        <Button variant="outline" className="gap-2">
++          <Upload className="h-4 w-4" />
++          Bulk Create Jobs
++        </Button>
++      </DialogTrigger>
++      <DialogContent className="sm:max-w-[600px]">
++        <DialogHeader>
++          <DialogTitle>Bulk Create Jobs</DialogTitle>
++          <DialogDescription>
++            Upload a ZIP file containing job descriptions in PDF or TXT format. Each file will be
++            processed and converted into a job posting.
++          </DialogDescription>
++        </DialogHeader>
++
++        <div className="space-y-6">
++          {processingStatus !== 'completed' && (
++            <FileDropzone
++              onFileSelect={handleFileSelect}
++              disabled={processingStatus === 'uploading' || processingStatus === 'processing'}
++              acceptedTypes={['.zip']}
++              description="Drop your ZIP file here"
++              fileTypeDescription="ZIP files only"
++              maxSize={50}
++            />
++          )}
++
++          {processingStatus !== 'completed' && (
++            <div className="flex flex-col gap-4">
++              <div className="flex items-center space-x-2">
++                <Checkbox
++                  id="is-mock"
++                  checked={isMock}
++                  onCheckedChange={(checked) => setIsMock(checked as boolean)}
++                  disabled={processingStatus === 'uploading' || processingStatus === 'processing'}
++                />
++                <Label htmlFor="is-mock">Mark jobs as mock data</Label>
++              </div>
++
++              <div className="flex items-center space-x-2">
++                <Checkbox
++                  id="is-published"
++                  checked={isPublished}
++                  onCheckedChange={(checked) => setIsPublished(checked as boolean)}
++                  disabled={processingStatus === 'uploading' || processingStatus === 'processing'}
++                />
++                <Label htmlFor="is-published">Publish jobs immediately</Label>
++              </div>
++            </div>
++          )}
++
++          {processingStatus !== 'idle' && (
++            <div className="space-y-4">
++              <BulkJobProgress
++                stats={stats}
++                processingStatus={processingStatus}
++                currentFile={currentFile || file?.name}
++                error={error}
++                unsupportedFiles={unsupportedFiles}
++                organizationId={organizationId}
++                onClose={handleClose}
++              />
++            </div>
++          )}
++
++          {error && (
++            <div className="text-sm text-red-500 flex items-center gap-2">
++              <AlertCircle className="h-4 w-4" />
++              {error}
++            </div>
++          )}
++        </div>
++
++        <DialogFooter>
++          {processingStatus !== 'completed' && (
++            <Button
++              type="submit"
++              onClick={handleUpload}
++              disabled={!file || processingStatus === 'uploading' || processingStatus === 'processing'}
++            >
++              {processingStatus === 'uploading' || processingStatus === 'processing'
++                ? "Processing..."
++                : "Upload and Process"}
++            </Button>
++          )}
++        </DialogFooter>
++      </DialogContent>
++    </Dialog>
++  )
++} 
+\ No newline at end of file
+diff --git a/app/(protected)/organizations/[id]/jobs/create/bulk-job-progress.tsx b/app/(protected)/organizations/[id]/jobs/create/bulk-job-progress.tsx
+new file mode 100644
+index 0000000..d27ebc1
+--- /dev/null
++++ b/app/(protected)/organizations/[id]/jobs/create/bulk-job-progress.tsx
+@@ -0,0 +1,93 @@
++import { CheckCircle2, XCircle, AlertTriangle } from "lucide-react"
++import { cn } from "@/lib/utils"
++
++interface ProgressCardProps {
++  icon: React.ReactNode
++  label: string
++  value: number | string
++  total?: number
++  color: string
++  explanation?: string[]
++}
++
++interface BulkJobProgressProps {
++  stats: {
++    totalFiles: number;
++    processedCount: number;
++    failedCount: number;
++    processingTime: number;
++    unsupportedCount?: number;
++  };
++  processingStatus?: 'idle' | 'uploading' | 'processing' | 'completed' | 'error';
++  error?: string;
++  unsupportedFiles?: string[];
++}
++
++const ProgressCard = ({ icon, label, value, total, color, explanation }: ProgressCardProps) => (
++  <div className={cn("p-4 rounded-lg bg-background/50", color)}>
++    <div className="flex items-center justify-between mb-2">
++      <div className="flex items-center gap-2">
++        {icon}
++        <span className="font-medium">{label}</span>
++      </div>
++      <span className="text-lg font-semibold">
++        {total ? `${value} / ${total}` : value}
++      </span>
++    </div>
++    {explanation && explanation.length > 0 && (
++      <div className="mt-2 text-sm text-muted-foreground">
++        {explanation.map((text, i) => (
++          <div key={i} className="flex items-start gap-1">
++            <span>•</span>
++            <span>{text}</span>
++          </div>
++        ))}
++      </div>
++    )}
++  </div>
++)
++
++// Update the main component to use these cards consistently
++export const BulkJobProgress = ({ stats }: BulkJobProgressProps) => {
++  const getFailureExplanations = () => {
++    if (stats.failedCount === 0) return ["No failed files"]
++    return [
++      "Files failed during processing",
++      "Check logs for detailed error messages",
++      "Try processing these files individually"
++    ]
++  }
++
++  const explanations: Record<string, string[]> = {
++    unsupported: [
++      "Only PDF and TXT files are supported",
++      "Make sure all your job descriptions are in PDF or TXT format",
++    ],
++  }
++
++  return (
++    <div className="grid grid-cols-3 gap-4">
++      <ProgressCard
++        icon={<CheckCircle2 className="h-5 w-5 text-green-500" />}
++        label="Processed"
++        value={stats.processedCount}
++        total={stats.totalFiles}
++        color="border-green-100"
++      />
++      <ProgressCard
++        icon={<XCircle className="h-5 w-5 text-red-500" />}
++        label="Failed"
++        value={stats.failedCount}
++        color="border-red-100"
++        explanation={getFailureExplanations()}
++      />
++      <ProgressCard
++        icon={<AlertTriangle className="h-5 w-5 text-yellow-500" />}
++        label="Unsupported"
++        value={stats.unsupportedCount || 0}
++        color="border-yellow-100"
++        explanation={explanations.unsupported}
++      />
++    </div>
++  )
++} 
+\ No newline at end of file
+diff --git a/app/(protected)/organizations/[id]/jobs/create/job-creation-form.tsx b/app/(protected)/organizations/[id]/jobs/create/job-creation-form.tsx
+new file mode 100644
+index 0000000..d9d9f8f
+--- /dev/null
++++ b/app/(protected)/organizations/[id]/jobs/create/job-creation-form.tsx
+@@ -0,0 +1,632 @@
++"use client"
++
++import { useForm } from "react-hook-form"
++import { zodResolver } from "@hookform/resolvers/zod"
++import { toast } from "sonner"
++import { useRouter } from "next/navigation"
++import { useState } from "react"
++import { jobFormSchema, type JobFormData, transformFormToRequestSingle } from "./types"
++import {
++    Form,
++    FormControl,
++    FormDescription,
++    FormField,
++    FormItem,
++    FormLabel,
++    FormMessage,
++} from "@/components/ui/form"
++import { Input } from "@/components/ui/input"
++import { Button } from "@/components/ui/button"
++import { Textarea } from "@/components/ui/textarea"
++import { Checkbox } from "@/components/ui/checkbox"
++import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
++import { Card } from "@/components/ui/card"
++import { Calendar } from "@/components/ui/calendar"
++import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
++import { cn } from "@/lib/utils"
++import { format } from "date-fns"
++import { CalendarIcon } from "lucide-react"
++
++interface JobCreationFormProps {
++  organizationId: string
++}
++
++export function JobCreationForm({ organizationId }: JobCreationFormProps) {
++  const router = useRouter()
++  const [isSubmitting, setIsSubmitting] = useState(false)
++
++  const form = useForm<JobFormData>({
++    resolver: zodResolver(jobFormSchema),
++    defaultValues: {
++      remote: false,
++      skills: [],
++      status: "DRAFT",
++      show_contact_info: false,
++      language: "en"
++    }
++  })
++
++  const onSubmit = async (data: JobFormData) => {
++    try {
++      setIsSubmitting(true)
++      const jobData = transformFormToRequestSingle(data, organizationId)
++
++      const response = await fetch(`/api/v1/organizations/${organizationId}/jobs`, {
++        method: 'POST',
++        headers: {
++          'Content-Type': 'application/json',
++        },
++        body: JSON.stringify(jobData),
++      })
++
++      if (!response.ok) {
++        const error = await response.json()
++        throw new Error(error.message || 'Failed to create job')
++      }
++
++      const job = await response.json()
++      toast.success('Job created successfully')
++      router.push(`/jobs/${job.id}`)
++    } catch (error) {
++      console.error('Error creating job:', error)
++      toast.error(error instanceof Error ? error.message : 'Failed to create job')
++    } finally {
++      setIsSubmitting(false)
++    }
++  }
++
++  return (
++    <Form {...form}>
++      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
++        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6">
++          {/* Left Column */}
++          <div className="space-y-6">
++            {/* Basic Information Section */}
++            <Card className="shadow-none border-none">
++              <div className="space-y-2">
++                <h2 className="text-lg font-semibold">Basic Information</h2>
++                <p className="text-sm text-muted-foreground">
++                  Core details about the position
++                </p>
++              </div>
++
++              <div className="space-y-4 mt-4">
++                <FormField
++                  control={form.control}
++                  name="title"
++                  render={({ field }) => (
++                    <FormItem>
++                      <FormLabel>Job Title</FormLabel>
++                      <FormControl>
++                        <Input placeholder="e.g. Senior Software Engineer" {...field} />
++                      </FormControl>
++                      <FormMessage />
++                    </FormItem>
++                  )}
++                />
++
++                <FormField
++                  control={form.control}
++                  name="description"
++                  render={({ field }) => (
++                    <FormItem>
++                      <FormLabel>Job Description</FormLabel>
++                      <FormControl>
++                        <Textarea
++                          placeholder="Describe the role and responsibilities..."
++                          className="min-h-[200px]"
++                          {...field}
++                        />
++                      </FormControl>
++                      <FormMessage />
++                    </FormItem>
++                  )}
++                />
++
++                <FormField
++                  control={form.control}
++                  name="jobType"
++                  render={({ field }) => (
++                    <FormItem>
++                      <FormLabel>Job Type</FormLabel>
++                      <FormControl>
++                        <RadioGroup
++                          onValueChange={field.onChange}
++                          defaultValue={field.value}
++                          className="flex flex-wrap space-x-1"
++                        >
++                          <FormItem className="flex items-center space-x-3 space-y-0">
++                            <FormControl>
++                              <RadioGroupItem value="FULL_TIME" />
++                            </FormControl>
++                            <FormLabel className="font-normal">
++                              Full Time
++                            </FormLabel>
++                          </FormItem>
++                          <FormItem className="flex items-center space-x-3 space-y-0">
++                            <FormControl>
++                              <RadioGroupItem value="PART_TIME" />
++                            </FormControl>
++                            <FormLabel className="font-normal">
++                              Part Time
++                            </FormLabel>
++                          </FormItem>
++                          <FormItem className="flex items-center space-x-3 space-y-0">
++                            <FormControl>
++                              <RadioGroupItem value="CONTRACT" />
++                            </FormControl>
++                            <FormLabel className="font-normal">
++                              Contract
++                            </FormLabel>
++                          </FormItem>
++                          <FormItem className="flex items-center space-x-3 space-y-0">
++                            <FormControl>
++                              <RadioGroupItem value="INTERNSHIP" />
++                            </FormControl>
++                            <FormLabel className="font-normal">
++                              Internship
++                            </FormLabel>
++                          </FormItem>
++                          {/* <FormItem className="flex items-center space-x-3 space-y-0">
++                            <FormControl>
++                              <RadioGroupItem value="VOLUNTEER" />
++                            </FormControl>
++                            <FormLabel className="font-normal">
++                              Volunteer
++                            </FormLabel>
++                          </FormItem> */}
++                          <FormItem className="flex items-center space-x-3 space-y-0">
++                            <FormControl>
++                              <RadioGroupItem value="TO_BE_DETERMINED" />
++                            </FormControl>
++                            <FormLabel className="font-normal">
++                              To be determined
++                            </FormLabel>
++                          </FormItem>
++                        </RadioGroup>
++                      </FormControl>
++                      <FormMessage />
++                    </FormItem>
++                  )}
++                />
++
++                <FormField
++                  control={form.control}
++                  name="language"
++                  render={({ field }) => (
++                    <FormItem>
++                      <FormLabel>Language</FormLabel>
++                      <FormControl>
++                        <select
++                          className="w-full p-2 border rounded"
++                          {...field}
++                        >
++                          <option value="en">English</option>
++                          <option value="fr">French</option>
++                        </select>
++                      </FormControl>
++                      <FormMessage />
++                    </FormItem>
++                  )}
++                />
++
++                <FormField
++                  control={form.control}
++                  name="summary"
++                  render={({ field }) => (
++                    <FormItem>
++                      <FormLabel>Summary</FormLabel>
++                      <FormControl>
++                        <Textarea
++                          placeholder="Provide a brief summary of the job..."
++                          className="min-h-[100px]"
++                          {...field}
++                        />
++                      </FormControl>
++                      <FormMessage />
++                    </FormItem>
++                  )}
++                />
++
++                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
++                  <FormField
++                    control={form.control}
++                    name="city"
++                    render={({ field }) => (
++                      <FormItem>
++                        <FormLabel>City</FormLabel>
++                        <FormControl>
++                          <Input {...field} />
++                        </FormControl>
++                        <FormMessage />
++                      </FormItem>
++                    )}
++                  />
++
++                  <FormField
++                    control={form.control}
++                    name="state"
++                    render={({ field }) => (
++                      <FormItem>
++                        <FormLabel>State/Province</FormLabel>
++                        <FormControl>
++                          <Input {...field} />
++                        </FormControl>
++                        <FormMessage />
++                      </FormItem>
++                    )}
++                  />
++
++                  <FormField
++                    control={form.control}
++                    name="country"
++                    render={({ field }) => (
++                      <FormItem>
++                        <FormLabel>Country</FormLabel>
++                        <FormControl>
++                          <Input {...field} />
++                        </FormControl>
++                        <FormMessage />
++                      </FormItem>
++                    )}
++                  />
++
++                  <FormField
++                    control={form.control}
++                    name="postalCode"
++                    render={({ field }) => (
++                      <FormItem>
++                        <FormLabel>Postal Code</FormLabel>
++                        <FormControl>
++                          <Input {...field} />
++                        </FormControl>
++                        <FormMessage />
++                      </FormItem>
++                    )}
++                  />
++                </div>
++
++                <FormField
++                  control={form.control}
++                  name="remote"
++                  render={({ field }) => (
++                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
++                      <FormControl>
++                        <Checkbox
++                          checked={field.value}
++                          onCheckedChange={field.onChange}
++                        />
++                      </FormControl>
++                      <div className="space-y-1 leading-none">
++                        <FormLabel>Remote Position</FormLabel>
++                        <FormDescription>
++                          Check if this position can be performed remotely
++                        </FormDescription>
++                      </div>
++                    </FormItem>
++                  )}
++                />
++              </div>
++            </Card>
++
++            {/* Dates and Status Section */}
++            <Card className="shadow-none border-none">
++              <div className="space-y-2">
++                <h2 className="text-lg font-semibold">Important Dates</h2>
++                <p className="text-sm text-muted-foreground">
++                  Set the vacancy timeline
++                </p>
++              </div>
++
++              <div className="space-y-4 mt-4">
++                <div className="grid grid-cols-2 gap-4">
++                  <FormField
++                    control={form.control}
++                    name="opening_date"
++                    render={({ field }) => (
++                      <FormItem className="flex flex-col">
++                        <FormLabel>Opening Date</FormLabel>
++                        <Popover>
++                          <PopoverTrigger asChild>
++                            <FormControl>
++                              <Button
++                                variant={"outline"}
++                                className={cn(
++                                  "w-full pl-3 text-left font-normal",
++                                  !field.value && "text-muted-foreground"
++                                )}
++                              >
++                                {field.value ? (
++                                  format(new Date(field.value), "PPP")
++                                ) : (
++                                  <span>Pick a date</span>
++                                )}
++                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
++                              </Button>
++                            </FormControl>
++                          </PopoverTrigger>
++                          <PopoverContent className="w-auto p-0" align="start">
++                            <Calendar
++                              mode="single"
++                              selected={field.value ? new Date(field.value) : undefined}
++                              onSelect={(date) => field.onChange(date?.toISOString())}
++                              disabled={(date) =>
++                                date < new Date()
++                              }
++                              initialFocus
++                            />
++                          </PopoverContent>
++                        </Popover>
++                        <FormMessage />
++                      </FormItem>
++                    )}
++                  />
++
++                  <FormField
++                    control={form.control}
++                    name="closing_date"
++                    render={({ field }) => (
++                      <FormItem className="flex flex-col">
++                        <FormLabel>Closing Date</FormLabel>
++                        <Popover>
++                          <PopoverTrigger asChild>
++                            <FormControl>
++                              <Button
++                                variant={"outline"}
++                                className={cn(
++                                  "w-full pl-3 text-left font-normal",
++                                  !field.value && "text-muted-foreground"
++                                )}
++                              >
++                                {field.value ? (
++                                  format(new Date(field.value), "PPP")
++                                ) : (
++                                  <span>Pick a date</span>
++                                )}
++                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
++                              </Button>
++                            </FormControl>
++                          </PopoverTrigger>
++                          <PopoverContent className="w-auto p-0" align="start">
++                            <Calendar
++                              mode="single"
++                              selected={field.value ? new Date(field.value) : undefined}
++                              onSelect={(date) => field.onChange(date?.toISOString())}
++                              disabled={(date) =>
++                                date < new Date()
++                              }
++                              initialFocus
++                            />
++                          </PopoverContent>
++                        </Popover>
++                        <FormMessage />
++                      </FormItem>
++                    )}
++                  />
++                </div>
++              </div>
++            </Card>
++          </div>
++
++          {/* Right Column */}
++          <div className="space-y-6">
++            {/* Requirements Section */}
++            <Card className="shadow-none border-none">
++              <div className="space-y-2">
++                <h2 className="text-lg font-semibold">Requirements</h2>
++                <p className="text-sm text-muted-foreground">
++                  Qualifications and skills needed for the role
++                </p>
++              </div>
++
++              <div className="space-y-4 mt-4">
++                <FormField
++                  control={form.control}
++                  name="requirements"
++                  render={({ field }) => (
++                    <FormItem>
++                      <FormLabel>Requirements</FormLabel>
++                      <FormControl>
++                        <Textarea
++                          placeholder="Enter requirements (one per line)..."
++                          className="min-h-[150px]"
++                          {...field}
++                        />
++                      </FormControl>
++                      <FormDescription>
++                        Enter each requirement on a new line
++                      </FormDescription>
++                      <FormMessage />
++                    </FormItem>
++                  )}
++                />
++
++                <FormField
++                  control={form.control}
++                  name="skills"
++                  render={({ field }) => (
++                    <FormItem>
++                      <FormLabel>Required Skills</FormLabel>
++                      <FormControl>
++                        <Textarea
++                          placeholder="Enter skills (one per line)..."
++                          className="min-h-[150px]"
++                          value={field.value?.join("\n") || ""}
++                          onChange={(e) =>
++                            field.onChange(
++                              e.target.value
++                                .split("\n")
++                                .map((line) => line.trim())
++                                .filter(Boolean)
++                            )
++                          }
++                        />
++                      </FormControl>
++                      <FormDescription>
++                        Enter each skill on a new line
++                      </FormDescription>
++                      <FormMessage />
++                    </FormItem>
++                  )}
++                />
++              </div>
++            </Card>
++
++            {/* Compensation Section */}
++            <Card className="shadow-none border-none">
++              <div className="space-y-2">
++                <h2 className="text-lg font-semibold">Compensation</h2>
++                <p className="text-sm text-muted-foreground">
++                  Salary and benefits information
++                </p>
++              </div>
++
++              <div className="space-y-4 mt-4">
++                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
++                  <FormField
++                    control={form.control}
++                    name="salaryMin"
++                    render={({ field }) => (
++                      <FormItem>
++                        <FormLabel>Minimum Salary</FormLabel>
++                        <FormControl>
++                          <Input
++                            type="number"
++                            {...field}
++                            onChange={(e) => field.onChange(Number(e.target.value))}
++                          />
++                        </FormControl>
++                        <FormMessage />
++                      </FormItem>
++                    )}
++                  />
++
++                  <FormField
++                    control={form.control}
++                    name="salaryMax"
++                    render={({ field }) => (
++                      <FormItem>
++                        <FormLabel>Maximum Salary</FormLabel>
++                        <FormControl>
++                          <Input
++                            type="number"
++                            {...field}
++                            onChange={(e) => field.onChange(Number(e.target.value))}
++                          />
++                        </FormControl>
++                        <FormMessage />
++                      </FormItem>
++                    )}
++                  />
++
++                  <FormField
++                    control={form.control}
++                    name="salaryCurrency"
++                    render={({ field }) => (
++                      <FormItem>
++                        <FormLabel>Currency</FormLabel>
++                        <FormControl>
++                          <Input {...field} placeholder="e.g. USD" />
++                        </FormControl>
++                        <FormMessage />
++                      </FormItem>
++                    )}
++                  />
++                </div>
++              </div>
++            </Card>
++
++            {/* Contact Information Section */}
++            <Card className="shadow-none border-none">
++              <div className="space-y-2">
++                <h2 className="text-lg font-semibold">Contact Information</h2>
++                <p className="text-sm text-muted-foreground">
++                  Details for applicant inquiries
++                </p>
++              </div>
++
++              <div className="space-y-4 mt-4">
++                <FormField
++                  control={form.control}
++                  name="contact_person"
++                  render={({ field }) => (
++                    <FormItem>
++                      <FormLabel>Contact Person</FormLabel>
++                      <FormControl>
++                        <Input placeholder="Full name" {...field} />
++                      </FormControl>
++                      <FormMessage />
++                    </FormItem>
++                  )}
++                />
++
++                <FormField
++                  control={form.control}
++                  name="contact_phone"
++                  render={({ field }) => (
++                    <FormItem>
++                      <FormLabel>Contact Phone</FormLabel>
++                      <FormControl>
++                        <Input placeholder="Phone number" {...field} />
++                      </FormControl>
++                      <FormMessage />
++                    </FormItem>
++                  )}
++                />
++
++                <FormField
++                  control={form.control}
++                  name="contact_email"
++                  render={({ field }) => (
++                    <FormItem>
++                      <FormLabel>Contact Email</FormLabel>
++                      <FormControl>
++                        <Input type="email" placeholder="Email address" {...field} />
++                      </FormControl>
++                      <FormMessage />
++                    </FormItem>
++                  )}
++                />
++
++                <FormField
++                  control={form.control}
++                  name="show_contact_info"
++                  render={({ field }) => (
++                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
++                      <FormControl>
++                        <Checkbox
++                          checked={field.value}
++                          onCheckedChange={field.onChange}
++                        />
++                      </FormControl>
++                      <div className="space-y-1 leading-none">
++                        <FormLabel>Show Contact Information</FormLabel>
++                        <FormDescription>
++                          Display contact information publicly on the job posting
++                        </FormDescription>
++                      </div>
++                    </FormItem>
++                  )}
++                />
++              </div>
++            </Card>
++          </div>
++        </div>
++
++        <div className="sticky bottom-0 flex justify-end space-x-4 p-6 bg-background border-t">
++          <Button
++            type="button"
++            variant="outline"
++            onClick={() => router.back()}
++            disabled={isSubmitting}
++          >
++            Cancel
++          </Button>
++          <Button type="submit" disabled={isSubmitting}>
++            {isSubmitting ? "Creating..." : "Create Job"}
++          </Button>
++        </div>
++      </form>
++    </Form>
++  )
++} 
+\ No newline at end of file
+diff --git a/app/(protected)/organizations/[id]/jobs/create/page.tsx b/app/(protected)/organizations/[id]/jobs/create/page.tsx
+new file mode 100644
+index 0000000..0e5f887
+--- /dev/null
++++ b/app/(protected)/organizations/[id]/jobs/create/page.tsx
+@@ -0,0 +1,59 @@
++import { JobCreationForm } from "./job-creation-form"
++import { BulkCreateDialog } from "./bulk-create-dialog"
++import { createClient } from "@/lib/supabase/server"
++import { notFound } from "next/navigation"
++
++interface PageProps {
++  params: {
++    id?: string
++  }
++}
++
++export default async function CreateJobPage({ params }: PageProps) {
++  // Defensive parameter handling
++  let organizationId = null
++  if (params) {
++    const resolvedParams = await params // Await the params
++    if (typeof resolvedParams.id === 'string') {
++      organizationId = resolvedParams.id
++    }
++  }
++  if (!organizationId) {
++    notFound()
++  }
++
++  const supabase = createClient()
++  const { data: organization, error } = await supabase
++    .from('organizations')
++    .select('id, name')
++    .eq('id', organizationId)
++    .single()
++
++  if (error || !organization) {
++    console.error('Error fetching organization:', error)
++    notFound()
++  }
++
++  return (
++    <div className="container mx-auto py-8">
++      <div className="mb-6 flex items-center justify-between">
++        <div>
++          <h1 className="text-2xl font-semibold">Create Vacancy</h1>
++          <p className="text-sm text-muted-foreground">
++            Create a new job posting for {organization.name.fr}
++          </p>
++        </div>
++        <BulkCreateDialog organizationId={organizationId} />
++      </div>
++
++      <div className="relative flex min-h-[calc(100vh-12rem)]">
++        {/* Main scrollable content */}
++        <div className="w-full overflow-y-auto scrollbar-hide">
++          <div className="rounded-lg bg-background">
++            <JobCreationForm organizationId={organizationId} />
++          </div>
++        </div>
++      </div>
++    </div>
++  )
++} 
+\ No newline at end of file
+diff --git a/app/(protected)/organizations/[id]/jobs/create/schema.ts b/app/(protected)/organizations/[id]/jobs/create/schema.ts
+new file mode 100644
+index 0000000..61228d0
+--- /dev/null
++++ b/app/(protected)/organizations/[id]/jobs/create/schema.ts
+@@ -0,0 +1,65 @@
++import { z } from "zod"
++
++const localizedStringSchema = z.object({
++  en: z.string().min(1, "English text is required"),
++  fr: z.string().optional(),
++})
++
++const localizedLocationSchema = z.object({
++  city: localizedStringSchema,
++  state: localizedStringSchema,
++  country: localizedStringSchema,
++  postal_code: localizedStringSchema,
++})
++
++export const jobTypes = [
++  "FULL_TIME",
++  "PART_TIME",
++  "CONTRACT",
++  "TEMPORARY",
++  "INTERNSHIP",
++  "VOLUNTEER",
++] as const
++
++export const jobStatuses = [
++  "DRAFT",
++  "PUBLISHED",
++  "CLOSED",
++  "ARCHIVED",
++] as const
++
++export const currencies = [
++  "USD",
++  "CAD",
++  "EUR",
++  "GBP",
++] as const
++
++export const jobCreationSchema = z.object({
++  organization_id: z.string().uuid(),
++  title: localizedStringSchema,
++  description: localizedStringSchema,
++  requirements: z.object({
++    en: z.array(z.string()),
++    fr: z.array(z.string()).optional(),
++  }),
++  skills: z.array(z.string()),
++  status: z.enum(jobStatuses),
++  location: localizedLocationSchema,
++  job_type: z.enum(jobTypes),
++  salary_min: z.number().nullable(),
++  salary_max: z.number().nullable(),
++  salary_currency: z.enum(currencies),
++  remote: z.boolean(),
++  opening_date: z.date().optional(),
++  closing_date: z.date().optional(),
++  contact_person: z.string().optional(),
++  contact_email: z.string().email().optional(),
++  contact_phone: z.string().optional(),
++  show_contact_info: z.boolean().optional(),
++  rating: z.number().min(0).max(5).nullable(),
++  is_mock: z.boolean(),
++  mock_batch_id: z.string().uuid().nullable(),
++})
++
++export type JobCreationInput = z.infer<typeof jobCreationSchema> 
+\ No newline at end of file
+diff --git a/app/(protected)/organizations/[id]/jobs/create/types.ts b/app/(protected)/organizations/[id]/jobs/create/types.ts
+new file mode 100644
+index 0000000..65a05bc
+--- /dev/null
++++ b/app/(protected)/organizations/[id]/jobs/create/types.ts
+@@ -0,0 +1,209 @@
++import { z } from "zod"
++
++export const JobType = z.enum(["FULL_TIME", "PART_TIME", "CONTRACT", "INTERNSHIP"])
++export type JobType = z.infer<typeof JobType>
++
++export const JobStatus = z.enum(["DRAFT", "PUBLISHED", "CLOSED", "ARCHIVED"])
++export type JobStatus = z.infer<typeof JobStatus>
++
++// For backward compatibility
++export const LocalizedString = z.object({
++  en: z.string(),
++  fr: z.string().optional()
++})
++export type LocalizedString = z.infer<typeof LocalizedString>
++
++// For backward compatibility
++export const LocalizedStringArray = z.object({
++  en: z.array(z.string()),
++  fr: z.array(z.string()).optional()
++})
++export type LocalizedStringArray = z.infer<typeof LocalizedStringArray>
++
++// New single-language location structure
++export const JobLocationSingle = z.object({
++  city: z.string(),
++  state: z.string(),
++  country: z.string(),
++  postal_code: z.string()
++})
++export type JobLocationSingle = z.infer<typeof JobLocationSingle>
++
++// For backward compatibility
++export const JobLocation = z.object({
++  city: LocalizedString,
++  state: LocalizedString,
++  country: LocalizedString,
++  postal_code: LocalizedString
++})
++export type JobLocation = z.infer<typeof JobLocation>
++
++// New single-language job creation request
++export const JobCreationRequestSingle = z.object({
++  organization_id: z.string().uuid(),
++  title: z.string(),
++  description: z.string(),
++  requirements: z.array(z.string()),
++  skills: z.array(z.string()),
++  status: JobStatus,
++  location: JobLocationSingle,
++  job_type: JobType,
++  salary_min: z.number(),
++  salary_max: z.number(),
++  salary_currency: z.string(),
++  remote: z.boolean(),
++  rating: z.number(),
++  is_mock: z.boolean(),
++  language: z.string().default("en"),
++  summary: z.string().optional(),
++  opening_date: z.string().optional(),
++  closing_date: z.string().optional(),
++  contact_person: z.string().optional(),
++  contact_email: z.string().email().optional(),
++  contact_phone: z.string().optional(),
++  show_contact_info: z.boolean()
++})
++export type JobCreationRequestSingle = z.infer<typeof JobCreationRequestSingle>
++
++// For backward compatibility
++export const JobCreationRequest = z.object({
++  organization_id: z.string().uuid(),
++  title: LocalizedString,
++  description: LocalizedString,
++  requirements: LocalizedStringArray,
++  skills: z.array(z.string()),
++  status: JobStatus,
++  location: JobLocation,
++  job_type: JobType,
++  salary_min: z.number(),
++  salary_max: z.number(),
++  salary_currency: z.string(),
++  remote: z.boolean(),
++  rating: z.number(),
++  is_mock: z.boolean(),
++  opening_date: z.string().optional(),
++  closing_date: z.string().optional(),
++  contact_person: z.string().optional(),
++  contact_email: z.string().email().optional(),
++  contact_phone: z.string().optional(),
++  show_contact_info: z.boolean()
++})
++export type JobCreationRequest = z.infer<typeof JobCreationRequest>
++
++// Form schema (flattened version of the API schema)
++export const jobFormSchema = z.object({
++  title: z.string().min(1),
++  description: z.string().min(1),
++  requirements: z.string().optional(),
++  skills: z.array(z.string()).default([]),
++  city: z.string().min(1),
++  state: z.string().min(1),
++  country: z.string().min(1),
++  postalCode: z.string().min(1),
++  jobType: JobType,
++  salaryMin: z.number().min(0),
++  salaryMax: z.number().min(0),
++  salaryCurrency: z.string().min(1),
++  remote: z.boolean().default(false),
++  status: z.literal("DRAFT").default("DRAFT"),
++  language: z.string().default("en"),
++  summary: z.string().optional(),
++  opening_date: z.string().optional(),
++  closing_date: z.string().optional(),
++  contact_person: z.string().optional(),
++  contact_email: z.string().email().optional(),
++  contact_phone: z.string().optional(),
++  show_contact_info: z.boolean().default(false)
++})
++export type JobFormData = z.infer<typeof jobFormSchema>
++
++// Helper function to transform form data to API request (new single-language version)
++export function transformFormToRequestSingle(
++  formData: JobFormData,
++  organizationId: string
++): JobCreationRequestSingle {
++  return {
++    organization_id: organizationId,
++    title: formData.title,
++    description: formData.description,
++    requirements: formData.requirements?.split('\n').filter(Boolean) || [],
++    skills: formData.skills,
++    status: formData.status,
++    location: {
++      city: formData.city,
++      state: formData.state,
++      country: formData.country,
++      postal_code: formData.postalCode
++    },
++    job_type: formData.jobType,
++    salary_min: formData.salaryMin,
++    salary_max: formData.salaryMax,
++    salary_currency: formData.salaryCurrency,
++    remote: formData.remote,
++    rating: 0,
++    is_mock: false,
++    language: formData.language || "en",
++    summary: formData.summary,
++    opening_date: formData.opening_date,
++    closing_date: formData.closing_date,
++    contact_person: formData.contact_person,
++    contact_email: formData.contact_email,
++    contact_phone: formData.contact_phone,
++    show_contact_info: formData.show_contact_info
++  }
++}
++
++// Helper function to transform form data to API request (for backward compatibility)
++export function transformFormToRequest(
++  formData: JobFormData,
++  organizationId: string
++): JobCreationRequest {
++  return {
++    organization_id: organizationId,
++    title: {
++      en: formData.title,
++      fr: formData.title // TODO: Add translation support
++    },
++    description: {
++      en: formData.description,
++      fr: formData.description // TODO: Add translation support
++    },
++    requirements: {
++      en: formData.requirements?.split('\n').filter(Boolean) || [],
++      fr: [] // TODO: Add translation support
++    },
++    skills: formData.skills,
++    status: formData.status,
++    location: {
++      city: {
++        en: formData.city,
++        fr: formData.city
++      },
++      state: {
++        en: formData.state,
++        fr: formData.state
++      },
++      country: {
++        en: formData.country,
++        fr: formData.country
++      },
++      postal_code: {
++        en: formData.postalCode,
++        fr: formData.postalCode
++      }
++    },
++    job_type: formData.jobType,
++    salary_min: formData.salaryMin,
++    salary_max: formData.salaryMax,
++    salary_currency: formData.salaryCurrency,
++    remote: formData.remote,
++    rating: 0,
++    is_mock: false,
++    opening_date: formData.opening_date,
++    closing_date: formData.closing_date,
++    contact_person: formData.contact_person,
++    contact_email: formData.contact_email,
++    contact_phone: formData.contact_phone,
++    show_contact_info: formData.show_contact_info
++  }
++} 
+\ No newline at end of file

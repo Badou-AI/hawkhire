@@ -1,0 +1,14 @@
+--- a/app/(protected)/job-board/[id]/actions.ts
++++ b/app/(protected)/job-board/[id]/actions.ts
+@@ -3,8 +3,9 @@
+ // Action to update job board
+ export async function updateJobBoard(formData: FormData) {
+   try {
+-        // Use absolute URL with IPv4 address
+-       const response = await fetch(`http://127.0.0.1:${process.env.PORT || 3000}/api/jobs`, {
++        // Use environment variables for API URL or default to relative path
++        const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || '';
++        const response = await fetch(`${baseUrl}/api/jobs`, {
+          headers: {
+            'Content-Type': 'application/json',
+          },

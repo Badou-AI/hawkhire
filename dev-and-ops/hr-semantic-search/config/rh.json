@@ -1,0 +1,91 @@
+{
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 1,
+      "analysis": {
+        "analyzer": {
+          "text_analyzer": {
+            "type": "custom",
+            "tokenizer": "standard",
+            "filter": [
+              "lowercase",
+              "stop",
+              "trim"
+            ]
+          }
+        }
+      }
+    },
+    "mappings": {
+      "properties": {
+        "title": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 256
+            }
+          }
+        },
+        "profile": {
+          "type": "object",
+          "properties": {
+            "first_name": {
+              "type": "text",
+              "fields": {
+                "keyword": {
+                  "type": "keyword",
+                  "ignore_above": 256
+                }
+              }
+            },
+            "last_name": {
+              "type": "text",
+              "fields": {
+                "keyword": {
+                  "type": "keyword",
+                  "ignore_above": 256
+                }
+              }
+            },
+            "tel_num": {
+              "type": "keyword"
+            },
+            "email": {
+              "type": "keyword"
+            }
+          }
+        },
+        "summary": {
+          "type": "text",
+          "analyzer": "text_analyzer"
+        },
+        "question_answer": {
+          "type": "nested",
+          "properties": {
+            "question": {
+              "type": "text",
+              "analyzer": "text_analyzer"
+            },
+            "answer": {
+              "type": "text",
+              "analyzer": "text_analyzer"
+            }
+          }
+        },
+        "example_queries": {
+          "type": "text",
+          "analyzer": "text_analyzer"
+        },
+        "topics": {
+          "type": "keyword"
+        },
+        "embedding": {
+          "type": "dense_vector",
+          "dims": 1024,
+          "index": true,
+          "similarity": "cosine"
+        }
+      }
+    }
+  }

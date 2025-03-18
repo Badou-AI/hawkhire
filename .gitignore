@@ -22,8 +22,12 @@
 
 # misc
 .DS_Store
+/scripts
+/patches
 *.pem
 /branchesDiff
+*.sh
+*.bak
 
 # debug
 npm-debug.log*

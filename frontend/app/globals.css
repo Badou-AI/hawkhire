@@ -1,0 +1,193 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+ 
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+ 
+    --primary: 267 100% 60%;
+    --primary-foreground: 210 40% 98%;
+    /* --primary: 214 84% 52%;
+    --primary-foreground: 0 0% 100%; */
+ 
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+ 
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+ 
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+ 
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+ 
+    --radius: 0.5rem;
+ 
+    --sidebar-background: 0 0% 98%;
+ 
+    --sidebar-foreground: 240 5.3% 26.1%;
+ 
+    --sidebar-primary: 240 5.9% 10%;
+ 
+    --sidebar-primary-foreground: 0 0% 98%;
+ 
+    --sidebar-accent: 240 4.8% 95.9%;
+ 
+    --sidebar-accent-foreground: 240 5.9% 10%;
+ 
+    --sidebar-border: 220 13% 91%;
+ 
+    --sidebar-ring: 217.2 91.2% 59.8%;
+
+    --sidebar-width: 256px;
+    --sidebar-collapsed-width: 64px;
+    --header-height: 64px;
+    --content-padding: 1rem;
+
+    --status-screening: 271 81% 56%;
+    --status-interview: 214 84% 52%;
+    --status-assessment: 31 97% 55%;
+    --status-offer: 142 72% 29%;
+    --status-hired: 161 94% 30%;
+    --status-rejected: 0 84% 60%;
+
+    --input: 240 5.9% 90%;
+    --ring: 240 10% 3.9%;
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+  }
+
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Global print styles */
+@media print {
+  html, body {
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background-color: white !important;
+    font-size: 12pt !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  
+  /* Ensure page breaks don't happen inside elements with this class */
+  .print-avoid-break {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+  
+  /* Force a page break before elements with this class */
+  .print-page-break {
+    break-before: page !important;
+    page-break-before: always !important;
+  }
+
+  /* Fix for multi-page printing */
+  @page {
+    size: auto;
+    margin: 0.5in;
+  }
+
+  /* Ensure all content is visible */
+  .hidden {
+    display: none !important;
+  }
+  
+  /* Make sure print:block elements are actually displayed */
+  .print\:block {
+    display: block !important;
+  }
+  
+  /* Make sure print:flex elements are actually displayed */
+  .print\:flex {
+    display: flex !important;
+  }
+
+  /* Make sure cards don't break across pages */
+  .print\:break-inside-avoid {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Ensure proper spacing between cards */
+  .print\:mb-5 {
+    margin-bottom: 1.25rem !important;
+  }
+
+  /* Fix for scrollable containers */
+  .overflow-y-auto, .overflow-hidden {
+    overflow: visible !important;
+    height: auto !important;
+  }
+  
+  /* Fix for main container */
+  .min-h-screen {
+    min-height: 0 !important;
+    height: auto !important;
+  }
+}
+
+.font-sans {
+  font-family: var(--font-mulish), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-libre-franklin), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+html {
+  font-size: 16px; /* Base font size */
+}
+
+body {
+  font-size: 1rem; /* 16px */
+}
+
+@layer utilities {
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+.job-card:hover {
+  border-color: theme('colors.primary.DEFAULT');
+}
+
+.rating-star {
+  @apply h-4 w-4 fill-yellow-400 text-yellow-400;
+}
+
+.job-filters-section {
+  @apply space-y-6 p-4;
+}
+
