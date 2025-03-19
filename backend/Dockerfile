@@ -11,7 +11,7 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy only requirements file first for better caching
-COPY backend/requirements.txt .
+COPY requirements.txt .
 
 # Create and activate virtual environment
 RUN python -m venv venv
@@ -40,11 +40,11 @@ COPY --from=builder /app/venv /app/venv
 ENV PATH="/app/venv/bin:$PATH"
 
 # Copy only necessary application files
-COPY backend/app ./app
+COPY app ./app
 
 # Copy additional configuration files if they exist
 # Uncomment the line below if you have alembic.ini in your backend directory
-# COPY backend/alembic.ini ./
+# COPY alembic.ini ./
 
 # Set proper permissions
 RUN chown -R khidma:khidma /app
