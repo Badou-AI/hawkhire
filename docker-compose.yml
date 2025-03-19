@@ -1,7 +1,8 @@
 services:
   frontend:
     build:
-      context: ./frontend
+      context: .
+      dockerfile: frontend/Dockerfile
       target: deps # Use the deps stage for development
     ports:
       - "3000:3000"
@@ -16,11 +17,12 @@ services:
     networks:
       - hawkhire-network
     depends_on:
-      - backend:
-          condition: service_healthy
+      backend:
+        condition: service_healthy
   backend:
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend/Dockerfile
     ports:
       - "8080:8080"
     volumes:
