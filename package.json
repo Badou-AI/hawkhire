@@ -1,0 +1,29 @@
+{
+  "name": "hawkhire-project",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hawkhire project management scripts",
+  "scripts": {
+    "dev": "docker-compose up",
+    "dev:detached": "docker-compose up -d",
+    "build": "docker-compose build",
+    "start": "docker-compose up -d",
+    "stop": "docker-compose stop",
+    "down": "docker-compose down",
+    "clean": "docker-compose down -v",
+    "rebuild": "docker-compose up --build -d",
+    "logs": "docker-compose logs -f",
+    "logs:backend": "docker-compose logs -f backend",
+    "logs:frontend": "docker-compose logs -f frontend",
+    "backend:shell": "docker-compose exec backend bash",
+    "frontend:shell": "docker-compose exec frontend sh",
+    "status": "docker-compose ps",
+    "frontend": "cd frontend && npm",
+    "frontend:dev": "cd frontend && npm run dev",
+    "frontend:build": "cd frontend && npm run build"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  }
+}
