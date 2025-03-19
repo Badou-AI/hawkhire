@@ -13,8 +13,8 @@ services:
     networks:
       - hawkhire-network
     depends_on:
-      - backend:
-          condition: service_healthy
+      backend:
+        condition: service_healthy
 
   backend:
     build:
